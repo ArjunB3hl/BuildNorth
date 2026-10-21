@@ -1,0 +1,21 @@
+# Repository-wide rules. Each app also has its own .gitignore:
+# mobile/.gitignore (Expo app + backend) and mac/.gitignore (Mac app).
+
+# macOS and editors
+.DS_Store
+.idea/
+*.swp
+
+# secrets: env files anywhere; only *.env.example templates are committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision
+
+# per-machine tool settings
+.claude/settings.local.json

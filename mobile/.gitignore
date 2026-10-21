@@ -1,0 +1,80 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files (app root and backend/); only the .env.example templates are committed
+.env
+.env.*
+!.env.example
+
+# Python backend (and its local SQLite database)
+.venv
+backend/var/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# typescript
+*.tsbuildinfo
+
+example
+
+# generated native folders
+/ios
+/android
+
+# local databases anywhere (the backend's lives in backend/var/)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# build artifacts and logs
+*.apk
+*.aab
+*.ipa
+*.app.zip
+*.log
+build/
+
+# editor and tool state that is per-machine
+.idea/
+.claude/settings.local.json
+.vscode/*.local.json
+
+# extra files that don't belong in the repo
+# (the ChatGPT starter for the Mac app; that app now lives in ../mac)
+NorthAssistantMacStarter.zip

@@ -1,0 +1,21 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+pyjwt[crypto]>=2.9
+# Durable app records: SQLite locally, any SQLAlchemy URL (e.g. Postgres) in production
+sqlalchemy>=2.0
+alembic>=1.13
+# Model calls (Ollama / OpenAI-compatible) and FastAPI's TestClient (needs httpx 0.x)
+httpx>=0.27,<1
+# Optional provider: only used when AI_PROVIDER=anthropic
+anthropic>=0.40
+# SurrealDB Agent Memory client. It is pre-release only; naming beta versions
+# here opts just these packages into pre-releases (no global --pre).
+surrealdb[memory]>=3.0.0b10
+surrealdb-memory>=1.0.0b1
+
+# MCP server for external assistants (OpenCode, ChatGPT, Claude); pinned: the v2 API moves quickly
+mcp==2.3.0
+
+# tests
+pytest>=8.0

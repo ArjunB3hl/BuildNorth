@@ -1,0 +1,67 @@
+# EAS Build custom build that produces the macOS app (EAS has no macOS platform, so this
+# runs as an iOS-platform job with "withoutCredentials" and only these steps).
+# Run with: EAS_NO_VCS=1 npx eas-cli@latest build -p ios -e macos
+build:
+  name: NorthAssistant macOS (Release, ad-hoc signed)
+  steps:
+    - eas/checkout
+
+    # npm ci from package-lock.json; the "postinstall": "patch-package" script runs here.
+    - eas/install_node_modules
+
+    - run:
+        name: Toolchain check
+        command: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i macosx
+          node -v
+          npm -v
+          ruby -v
+          bundle -v
+
+    - run:
+        name: Install gems (CocoaPods and xcodeproj from Gemfile.lock)
+        command: bundle install
+
+    - run:
+        name: Install pods (macos/)
+        working_directory: ./macos
+        command: bundle exec pod install
+
+    - run:
+        name: xcodebuild NorthAssistant-macOS (Release)
+        command: |
+          set -eo pipefail
+          xcodebuild \
+            -workspace macos/NorthAssistant.xcworkspace \
+            -scheme NorthAssistant-macOS \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath macos/build/DerivedData \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGN_IDENTITY=- \
+            build
+
+    - run:
+        name: Verify signature and zip the .app
+        command: |
+          set -eo pipefail
+          APP=macos/build/DerivedData/Build/Products/Release/NorthAssistant.app
+          test -d "$APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 || true
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/NorthAssistant-macOS.zip
+
+    # The .app as the build's application archive (eas build:download extracts it).
+    - eas/upload_artifact:
+        name: Upload NorthAssistant.app (application archive)
+        inputs:
+          type: application-archive
+          path: macos/build/DerivedData/Build/Products/Release/NorthAssistant.app
+
+    # The same app zipped with ditto, which keeps framework symlinks intact.
+    - eas/upload_artifact:
+        name: Upload NorthAssistant-macOS.zip (build artifact)
+        inputs:
+          type: build-artifact
+          path: dist/NorthAssistant-macOS.zip

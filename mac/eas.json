@@ -1,0 +1,18 @@
+{
+  "cli": {
+    "version": ">= 25.2.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "macos": {
+      "withoutCredentials": true,
+      "node": "22.23.3",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1",
+        "resourceClass": "medium",
+        "bundler": "2.6.9",
+        "config": "macos-app.yml"
+      }
+    }
+  }
+}

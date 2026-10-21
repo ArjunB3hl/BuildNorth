@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>BuildNorth reads your daily sleep, resting heart rate, HRV, steps, active energy and workouts to save a daily summary to your BuildNorth account.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Only debug builds in the simulator write sample health data, for testing. BuildNorth never writes to Health otherwise.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.arjun273773.buildnorth</string>
+</dict>
+</plist>

@@ -1,0 +1,15 @@
+diff --git a/node_modules/expo-modules-core/ios/Platform/Platform.h b/node_modules/expo-modules-core/ios/Platform/Platform.h
+index e5dc7ec..d792b4c 100644
+--- a/node_modules/expo-modules-core/ios/Platform/Platform.h
++++ b/node_modules/expo-modules-core/ios/Platform/Platform.h
+@@ -17,7 +17,9 @@
+ @compatibility_alias UIHostingController NSHostingController;
+ @compatibility_alias UIImage NSImage;
+ 
+-#ifndef UIApplication
++// react-native-macos 0.83+ already declares this alias in RCTUIKitCompat.h, and a second
++// @compatibility_alias is an error (`#ifndef` can't see aliases).
++#if !defined(UIApplication) && !__has_include(<RCTUIKit/RCTUIKitCompat.h>)
+ @compatibility_alias UIApplication NSApplication;
+ #endif
+ 
