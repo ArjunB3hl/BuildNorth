@@ -87,7 +87,7 @@ All pins live in `versions.env` (the CI build reads its build arguments from it)
 ```
 versions.env                 every pin (model, demo commit, base image, torch/CUDA, image name/version)
 docker/Dockerfile            the image (no weights, no secrets, no SSH host keys, no demo TLS key)
-docker/patch_demo.py         build-time patch of the demo page: more camera frames per second, coaching defaults
+docker/patch_demo.py         build-time patch of the demo: more camera frames per second, coaching defaults, KV window
 requirements/                requirements.in + overrides.txt -> requirements.lock (lock.sh), build constraints
 runtime/entrypoint.sh        start order, readiness, supervision, shutdown
 runtime/preflight.py         start-up checks with exit codes 2 config, 3 model, 4 GPU, 5 disk/ports
@@ -218,7 +218,7 @@ Measurements (SSH: `ssh root@<publicIp> -p <portMappings[22]>` from `rp.sh statu
 | 1 | Start-to-ready | `rp.sh wait-ready` (Pod created → `/readyz` 200, includes image pull); `startup.json` `marks_s.ready` (container start → ready) |
 | 2 | Model load / warm-up | `startup.json`: `model_loaded − caddy_up` (load), `warmup_done − gateway_up` (warm-up); `warmup.json` |
 | 3 | Peak VRAM | `python3 -c "import csv,sys; print(max(float(r[1]) for r in csv.reader(open(sys.argv[1]))), 'MiB')" /workspace/rhythm/logs/<run>/gpu.csv` after step 4 (covers load, warm-up and the session) |
-| 4 | One-session speed (in the Pod) | `python /opt/rhythm/runtime/warmup.py --skip-chat --chunks 60 --json /workspace/rhythm/logs/probe-local.json`: `backend_wall_clock_ms` mean/max (< 1000 ms per 1 s unit = keeps up with real time), `lag_after_last_chunk_s` |
+| 4 | One-session speed (in the Pod) | `python /opt/rhythm/runtime/warmup.py --skip-chat --chunks 60 --frame-mode grid4 --json /workspace/rhythm/logs/probe-local.json` (what the page sends; `--frame-mode 1` for upstream's load): `backend_wall_clock_ms` mean/max (< 1000 ms per 1 s unit = keeps up with real time), `lag_after_last_chunk_s` |
 | 5 | End-to-end latency (from the laptop, through the proxy) | `python runtime/warmup.py --url wss://<POD_ID>-8000.proxy.runpod.net/v1/realtime --token "$RHYTHM_API_TOKEN" --skip-chat --chunks 60 --json probe-proxy.json` (venv from `tests/requirements-tests.txt`); compare `first_event_s` and `lag_after_last_chunk_s` with #4; network baseline: `for i in 1 2 3 4 5; do curl -so /dev/null -w '%{time_total}\n' https://<POD_ID>-8000.proxy.runpod.net/healthz; done` |
 | 6 | WebSocket through the proxy, session cap | #5 succeeding answers it; then `--chunks 130` (a session longer than Cloudflare's 100 s request limit must not be cut); then `--chunks 310 --timeout 60`: the gateway's 300 s cap must end it with `closed by the server: reason=timeout` (exit 1 is the expected result); then immediately run #5 again with `--chunks 5` and record whether the first attempt gets `session_failed` (the reconnect window in section 10) |
 | 7 | Test clips (section 8a) | `python /opt/rhythm/runtime/clip_eval.py --clips /workspace/rhythm/test-clips/ready-2026-10-22 --out /workspace/rhythm/logs/clip-eval-1`: per clip, the chat answer (exercise, reps, form cue) and what the coach says unprompted in a streamed session, with per-chunk latency; `summary.md` for review. About 15 min of GPU for 46 clips (5.7 min of video, streamed in real time, plus the chat pass) |
@@ -278,7 +278,8 @@ hf download "$MOTION_LIBRARY_REPO" --repo-type dataset --local-dir "$TMPDIR/moti
 `runtime/clip_eval.py` runs inside the Pod against the local gateway (measurement 7). It makes two passes per clip:
 - **chat:** the whole mp4 plus a question; the answer is text only.
 - **duplex:** the clip is streamed like the camera, one second of silence per second plus the clip's frames for that
-  second as the page sends them (`--frame-mode`, default `grid4`, see section 10a; `1` = upstream's one frame), then
+  second as the page sends them (`--frame-mode`, default `grid4`, see section 10a; `1` = upstream's one frame; a
+  last partial second repeats its last sample), then
   4 silent chunks, with the English voice (`--voice`). The model is forced to listen for the first 3 steps of a session.
 
 It writes `results.jsonl`, `summary.json` and `summary.md`. `label_match` is only a keyword check against the
@@ -364,16 +365,34 @@ the build): the page samples the camera every 1000/N ms and sends, per step, `RH
 
 Each image costs about 150-190 ms of model time; a step must finish within 1 s, and a spoken answer needs headroom.
 `grid4` gives five moments per second for the cost of two images, the way MiniCPM-o's own examples combine frames.
-The app's own client can send the same thing: `frame_base64_list` takes several JPEGs per step.
+The app's own client can send the same thing: `frame_base64_list` takes several JPEGs per step. The page's "HD"
+toggle (2 slices per image) is used only in mode `1`: with `grid4` it would be 6 slices per step, not real time.
+
+**Session length and the KV window.** Every second adds to the model's KV cache: about 79 tokens with one image, about
+145 with two (`grid4`, `2`), about 277 with four, plus a few dozen when the coach speaks. Upstream never prunes the
+duplex cache in this demo, and the page stops a session when it reaches 8192 tokens, so a `grid4` session would end
+after about 55 s (upstream's one frame: about 100 s). `docker/patch_demo.py` therefore turns on the model's own
+**basic sliding window** in the backend: the system prompt and reference voice are kept, and when the cache passes
+`RHYTHM_KV_WINDOW_HIGH` (6000) tokens the oldest seconds are dropped down to `RHYTHM_KV_WINDOW_LOW` (4500). With
+`grid4` the coach then always sees the last ~30-40 s, and a page session runs until the gateway's 300 s cap (the page
+logs "KV pruned" when it slides). `RHYTHM_KV_WINDOW=off` restores upstream; `context` is the model's other mode (it
+carries a summary of dropped text). **Not yet measured on the GPU:** per-step time and answers after the window
+slides.
 
 Coaching defaults on the page: the "English Call" preset carries the Rhythm form-coaching prompt (greet briefly, watch
 the body position, say if it is right or give one short correction, otherwise stay quiet), and the length-penalty
-slider starts at 0.8 (upstream 1.1; lower = shorter turns). Overrides, written at start-up by `write_config.py`:
+slider starts at 0.8 with a "Coach" preset button (upstream 1.1; lower = shorter turns). The page keeps its settings
+under its own browser key (`omni_settings_rhythm1`), so values the unpatched page saved on the same Pod URL (1.1, HD,
+an old prompt) are not restored. Pages and scripts are served with `Cache-Control: no-cache`, so a browser picks up a
+new image or a changed `RHYTHM_FRAME_MODE` on the next reload. `/mobile-omni/` loads the same settings; `/omni` is the
+page that was tested. Overrides, written at start-up by `write_config.py` (a bad value stops start-up with a message):
 - `RHYTHM_COACH_PROMPT`: replaces the preset's prompt.
 - `RHYTHM_DUPLEX_CONFIG`: JSON object of duplex settings sent with every session (keys: `temperature`, `top_k`,
   `top_p`, `listen_prob_scale` (> 1 = speaks less), `listen_top_k`, `length_penalty`, `decode_mode`,
-  `text_repetition_penalty`, `text_repetition_window_size`); the page's length-penalty slider wins over
-  `length_penalty`. Example: `{"listen_prob_scale": 1.2}`.
+  `text_repetition_penalty`, `text_repetition_window_size`), checked against the backend's ranges; the page's
+  length-penalty slider wins over `length_penalty`. Example: `{"listen_prob_scale": 1.2}`.
+- `RHYTHM_KV_WINDOW` (`basic` | `context` | `off`), `RHYTHM_KV_WINDOW_HIGH` / `RHYTHM_KV_WINDOW_LOW` (6000 / 4500;
+  HIGH at most 7192, so one more second always fits under the page's 8192).
 
 ## 11. Start-up time vs `torch.compile`
 

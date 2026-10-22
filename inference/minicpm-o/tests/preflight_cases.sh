@@ -151,6 +151,29 @@ reject "duplex config that is not JSON -> clear error" "RHYTHM_DUPLEX_CONFIG is 
 reject "duplex config with an unknown key -> clear error" "RHYTHM_DUPLEX_CONFIG must be a JSON object" \
   'RHYTHM_DUPLEX_CONFIG={"listen_scale": 2}'
 reject "duplex config that is a list -> clear error" "RHYTHM_DUPLEX_CONFIG must be a JSON object" 'RHYTHM_DUPLEX_CONFIG=[1]'
+reject "duplex value out of the backend's range -> clear error" "temperature=3: must be float >= 0.0 <= 2.0" \
+  'RHYTHM_DUPLEX_CONFIG={"temperature": 3}'
+reject "duplex value of the wrong type -> clear error" "top_k=20.5: must be int >= 0" 'RHYTHM_DUPLEX_CONFIG={"top_k": 20.5}'
+reject "unknown decode_mode -> clear error" "decode_mode='beam': must be 'sampling' or 'greedy'" \
+  'RHYTHM_DUPLEX_CONFIG={"decode_mode": "beam"}'
+check "in-range duplex values and listen_top_k null are accepted" \
+  'cfg["duplexConfig"] == {"text_repetition_penalty": 1.0, "listen_top_k": None, "decode_mode": "greedy"}' \
+  'RHYTHM_DUPLEX_CONFIG={"text_repetition_penalty": 1.0, "listen_top_k": null, "decode_mode": "greedy"}'
+check "empty RHYTHM_FRAME_MODE means the default; spaces are ignored" 'cfg["frameMode"] == "grid4"' RHYTHM_FRAME_MODE=
+check "RHYTHM_FRAME_MODE with spaces" 'cfg["frameMode"] == "2"' 'RHYTHM_FRAME_MODE= 2 '
+check "RHYTHM_COACH_PROMPT with emoji, a colon and a line separator stays one valid YAML line" \
+  'preset.splitlines()[1] == "system_prompt: \"Squat 💪: knees out\\u2028ok\"" and len(preset.splitlines()) == 3' \
+  "RHYTHM_COACH_PROMPT=$(printf 'Squat \xf0\x9f\x92\xaa: knees out\xe2\x80\xa8ok')"
+reject "unknown KV window mode -> clear error" "RHYTHM_KV_WINDOW='sliding': one of basic" RHYTHM_KV_WINDOW=sliding
+reject "KV window high mark too close to the page's 8192 cap -> clear error" "need 0 < LOW < HIGH <= 7192" \
+  RHYTHM_KV_WINDOW_HIGH=8000
+reject "KV window low mark above the high mark -> clear error" "need 0 < LOW < HIGH" RHYTHM_KV_WINDOW_LOW=6500
+reject "KV window mark that is not a number -> clear error" "RHYTHM_KV_WINDOW_HIGH='6k' is not a number" RHYTHM_KV_WINDOW_HIGH=6k
+if out=$(MODEL_DIR=/m RHYTHM_KV_WINDOW=off python3 runtime/write_config.py --out "$W/app/config.json" 2>&1) \
+   && grep -q "kv_window=off" <<<"$out" && out2=$(MODEL_DIR=/m python3 runtime/write_config.py --out "$W/app/config.json" 2>&1) \
+   && grep -q "kv_window=basic 4500-6000" <<<"$out2"; then
+  pass=$((pass + 1)); echo "ok    KV window: basic 4500-6000 by default, off on request (reported at start-up)"
+else failn=$((failn + 1)); echo "FAIL  KV window report: $out / ${out2:-}"; fi
 
 echo "preflight cases: $pass passed, $failn failed"
 [[ $failn == 0 ]]

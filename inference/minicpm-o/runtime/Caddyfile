@@ -81,6 +81,10 @@
 				header_up -Authorization
 				header_up -Referer
 				header_up Cookie `__Host-rhythm_token=[^;]*;?\s*` ""
+				# revalidate every page/script load (cheap 304s via the gateway's ETag/Last-Modified): after an image
+				# switch or a changed RHYTHM_FRAME_MODE, a browser must not keep running the old omni-app.js or
+				# rhythm-config.js from its heuristic cache
+				header_down Cache-Control "no-cache"
 				flush_interval -1
 			}
 		}

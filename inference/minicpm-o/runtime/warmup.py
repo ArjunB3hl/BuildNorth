@@ -53,6 +53,14 @@ def synthetic_chunk_audio(seconds: float = 1.0, rate: int = 16000) -> str:
     return base64.b64encode(pcm.tobytes()).decode()
 
 
+def synthetic_frames(frame_mode: str = "1") -> list[str]:
+    """One step's synthetic images in the given frame mode (see file_chunks)."""
+    one = synthetic_frame()
+    if frame_mode == "grid4":
+        return [one, base64.b64encode(grid_jpeg([base64.b64decode(one)] * 4)).decode()]
+    return [one] * int(frame_mode)
+
+
 def synthetic_frame() -> str:
     from PIL import Image  # noqa: PLC0415
     img = Image.new("RGB", (448, 448))
@@ -107,8 +115,11 @@ def file_chunks(path: str, chunks: int | None = None, frame_mode: str = "1") -> 
         per = 4 if frame_mode == "grid4" else int(frame_mode)
         fr = sampled_frames(path, per)
         out = []
-        for i in range(min(n, len(fr) // per)):
+        for i in range(n):
             group = fr[i * per:(i + 1) * per]
+            if not group:
+                break
+            group += group[-1:] * (per - len(group))            # a clip's last, partial second: repeat its last sample
             imgs = [group[len(group) // 2], grid_jpeg(group)] if frame_mode == "grid4" else group
             audio = pcm[i * second:(i + 1) * second]
             audio += b"\0" * (second - len(audio))
@@ -242,13 +253,14 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
                     drain: float = 10.0, no_queue: bool = False,
                     system_prompt: str = "You are a concise fitness coach. Always speak English.",
                     data: list | None = None, init_extra: dict | None = None, tail_chunks: int = 0,
-                    realtime: bool = True, duplex_config: dict | None = None) -> dict:
+                    realtime: bool = True, duplex_config: dict | None = None, frame_mode: str = "1") -> dict:
     """One omni full-duplex session: 1-second chunks (exactly 16000 float32 samples + frames), paced in real time
     unless realtime=False. tail_chunks appends that many silent chunks repeating the last frame: the model is forced to
     listen for the first 3 steps of a session and can only answer on a later step. The full duplex config is sent
     (default: DEFAULT_DUPLEX_CONFIG), because the backend otherwise keeps the previous session's sampling settings."""
     if data is None:
-        data = file_chunks(video_file, chunks) if video_file else [(synthetic_chunk_audio(), [synthetic_frame()])] * chunks
+        data = (file_chunks(video_file, chunks, frame_mode) if video_file
+                else [(synthetic_chunk_audio(), synthetic_frames(frame_mode))] * chunks)
     if tail_chunks:
         silence = base64.b64encode(b"\0" * 16000 * 4).decode()
         data = list(data) + [(silence, data[-1][1])] * tail_chunks
@@ -361,7 +373,8 @@ async def main_async(a) -> dict:
         out["chat"] = await run_chat(a.url, a.token, a.timeout, a.no_queue)
         print(f"[warmup] chat ok: {out['chat']['response_s']}s -> {out['chat']['text']!r}", flush=True)
     if not a.skip_video:
-        out["video"] = await run_video(a.url, a.token, a.timeout, a.chunks, a.video_file, a.drain, a.no_queue)
+        out["video"] = await run_video(a.url, a.token, a.timeout, a.chunks, a.video_file, a.drain, a.no_queue,
+                                       frame_mode=a.frame_mode)
         v = out["video"]
         print(f"[warmup] video duplex ok: {v['chunks_answered']}/{v['chunks_sent']} chunks answered, events "
               f"{v['events']}, chunk latency {v['chunk_latency_s']}", flush=True)
@@ -376,6 +389,8 @@ def main() -> int:
     ap.add_argument("--total-timeout", type=float, help="hard limit for the whole run (default: 3 x --timeout + chunks + 60)")
     ap.add_argument("--chunks", type=int, default=3, help="1-second video-duplex chunks to send")
     ap.add_argument("--video-file", help="use this (permitted) clip instead of synthetic input")
+    ap.add_argument("--frame-mode", default="1", choices=["1", "2", "3", "4", "grid4"],
+                    help="images per 1-second step: 1 (the warm-up), or what the patched page sends (grid4 by default)")
     ap.add_argument("--drain", type=float, default=10.0,
                     help="after the last chunk, stop this many seconds after the last answer")
     ap.add_argument("--no-queue", action="store_true", help="fail instead of waiting in the gateway queue")

@@ -10,7 +10,8 @@ Test knobs (environment): STUB_SPEAK=1 answers every video chunk with text + aud
 per-chunk model time; STUB_FAIL_AFTER_CHUNKS=N closes the video session with reason backend_error after N chunks;
 STUB_CLOSE_REASON=R answers session.close with reason R; STUB_REQUIRE_CONFIG=1 refuses a video session.init without a
 non-empty config (the real backend silently keeps the previous session's settings then); STUB_REFUSE_FIRST=N answers
-the first N sessions with session_failed, as while the worker is still cleaning up."""
+the first N sessions with session_failed, as while the worker is still cleaning up. Every session.init (its voice)
+and video chunk (its image count) is printed, so tests can check what reached the server."""
 import argparse
 import asyncio
 import base64
@@ -98,6 +99,8 @@ async def session(ws):
             t = msg.get("type")
             if t == "session.init":
                 cfg = (msg.get("payload") or {}).get("config")
+                voice = ((msg.get("payload") or {}).get("voice") or {}).get("ref_audio_path")
+                print(f"stub gateway: session.init mode={mode} voice={voice}", flush=True)
                 if mode != "chat" and os.environ.get("STUB_REQUIRE_CONFIG") == "1" and not cfg:
                     await send(ws, type="session.closed", reason="backend_error", diagnostic={"error": "no config"})
                     return
@@ -110,6 +113,7 @@ async def session(ws):
                 await send(ws, type="response.done", text=text)
             elif t == "input.append":
                 inp = msg.get("input") or {}
+                print(f"stub gateway: chunk {chunk} images={len(inp.get('video_frames') or [])}", flush=True)
                 await asyncio.sleep(float(os.environ.get("STUB_UNIT_S", "0.05")))
                 fail_after = int(os.environ.get("STUB_FAIL_AFTER_CHUNKS", "0") or 0)
                 if fail_after and chunk >= fail_after:

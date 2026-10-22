@@ -58,6 +58,8 @@ check "wrong bearer -> 401" 401 -H "Authorization: Bearer wrong-0123456789abcdef
 check "token + 1 char -> 401" 401 -H "Authorization: Bearer ${T}x" "$U/echo"
 check "token minus last char -> 401" 401 -H "Authorization: Bearer ${T%?}" "$U/echo"
 check "token without 'Bearer ' -> 401" 401 -H "Authorization: $T" "$U/echo"
+check "authorized GET reaches the gateway" 200 -H "Authorization: Bearer $T" "$U/echo"
+body_has "proxied responses say Cache-Control: no-cache (no stale page code after an image switch)" '^[Cc]ache-[Cc]ontrol: no-cache'
 check "empty access_token -> 401" 401 "$U/echo?access_token="
 check "wrong cookie -> 401" 401 -H "Cookie: __Host-rhythm_token=nope" "$U/echo"
 check "old cookie name is not accepted" 401 -H "Cookie: rhythm_token=$T" "$U/echo"

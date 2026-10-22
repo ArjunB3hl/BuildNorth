@@ -68,15 +68,33 @@ def build() -> dict:
     }
 
 
-# duplex settings the backend accepts (core/schemas/duplex.py); an unknown key would end every session
-DUPLEX_KEYS = {"decode_mode", "temperature", "top_k", "top_p", "text_repetition_penalty", "text_repetition_window_size",
-               "length_penalty", "listen_prob_scale", "listen_top_k"}
+# Duplex settings a session may send, with the bounds of the backend's DuplexConfig (core/schemas/duplex.py @ 47709a92):
+# (type, min, max). A value out of range fails every page session at session.init, so it is refused at start-up.
+DUPLEX_FIELDS = {
+    "temperature": (float, 0.0, 2.0), "top_k": (int, 0, None), "top_p": (float, 0.0, 1.0),
+    "text_repetition_penalty": (float, 1.0, None), "text_repetition_window_size": (int, 1, None),
+    "length_penalty": (float, 0.1, 5.0), "listen_prob_scale": (float, 0.0, None), "listen_top_k": (int, 1, None),
+    "decode_mode": (str, None, None),
+}
 FRAME_MODES = {"grid4", "1", "2", "3", "4"}
+KV_WINDOWS = {"off", "basic", "context"}
+PAGE_KV_CAP = 8192        # the demo page stops a session at this KV-cache length (static/omni/omni-app.js)
+
+
+def duplex_value_ok(key: str, v) -> bool:
+    kind, lo, hi = DUPLEX_FIELDS[key]
+    if key == "decode_mode":
+        return v in ("sampling", "greedy")
+    if key == "listen_top_k" and v is None:
+        return True
+    if isinstance(v, bool) or not isinstance(v, (int, float) if kind is float else int):
+        return False
+    return (lo is None or v >= lo) and (hi is None or v <= hi)
 
 
 def page_config() -> dict:
     """Settings for the patched demo page (docker/patch_demo.py): frames per 1-second step and duplex settings."""
-    mode = os.environ.get("RHYTHM_FRAME_MODE", "grid4")
+    mode = os.environ.get("RHYTHM_FRAME_MODE", "").strip() or "grid4"
     if mode not in FRAME_MODES:
         raise SystemExit(f"[write_config] RHYTHM_FRAME_MODE={mode!r}: one of {', '.join(sorted(FRAME_MODES))} (grid4 = the "
                          "current frame + one 2x2 grid of 4 samples per second; N = N frames per second)")
@@ -85,9 +103,31 @@ def page_config() -> dict:
         duplex = json.loads(raw)
     except ValueError as e:
         raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG is not valid JSON ({e})")
-    if not isinstance(duplex, dict) or set(duplex) - DUPLEX_KEYS:
-        raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG must be a JSON object with keys from {sorted(DUPLEX_KEYS)}")
+    if not isinstance(duplex, dict) or set(duplex) - set(DUPLEX_FIELDS):
+        raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG must be a JSON object with keys from {sorted(DUPLEX_FIELDS)}")
+    for k, v in duplex.items():
+        if not duplex_value_ok(k, v):
+            kind, lo, hi = DUPLEX_FIELDS[k]
+            allowed = ("'sampling' or 'greedy'" if k == "decode_mode" else
+                       f"{kind.__name__}{'' if lo is None else f' >= {lo}'}{'' if hi is None else f' <= {hi}'}"
+                       + (" or null" if k == "listen_top_k" else ""))
+            raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG {k}={v!r}: must be {allowed}")
     return {"frameMode": mode, "duplexConfig": duplex}
+
+
+def kv_window() -> dict:
+    """The backend's duplex KV window (read from the same variables by the patched core/processors/unified.py, which
+    has the same defaults): checked here so a bad value stops start-up instead of the model load."""
+    mode = os.environ.get("RHYTHM_KV_WINDOW", "basic")
+    if mode not in KV_WINDOWS:
+        raise SystemExit(f"[write_config] RHYTHM_KV_WINDOW={mode!r}: one of basic (default), context, off")
+    high = int(env_num("RHYTHM_KV_WINDOW_HIGH", 6000, int))
+    low = int(env_num("RHYTHM_KV_WINDOW_LOW", 4500, int))
+    # one listening second adds up to ~280 tokens (4 images), a speaking one a few dozen more: keep 1000 below the cap
+    if mode == "basic" and not 0 < low < high <= PAGE_KV_CAP - 1000:
+        raise SystemExit(f"[write_config] RHYTHM_KV_WINDOW_LOW={low} / RHYTHM_KV_WINDOW_HIGH={high}: need "
+                         f"0 < LOW < HIGH <= {PAGE_KV_CAP - 1000} (the page stops a session at {PAGE_KV_CAP} tokens)")
+    return {"mode": mode, "high": high, "low": low}
 
 
 def write_atomic(path: str, text: str) -> None:
@@ -97,9 +137,22 @@ def write_atomic(path: str, text: str) -> None:
     os.replace(tmp, path)
 
 
+def yaml_quoted(text: str) -> str:
+    """text as a YAML double-quoted scalar on one line. json.dumps escapes quotes, backslashes and control characters
+    (valid YAML escapes too) but writes emoji as UTF-16 surrogate escapes, which YAML rejects: so keep non-ASCII
+    literal and escape only what YAML may not contain literally or would read as a line break."""
+    out = []
+    for ch in json.dumps(text, ensure_ascii=False)[1:-1]:
+        c = ord(ch)
+        printable = c in (0x09, 0x0A, 0x0D) or 0x20 <= c <= 0x7E or 0xA0 <= c <= 0xD7FF or 0xE000 <= c <= 0xFFFD \
+            or c >= 0x10000
+        out.append(ch if printable and c not in (0x2028, 0x2029) else f"\\u{c:04x}")
+    return '"' + "".join(out) + '"'
+
+
 def set_coach_prompt(app_dir: str, prompt: str) -> None:
-    """Replace the English preset's system prompt (the page loads it into the prompt box). A JSON string is a valid
-    YAML double-quoted scalar, so the one line is rewritten without a YAML library."""
+    """Replace the English preset's system prompt (the page loads it into the prompt box): the one line is rewritten
+    without a YAML library, and checked with PyYAML (as the demo reads it) where available."""
     path = os.path.join(app_dir, "assets", "presets", "omni", "english_call.yaml")
     try:
         lines = open(path, encoding="utf-8").read().splitlines()
@@ -108,7 +161,13 @@ def set_coach_prompt(app_dir: str, prompt: str) -> None:
     hits = [i for i, line in enumerate(lines) if line.startswith("system_prompt:")]
     if len(hits) != 1:
         raise SystemExit(f"[write_config] {path}: expected one system_prompt line, found {len(hits)}")
-    lines[hits[0]] = "system_prompt: " + json.dumps(prompt)
+    lines[hits[0]] = "system_prompt: " + yaml_quoted(prompt)
+    try:
+        import yaml  # noqa: PLC0415 - in the image (the demo reads presets with it); optional for the CPU tests
+    except ImportError:
+        yaml = None
+    if yaml is not None and yaml.safe_load(lines[hits[0]]) != {"system_prompt": prompt}:
+        raise SystemExit("[write_config] RHYTHM_COACH_PROMPT does not survive YAML quoting; simplify it")
     write_atomic(path, "\n".join(lines) + "\n")
 
 
@@ -119,6 +178,7 @@ def main() -> int:
     a = ap.parse_args()
     cfg = build()
     page = page_config()
+    window = kv_window()
     ref = cfg["audio"]["ref_audio_path"]
     app_dir = os.path.dirname(os.path.abspath(a.out))
     if not a.print and not os.path.isfile(ref if os.path.isabs(ref) else os.path.join(app_dir, ref)):
@@ -127,6 +187,7 @@ def main() -> int:
     if a.print:
         sys.stdout.write(text)
         sys.stdout.write("rhythm-config.js: " + json.dumps(page) + "\n")
+        sys.stdout.write("kv window: " + json.dumps(window) + "\n")
         return 0
     write_atomic(a.out, text)
     os.makedirs(os.path.join(app_dir, "static"), exist_ok=True)
@@ -135,7 +196,8 @@ def main() -> int:
         set_coach_prompt(app_dir, os.environ["RHYTHM_COACH_PROMPT"].strip())
     print(f"[write_config] wrote {a.out}: model_path={cfg['model']['model_path']} attn={cfg['model']['attn_implementation']} "
           f"compile={cfg['service']['compile']} recording={cfg['recording']['enabled']} voice={cfg['audio']['ref_audio_path']} "
-          f"page frames={page['frameMode']} duplex={page['duplexConfig']}")
+          f"page frames={page['frameMode']} duplex={page['duplexConfig']} kv_window={window['mode']}"
+          + (f" {window['low']}-{window['high']}" if window["mode"] == "basic" else ""))
     return 0
 
 

@@ -10,7 +10,15 @@
 2. Settings from the deployment (static/rhythm-config.js, written by the entrypoint from the environment): the frame
    mode, and duplex settings (e.g. listen_prob_scale) merged under the page's own length-penalty slider.
 3. Coaching defaults: the "English Call" preset gets the Rhythm form-coaching prompt, and the length-penalty slider
-   starts at 0.8 (upstream 1.1, which makes turns longer).
+   starts at 0.8 (upstream 1.1, which makes turns longer). The page saves its settings under its own localStorage key,
+   so values saved by the unpatched page (length penalty 1.1, HD, an old prompt) on the same origin do not come back.
+   HD (2 slices per image) is used only with one frame per step: with grid4 it would be 6 slices per step.
+4. A bounded duplex KV cache (core/processors/unified.py). Upstream never prunes it in this demo, and the page stops a
+   session when it reaches 8192 tokens: each listening second costs ~79 tokens with one image and ~145 with two, so a
+   grid4 session would end after ~55 s. The backend now uses the model's "basic" sliding window (the system prompt and
+   reference voice are kept; the oldest seconds are dropped when the cache passes RHYTHM_KV_WINDOW_HIGH tokens, down
+   to RHYTHM_KV_WINDOW_LOW). RHYTHM_KV_WINDOW=off restores upstream; "context" is the model's other mode.
+5. /mobile-omni/ loads the same rhythm-config.js and starts at 0.8 (it runs the same patched omni-app.js).
 
 Every edit asserts that the upstream text is exactly as expected, so a changed upstream fails the build instead of
 being patched wrongly.
@@ -138,6 +146,18 @@ const FILE_MAX_DURATION = 120; // 2 minutes"""),
         ("""                    if (chunk.frameBase64) msg.frame_base64_list = [chunk.frameBase64];""",
          """                    if (chunk.frameBase64List && chunk.frameBase64List.length) msg.frame_base64_list = chunk.frameBase64List;
                     else if (chunk.frameBase64) msg.frame_base64_list = [chunk.frameBase64];"""),
+        # 3. own settings key: the unpatched page saved 1.1 etc. under 'omni_settings' on this origin
+        ("""const settingsPersistence = new SettingsPersistence('omni_settings', [""",
+         """const settingsPersistence = new SettingsPersistence('omni_settings_rhythm1', [  // Rhythm: see docker/patch_demo.py"""),
+        # 3. HD only with one frame per step
+        ("""function getEffectiveMaxSliceNums() {
+    return _hdToggleActive ? 2 : 1;
+}""",
+         """function getEffectiveMaxSliceNums() {
+    // Rhythm: HD = 2 slices per image; with several images per step that is no longer real time (docker/patch_demo.py)
+    const rhythmMode = String(((window.RHYTHM_CONFIG || {}).frameMode) || 'grid4');
+    return _hdToggleActive && rhythmMode === '1' ? 2 : 1;
+}"""),
         # 2. deployment duplex settings under the page's slider
         ("""        config: { length_penalty: parseFloat(document.getElementById('omniLengthPenalty').value) || 1.0 },""",
          """        config: Object.assign({}, ((window.RHYTHM_CONFIG || {}).duplexConfig) || {},
@@ -148,8 +168,41 @@ const FILE_MAX_DURATION = 120; // 2 minutes"""),
         ("""<script src="/static/ref-audio-player.js"></script>""",
          """<script src="/static/rhythm-config.js"></script>
 <script src="/static/ref-audio-player.js"></script>"""),
-        # 3. shorter turns by default
+        # 3. shorter turns by default, with a preset button for it
         ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="0.8\""""),
+        ("""<button type="button" class="lp-preset-btn active" data-lp="1.1" title""",
+         """<button type="button" class="lp-preset-btn" data-lp="1.1" title"""),
+        ("""                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button type="button" class="lp-preset-btn" data-lp="1.2" title""",
+         """                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button type="button" class="lp-preset-btn active" data-lp="0.8" title="Coach — one short sentence, then quiet">Coach</button>
+                            <span style="font-size:10px;color:#999;">One short sentence (Rhythm default)</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button type="button" class="lp-preset-btn" data-lp="1.2" title"""),
+    ])
+    # 5. the mobile page runs the same omni-app.js
+    edit("static/mobile-omni/index.html", [
+        ("""<script src="/static/ref-audio-player.js"></script>""",
+         """<script src="/static/rhythm-config.js"></script>
+<script src="/static/ref-audio-player.js"></script>"""),
+        ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="0.8\""""),
+        ("""class="lp-preset-btn active" data-lp="1.1">""", """class="lp-preset-btn" data-lp="1.1">"""),
+    ])
+    # 4. bounded duplex KV cache (the backend process inherits the container environment; write_config.py validates it)
+    edit("core/processors/unified.py", [
+        ("""                "force_listen_count": self.duplex_config.force_listen_count,
+            },
+            device=self.device,
+            chat_vocoder=self.chat_vocoder,""",
+         """                "force_listen_count": self.duplex_config.force_listen_count,
+                # Rhythm (docker/patch_demo.py): bound the duplex KV cache
+                "sliding_window_mode": os.environ.get("RHYTHM_KV_WINDOW", "basic"),
+                "basic_window_high_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_HIGH", "6000")),
+                "basic_window_low_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_LOW", "4500")),
+            },
+            device=self.device,
+            chat_vocoder=self.chat_vocoder,"""),
     ])
     # 3. English preset carries the coaching prompt (a JSON string is a valid YAML double-quoted scalar)
     edit("assets/presets/omni/english_call.yaml", [
