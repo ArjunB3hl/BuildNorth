@@ -149,14 +149,23 @@ const FILE_MAX_DURATION = 120; // 2 minutes"""),
         # 3. own settings key: the unpatched page saved 1.1 etc. under 'omni_settings' on this origin
         ("""const settingsPersistence = new SettingsPersistence('omni_settings', [""",
          """const settingsPersistence = new SettingsPersistence('omni_settings_rhythm1', [  // Rhythm: see docker/patch_demo.py"""),
-        # 3. HD only with one frame per step
-        ("""function getEffectiveMaxSliceNums() {
+        # 3. HD only with one image per step (camera frame mode 1, or file playback); the hint says so
+        ("""    if (hint) hint.textContent = active ? '192 tok' : '64 tok';
+}
+
+function getEffectiveMaxSliceNums() {
     return _hdToggleActive ? 2 : 1;
 }""",
-         """function getEffectiveMaxSliceNums() {
-    // Rhythm: HD = 2 slices per image; with several images per step that is no longer real time (docker/patch_demo.py)
-    const rhythmMode = String(((window.RHYTHM_CONFIG || {}).frameMode) || 'grid4');
-    return _hdToggleActive && rhythmMode === '1' ? 2 : 1;
+         """    if (hint) hint.textContent = active ? (_rhythmHdAllowed() ? '192 tok' : 'HD: frame mode 1 only') : '64 tok';
+}
+
+// Rhythm: HD = 2 slices per image; with several camera images per step that is no longer real time (docker/patch_demo.py)
+function _rhythmHdAllowed() {
+    return currentMode === 'file' || String(((window.RHYTHM_CONFIG || {}).frameMode) || 'grid4') === '1';
+}
+
+function getEffectiveMaxSliceNums() {
+    return _hdToggleActive && _rhythmHdAllowed() ? 2 : 1;
 }"""),
         # 2. deployment duplex settings under the page's slider
         ("""        config: { length_penalty: parseFloat(document.getElementById('omniLengthPenalty').value) || 1.0 },""",
@@ -197,9 +206,9 @@ const FILE_MAX_DURATION = 120; // 2 minutes"""),
             chat_vocoder=self.chat_vocoder,""",
          """                "force_listen_count": self.duplex_config.force_listen_count,
                 # Rhythm (docker/patch_demo.py): bound the duplex KV cache
-                "sliding_window_mode": os.environ.get("RHYTHM_KV_WINDOW", "basic"),
-                "basic_window_high_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_HIGH", "6000")),
-                "basic_window_low_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_LOW", "4500")),
+                "sliding_window_mode": os.environ.get("RHYTHM_KV_WINDOW") or "basic",
+                "basic_window_high_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_HIGH") or "6000"),
+                "basic_window_low_tokens": int(os.environ.get("RHYTHM_KV_WINDOW_LOW") or "4500"),
             },
             device=self.device,
             chat_vocoder=self.chat_vocoder,"""),

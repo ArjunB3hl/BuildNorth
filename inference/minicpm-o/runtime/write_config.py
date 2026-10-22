@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -87,7 +88,9 @@ def duplex_value_ok(key: str, v) -> bool:
         return v in ("sampling", "greedy")
     if key == "listen_top_k" and v is None:
         return True
-    if isinstance(v, bool) or not isinstance(v, (int, float) if kind is float else int):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+        return False
+    if kind is int and v != int(v):                              # 20.0 is accepted by the backend, 20.5 is not
         return False
     return (lo is None or v >= lo) and (hi is None or v <= hi)
 
@@ -99,8 +102,10 @@ def page_config() -> dict:
         raise SystemExit(f"[write_config] RHYTHM_FRAME_MODE={mode!r}: one of {', '.join(sorted(FRAME_MODES))} (grid4 = the "
                          "current frame + one 2x2 grid of 4 samples per second; N = N frames per second)")
     raw = os.environ.get("RHYTHM_DUPLEX_CONFIG", "").strip() or "{}"
+    def no_constant(name):
+        raise ValueError(f"{name} is not a number the page can send")
     try:
-        duplex = json.loads(raw)
+        duplex = json.loads(raw, parse_constant=no_constant)
     except ValueError as e:
         raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG is not valid JSON ({e})")
     if not isinstance(duplex, dict) or set(duplex) - set(DUPLEX_FIELDS):
@@ -112,13 +117,16 @@ def page_config() -> dict:
                        f"{kind.__name__}{'' if lo is None else f' >= {lo}'}{'' if hi is None else f' <= {hi}'}"
                        + (" or null" if k == "listen_top_k" else ""))
             raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG {k}={v!r}: must be {allowed}")
+    if duplex.get("temperature") == 0 and duplex.get("decode_mode", "sampling") == "sampling":
+        # the decoder divides the logits by the temperature: every session would fail at its first decode step
+        raise SystemExit('[write_config] RHYTHM_DUPLEX_CONFIG temperature=0 with sampling: use "decode_mode": "greedy"')
     return {"frameMode": mode, "duplexConfig": duplex}
 
 
 def kv_window() -> dict:
     """The backend's duplex KV window (read from the same variables by the patched core/processors/unified.py, which
     has the same defaults): checked here so a bad value stops start-up instead of the model load."""
-    mode = os.environ.get("RHYTHM_KV_WINDOW", "basic")
+    mode = os.environ.get("RHYTHM_KV_WINDOW", "").strip() or "basic"
     if mode not in KV_WINDOWS:
         raise SystemExit(f"[write_config] RHYTHM_KV_WINDOW={mode!r}: one of basic (default), context, off")
     high = int(env_num("RHYTHM_KV_WINDOW_HIGH", 6000, int))

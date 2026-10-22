@@ -378,7 +378,8 @@ the build): the page samples the camera every 1000/N ms and sends, per step, `RH
 Each image costs about 150-190 ms of model time; a step must finish within 1 s, and a spoken answer needs headroom.
 `grid4` gives five moments per second for the cost of two images, the way MiniCPM-o's own examples combine frames.
 The app's own client can send the same thing: `frame_base64_list` takes several JPEGs per step. The page's "HD"
-toggle (2 slices per image) is used only in mode `1`: with `grid4` it would be 6 slices per step, not real time.
+toggle (2 slices per image) applies only in mode `1` and to file playback (the hint says "HD: frame mode 1 only"
+otherwise): with `grid4` it would be 6 slices per step, not real time.
 
 **Session length and the KV window.** Every second adds to the model's KV cache: about 79 tokens with one image, about
 145 with two (`grid4`, `2`), about 277 with four, plus a few dozen when the coach speaks. Upstream never prunes the
@@ -388,16 +389,19 @@ after about 55 s (upstream's one frame: about 100 s). `docker/patch_demo.py` the
 `RHYTHM_KV_WINDOW_HIGH` (6000) tokens the oldest seconds are dropped down to `RHYTHM_KV_WINDOW_LOW` (4500). With
 `grid4` the coach then always sees the last ~30-40 s, and a page session runs until the gateway's 300 s cap (the page
 logs "KV pruned" when it slides). `RHYTHM_KV_WINDOW=off` restores upstream; `context` is the model's other mode (it
-carries a summary of dropped text). **Not yet measured on the GPU:** per-step time and answers after the window
-slides.
+carries a summary of dropped text). A slide drops one unit at a time and each drop rewrites the remaining cache, so
+the step after a slide starts later (estimated ~0.1-0.2 s with `grid4`; much more for audio-only sessions, whose units
+are small). The backend's `wall_clock_ms` does not include it; chunk latency does. **Not yet measured on the GPU:**
+per-step time and answers after the window slides.
 
 Coaching defaults on the page: the "English Call" preset carries the Rhythm form-coaching prompt (greet briefly, watch
 the body position, say if it is right or give one short correction, otherwise stay quiet), and the length-penalty
 slider starts at 0.8 with a "Coach" preset button (upstream 1.1; lower = shorter turns). The page keeps its settings
 under its own browser key (`omni_settings_rhythm1`), so values the unpatched page saved on the same Pod URL (1.1, HD,
 an old prompt) are not restored. Pages and scripts are served with `Cache-Control: no-cache`, so a browser picks up a
-new image or a changed `RHYTHM_FRAME_MODE` on the next reload. `/mobile-omni/` loads the same settings; `/omni` is the
-page that was tested. Overrides, written at start-up by `write_config.py` (a bad value stops start-up with a message):
+new image or a changed `RHYTHM_FRAME_MODE` on the next reload (a page cached before this header existed needs one
+hard reload, Cmd+Shift+R). `/mobile-omni/` loads the same settings but picks its preset from the browser language:
+choose "English Call" there. `/omni` is the page that was tested. Overrides, written at start-up by `write_config.py` (a bad value stops start-up with a message):
 - `RHYTHM_COACH_PROMPT`: replaces the preset's prompt.
 - `RHYTHM_DUPLEX_CONFIG`: JSON object of duplex settings sent with every session (keys: `temperature`, `top_k`,
   `top_p`, `listen_prob_scale` (> 1 = speaks less), `listen_top_k`, `length_penalty`, `decode_mode`,

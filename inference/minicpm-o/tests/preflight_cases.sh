@@ -169,11 +169,30 @@ reject "KV window high mark too close to the page's 8192 cap -> clear error" "ne
   RHYTHM_KV_WINDOW_HIGH=8000
 reject "KV window low mark above the high mark -> clear error" "need 0 < LOW < HIGH" RHYTHM_KV_WINDOW_LOW=6500
 reject "KV window mark that is not a number -> clear error" "RHYTHM_KV_WINDOW_HIGH='6k' is not a number" RHYTHM_KV_WINDOW_HIGH=6k
+reject "duplex value Infinity -> clear error" "Infinity is not a number the page can send" \
+  'RHYTHM_DUPLEX_CONFIG={"listen_prob_scale": Infinity}'
+reject "duplex value 1e400 (overflows to inf) -> clear error" "listen_prob_scale=inf: must be float" \
+  'RHYTHM_DUPLEX_CONFIG={"listen_prob_scale": 1e400}'
+reject "temperature 0 with sampling -> points to greedy" 'temperature=0 with sampling: use "decode_mode": "greedy"' \
+  'RHYTHM_DUPLEX_CONFIG={"temperature": 0}'
+check "temperature 0 with greedy and an integral float for top_k are accepted" \
+  'cfg["duplexConfig"] == {"temperature": 0, "decode_mode": "greedy", "top_k": 20.0}' \
+  'RHYTHM_DUPLEX_CONFIG={"temperature": 0, "decode_mode": "greedy", "top_k": 20.0}'
 if out=$(MODEL_DIR=/m RHYTHM_KV_WINDOW=off python3 runtime/write_config.py --out "$W/app/config.json" 2>&1) \
    && grep -q "kv_window=off" <<<"$out" && out2=$(MODEL_DIR=/m python3 runtime/write_config.py --out "$W/app/config.json" 2>&1) \
    && grep -q "kv_window=basic 4500-6000" <<<"$out2"; then
   pass=$((pass + 1)); echo "ok    KV window: basic 4500-6000 by default, off on request (reported at start-up)"
 else failn=$((failn + 1)); echo "FAIL  KV window report: $out / ${out2:-}"; fi
+# the patched backend (core/processors/unified.py) must read the window variables exactly like write_config.py does
+if RHYTHM_KV_WINDOW= RHYTHM_KV_WINDOW_HIGH= RHYTHM_KV_WINDOW_LOW= python3 - docker/patch_demo.py <<'EOF'
+import os, re, sys
+src = open(sys.argv[1]).read()
+exprs = re.findall(r'"(sliding_window_mode|basic_window_high_tokens|basic_window_low_tokens)": (.+?),\n', src)
+got = {k: eval(e) for k, e in exprs}
+assert got == {"sliding_window_mode": "basic", "basic_window_high_tokens": 6000, "basic_window_low_tokens": 4500}, got
+EOF
+then pass=$((pass + 1)); echo "ok    patched backend: empty KV window variables mean the defaults (as in write_config.py)"
+else failn=$((failn + 1)); echo "FAIL  patched backend reads empty KV window variables differently from write_config.py"; fi
 
 echo "preflight cases: $pass passed, $failn failed"
 [[ $failn == 0 ]]
