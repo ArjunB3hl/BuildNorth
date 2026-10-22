@@ -99,8 +99,8 @@ scripts/stage_model.py       model staging to the network volume via Runpod's S3
 scripts/stage_clips.py       builds and stages a private test-clip set (policy, metadata stripping, checksums)
 runpod/template.json         Runpod template (REST TemplateCreateInput)
 runpod/pod.json              GPU Pod request (REST PodCreateInput)
-runpod/rp.sh                 template / create / status / wait-ready / stop / start / verify-stopped / terminate / running
-tests/                       CPU tests (section 13) and the stub demo processes they use
+runpod/rp.sh                 template / create / status / wait-ready / stop / start / set-image / verify-stopped / terminate / running
+tests/                       CPU tests (section 13) and the stubs they use (demo processes, Runpod REST API)
 .env.example                 every setting, placeholders only
 ../../.github/workflows/minicpm-o-image.yml        CPU validation + image build/push (GitHub-hosted runner)
 ../../.github/workflows/minicpm-o-stage-model.yml  model staging job (GitHub-hosted runner)
@@ -313,6 +313,18 @@ Equivalents (from your machine, with your API key): console → Pods → ⋮ →
 
 Nothing in this folder deletes a network volume or any other resource. Delete the volume yourself in Runpod → Storage
 when the model is no longer needed.
+
+**Switching a running Pod to a new image** (keeps its GPU host, volume and URL; no new template needed):
+
+```bash
+runpod/rp.sh set-image POD_ID         # PATCH /pods/POD_ID with imageName=IMAGE_REF; asks first ('switch image')
+runpod/rp.sh wait-ready POD_ID        # the Pod restarts: image pull + model load, about 5 min
+```
+
+The PATCH resets the Pod, and Runpod does not say whether settings left out of it are kept, so `set-image` sends every
+setting back as it is (env, ports, disks, registry auth) with only the image changed, then reads the Pod again and
+fails if anything else changed. Env values are compared by hash and never printed. The Pod keeps the template id it
+was created from; run `rp.sh template` as well so new Pods get the same image.
 
 ## 10. Access
 
