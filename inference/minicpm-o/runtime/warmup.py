@@ -266,6 +266,7 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
         data = list(data) + [(silence, data[-1][1])] * tail_chunks
     kinds: dict[str, int] = {}
     first: dict[str, float] = {}
+    kv_by_chunk: dict[int, int] = {}
     answered: dict[int, float] = {}           # chunk number -> seconds after t_start of its first answer
     texts: list[str] = []
     audio_samples = 0
@@ -335,6 +336,10 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
                         w = (msg.get("metrics") or {}).get("wall_clock_ms")
                         if w is not None:
                             wall.append(w)
+                    # the model's KV-cache length after this step (it shrinks when the sliding window drops seconds)
+                    kv = (msg.get("metrics") or {}).get("kv_cache_length", msg.get("kv_cache_length"))
+                    if idx is not None and isinstance(kv, int):
+                        kv_by_chunk[idx] = kv
                 elif t == "error":
                     raise ProbeError(f"video session error: {msg}")
                 elif t == "session.closed":
@@ -362,6 +367,10 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
             if last in answered and last < len(sent) else None,
             "backend_wall_clock_ms": {"n": len(wall), "max": max(wall) if wall else None,
                                       "mean": round(sum(wall) / len(wall), 1) if wall else None},
+            "kv_cache_length": {"max": max(kv_by_chunk.values()) if kv_by_chunk else None,
+                                "last": kv_by_chunk[max(kv_by_chunk)] if kv_by_chunk else None,
+                                "drops": sum(1 for i in kv_by_chunk if i - 1 in kv_by_chunk and kv_by_chunk[i] < kv_by_chunk[i - 1]),
+                                "by_chunk": [kv_by_chunk.get(i) for i in range(len(data))]},
             "text": "".join(texts)[:2000], "audio_out_s": round(audio_samples / 24000, 2),
             "closed_reason": closed.get("reason"), "duplex_config": config,
             "send_times_s": [round(t - t_start, 3) for t in sent], "answer_times_s": answered}
@@ -376,8 +385,11 @@ async def main_async(a) -> dict:
         out["video"] = await run_video(a.url, a.token, a.timeout, a.chunks, a.video_file, a.drain, a.no_queue,
                                        frame_mode=a.frame_mode)
         v = out["video"]
+        kv = v["kv_cache_length"]
         print(f"[warmup] video duplex ok: {v['chunks_answered']}/{v['chunks_sent']} chunks answered, events "
-              f"{v['events']}, chunk latency {v['chunk_latency_s']}", flush=True)
+              f"{v['events']}, chunk latency {v['chunk_latency_s']}"
+              + (f", kv cache max {kv['max']} last {kv['last']} drops {kv['drops']}" if kv["max"] is not None else ""),
+              flush=True)
     return out
 
 

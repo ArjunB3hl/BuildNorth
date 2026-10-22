@@ -60,6 +60,16 @@ gateway STUB_REQUIRE_CONFIG=1
 probe --skip-chat --chunks 2 --timeout 20 --json "$W/g.json" > "$W/g.log" 2>&1 && ok "probe exit 0 with the config check on" || bad "config" "$W/g.log"
 [[ $(field "$W/g.json" "d['video']['duplex_config']['temperature']") == 0.7 ]] && ok "duplex_config recorded (temperature 0.7)" || bad "config record"
 
+echo "--- KV-cache length per chunk (the sliding window shows as drops) and --frame-mode grid4 on synthetic input"
+gateway STUB_KV_WINDOW=3
+probe --skip-chat --chunks 7 --timeout 20 --frame-mode grid4 --json "$W/k.json" > "$W/k.log" 2>&1 \
+  && ok "probe exit 0 (grid4, 7 chunks)" || bad "probe failed" "$W/k.log"
+[[ $(field "$W/k.json" "d['video']['kv_cache_length']['by_chunk']") == "[300, 445, 590, 300, 445, 590, 300]" \
+   && $(field "$W/k.json" "(d['video']['kv_cache_length']['max'], d['video']['kv_cache_length']['drops'])") == "(590, 2)" ]] \
+  && grep -q 'kv cache max 590 last 300 drops 2' "$W/k.log" && ok "kv_cache_length recorded per chunk: max 590, 2 drops" || bad "kv record" "$W/k.log"
+[[ $(grep -c 'stub gateway: chunk [0-9]* images=2$' "$W/gw.log") == 7 ]] && ok "--frame-mode grid4: 2 synthetic images per chunk" \
+  || bad "grid4 synthetic images" "$W/gw.log"
+
 echo "--- no free worker: --no-queue fails at once; otherwise the handshake deadline holds despite queue updates"
 gateway --no-register
 t0=$(date +%s)

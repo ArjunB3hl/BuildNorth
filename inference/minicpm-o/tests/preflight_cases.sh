@@ -184,7 +184,7 @@ if out=$(MODEL_DIR=/m RHYTHM_KV_WINDOW=off python3 runtime/write_config.py --out
   pass=$((pass + 1)); echo "ok    KV window: basic 4500-6000 by default, off on request (reported at start-up)"
 else failn=$((failn + 1)); echo "FAIL  KV window report: $out / ${out2:-}"; fi
 # the patched backend (core/processors/unified.py) must read the window variables exactly like write_config.py does
-if RHYTHM_KV_WINDOW= RHYTHM_KV_WINDOW_HIGH= RHYTHM_KV_WINDOW_LOW= python3 - docker/patch_demo.py <<'EOF'
+if RHYTHM_KV_WINDOW='' RHYTHM_KV_WINDOW_HIGH='' RHYTHM_KV_WINDOW_LOW='' python3 - docker/patch_demo.py <<'EOF'
 import os, re, sys
 src = open(sys.argv[1]).read()
 exprs = re.findall(r'"(sliding_window_mode|basic_window_high_tokens|basic_window_low_tokens)": (.+?),\n', src)

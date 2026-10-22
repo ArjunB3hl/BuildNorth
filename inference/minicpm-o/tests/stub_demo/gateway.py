@@ -8,7 +8,8 @@ of each chunk; session.close is answered with session.closed.
 
 Test knobs (environment): STUB_SPEAK=1 answers every video chunk with text + audio + listen deltas; STUB_UNIT_S is the
 per-chunk model time; STUB_FAIL_AFTER_CHUNKS=N closes the video session with reason backend_error after N chunks;
-STUB_CLOSE_REASON=R answers session.close with reason R; STUB_REQUIRE_CONFIG=1 refuses a video session.init without a
+STUB_CLOSE_REASON=R answers session.close with reason R; STUB_KV_WINDOW=K makes the reported kv_cache_length fall
+back every K chunks; STUB_REQUIRE_CONFIG=1 refuses a video session.init without a
 non-empty config (the real backend silently keeps the previous session's settings then); STUB_REFUSE_FIRST=N answers
 the first N sessions with session_failed, as while the worker is still cleaning up. Every session.init (its voice)
 and video chunk (its image count) is printed, so tests can check what reached the server."""
@@ -120,7 +121,9 @@ async def session(ws):
                     await send(ws, type="session.closed", reason="backend_error", diagnostic={"error": "stub failure"})
                     return
                 usage = {"chunk_index": chunk}
-                metrics = {"wall_clock_ms": float(os.environ.get("STUB_UNIT_S", "0.05")) * 1000}
+                metrics = {"wall_clock_ms": float(os.environ.get("STUB_UNIT_S", "0.05")) * 1000,
+                           # grows 145 per step; STUB_KV_WINDOW=K drops it back every K steps, like the sliding window
+                           "kv_cache_length": 300 + 145 * (chunk % int(os.environ.get("STUB_KV_WINDOW") or 10**9))}
                 if os.environ.get("STUB_SPEAK") == "1":
                     await send(ws, type="response.output.delta", kind="text", text="Nice form. ",
                                input_id=inp.get("input_id"), metrics=metrics, **usage)
