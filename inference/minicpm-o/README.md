@@ -111,11 +111,11 @@ tests/                       CPU tests (section 13) and the stub demo processes 
 |---|---|---|---|
 | 1 | Permission to push this folder and the two workflows to `ArjunB3hl/BuildNorth` (**public repo**: the files become public; no secrets are in them) | git push | no |
 | 2 | (recommended) Repository secret `GHCR_TOKEN`: a classic PAT with only `write:packages`. The workflow pushes with it (GitHub's docs disagree on whether a package first pushed with `GITHUB_TOKEN` from a public repo starts public). Either way, the workflow first pushes a code-free placeholder and refuses to push the real image unless an anonymous pull of it is denied (the package must stay private: the demo code has no license, and public cannot be undone) | GitHub → Settings → Secrets → Actions | no (GHCR storage/bandwidth currently free) |
-| 3 | A GitHub classic PAT with only `read:packages`, saved in Runpod → Settings → Container Registry Auth (registry `ghcr.io`, username `ArjunB3hl`) → its id is `RUNPOD_REGISTRY_AUTH_ID` | Runpod | no |
+| 3 | A GitHub classic PAT with only `read:packages`, saved in Runpod → Credentials → Container Registry Auth (registry `ghcr.io`, username `ArjunB3hl`). Put its id into `.env` as `RUNPOD_REGISTRY_AUTH_ID` (`runpod/rp.sh registry-auths` lists ids); the template made by `rp.sh template` attaches it | Runpod | no |
 | 4 | Runpod network volume: **30 GB in US-KS-2** (S3 API + RTX 6000 Ada / L40 / RTX A6000 in stock on 22 Oct) | Runpod → Storage | **yes: 30 × $0.07 = $2.10/month**, billed until deleted |
 | 5 | Runpod S3 API key (`user_…` + `rps_…`) as repository secrets `RUNPOD_S3_ACCESS_KEY_ID` / `RUNPOD_S3_SECRET_ACCESS_KEY`, and the same values in your local `.env` (clip staging, section 8a, runs on the Mac; the secret is shown only once, so save it when you create the key) | GitHub → Settings → Secrets → Actions; local `.env` | no |
-| 6 | Runpod secret `rhythm_api_token` = output of `openssl rand -hex 32` (keep a copy in your password manager for the app) | Runpod → Settings → Secrets | no |
-| 7 | Runpod API key (read/write) in your shell as `RUNPOD_API_KEY` for `runpod/rp.sh` | your machine, never committed | no |
+| 6 | Runpod secret holding the output of `openssl rand -hex 32` (keep a copy in your password manager). Runpod's docs describe two naming conventions, and both work: a secret named `rhythm_api_token` (the template maps `{{ RUNPOD_SECRET_rhythm_api_token }}` into `RHYTHM_API_TOKEN`), or, where the console requires keys to start with `RUNPOD_SECRET_`, a secret named `RUNPOD_SECRET_RHYTHM_API_TOKEN` (the container reads it directly). A reference that does not resolve stops start-up with a clear message. For a published app, keep this token on Rhythm's backend rather than in the app bundle | Runpod → Credentials → Secrets | no |
+| 7 | Runpod API key in `.env` as `RUNPOD_API_KEY` for `runpod/rp.sh`. A restricted key works if it allows read/write on Pods (create, get, list, stop, start, delete), Templates (create, get) and read on Container Registry Auth; a read-only key cannot create or stop Pods | your machine, never committed | no |
 | 8 | (optional) Your SSH public key in Runpod → Settings → SSH Public Keys, for SSH administration | Runpod | no |
 | 9 | Approval of the first GPU test (section 8) | — | **yes: about $0.75 on an RTX A6000, capped at $5** |
 | 10 | (optional) Confirmation to include the 10 'confirm' clips in the test set (section 8a) | — | no |
@@ -344,10 +344,10 @@ accepting first-frame-per-chunk video. Not built, not tested.
 Run from this folder; the GitHub `validate` job runs the same.
 
 ```bash
-bash tests/preflight_cases.sh                       # 25 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
+bash tests/preflight_cases.sh                       # 26 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
 PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/auth_matrix.sh        # 46 checks: real Caddyfile, HTTP + WebSocket,
                                                                      # cross-Pod cookie use, write methods
-PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/entrypoint_cases.sh   # 39 checks: real entrypoint + stub demo
+PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/entrypoint_cases.sh   # 43 checks: real entrypoint + stub demo
 PATH="<venv>/bin:$PATH" bash tests/probe_cases.sh                    # 15 checks: warm-up/probe client
 PATH="<venv>/bin:$PATH" bash tests/clips_cases.sh                    # 28 checks: clip policy/build/upload/verify/eval
 bash tests/image_smoke.sh <image ref>               # on a built image (CI)

@@ -95,6 +95,17 @@ grep -q 'FATAL: preflight failed (exit 2): RHYTHM_API_TOKEN is not set' "$W/noto
 grep -q 'RHYTHM_API_TOKEN is not set' "$(run_dir)/FAILED" && ok "FAILED file written" || bad "FAILED file"
 grep -q 'started backend' "$W/notoken.log" && bad "backend was started anyway" || ok "no model process started"
 
+echo "--- B2. token from a Runpod secret variable (either naming convention), unresolved template value replaced"
+run_case secretvar RHYTHM_API_TOKEN= RUNPOD_SECRET_RHYTHM_API_TOKEN=tok-0123456789abcdef0123456789abcdef
+if wait_ready 60; then ok "ready with RUNPOD_SECRET_RHYTHM_API_TOKEN only"; else bad "not ready" "$W/secretvar.log"; fi
+code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer tok-0123456789abcdef0123456789abcdef" "$U/echo")
+[[ $code != 401 ]] && ok "Caddy accepts that token (HTTP $code)" || bad "token not applied to Caddy"
+grep -q 'tok-0123456789abcdef' "$W/secretvar.log" && bad "token value logged" || ok "token value not logged"
+kill -TERM "$EP"; wait_exit 30
+run_case secretref RHYTHM_API_TOKEN="{{ RUNPOD_SECRET_rhythm_api_token }}" RUNPOD_SECRET_rhythm_api_token=tok-0123456789abcdef0123456789abcdef
+if wait_ready 60; then ok "ready when the template reference stayed unresolved but the secret variable exists"; else bad "not ready" "$W/secretref.log"; fi
+kill -TERM "$EP"; wait_exit 30
+
 echo "--- C. missing model: actionable message"
 run_case nomodel MODEL_DIR="$W/nope"
 wait_exit 20

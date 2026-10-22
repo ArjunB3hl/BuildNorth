@@ -178,6 +178,18 @@ log "MiniCPM-o 4.5 for Rhythm, image ${RHYTHM_IMAGE_VERSION:-?}, model ${MODEL_I
 log "logs: $RUN_LOG_DIR"
 
 # ---- 2. configuration + preflight (no model load yet) -----------------------------------------------------------------
+# The access token comes from a Runpod secret. Runpod's docs describe two conventions: the template maps
+# {{ RUNPOD_SECRET_rhythm_api_token }} into RHYTHM_API_TOKEN, or a secret whose key starts with RUNPOD_SECRET_ is
+# injected as an environment variable of that name. Accept either (never logging the value).
+if [[ -z ${RHYTHM_API_TOKEN:-} || ${RHYTHM_API_TOKEN} == *'{{'* ]]; then
+  for v in RUNPOD_SECRET_RHYTHM_API_TOKEN RUNPOD_SECRET_rhythm_api_token; do
+    if [[ -n ${!v:-} ]]; then
+      export RHYTHM_API_TOKEN=${!v}
+      log "access token taken from the Runpod secret variable $v"
+      break
+    fi
+  done
+fi
 python "$RT/write_config.py" --out "$APP_DIR/config.json" || fail "could not write $APP_DIR/config.json (see the message above)"
 cp "$APP_DIR/config.json" "$RUN_LOG_DIR/config.json"
 rc=0

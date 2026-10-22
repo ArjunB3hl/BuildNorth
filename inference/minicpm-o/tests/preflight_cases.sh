@@ -42,6 +42,7 @@ expect 0 "all checks passed"
 expect 0 "verified by sha256" MODEL_VERIFY=sha256
 expect 2 "RHYTHM_API_TOKEN is not set.*RUNPOD_SECRET" RHYTHM_API_TOKEN=
 expect 2 "must be 32-256 characters" RHYTHM_API_TOKEN=short
+expect 2 "unresolved secret reference" RHYTHM_API_TOKEN="{{ RUNPOD_SECRET_rhythm_api_token }}"
 expect 2 "must be 32-256 characters" RHYTHM_API_TOKEN="$(printf '%064d' 0)"$'\n'   # valid token + trailing newline
 expect 2 "HF_HUB_OFFLINE must be 1" HF_HUB_OFFLINE=0
 expect 2 "MODEL_VERIFY='bogus'" MODEL_VERIFY=bogus

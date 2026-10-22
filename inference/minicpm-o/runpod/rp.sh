@@ -13,6 +13,7 @@
 #   rp.sh verify-stopped [POD_ID]  exit 0 only if the Pod is EXITED or gone
 #   rp.sh terminate [POD_ID]       delete the Pod (asks first), then verify it is gone
 #   rp.sh running                  list every Pod on the account that is not stopped (should be empty after a test)
+#   rp.sh registry-auths           list the Container Registry Auth credentials (id + name) for RUNPOD_REGISTRY_AUTH_ID
 #
 # POD_ID defaults to the id saved in runpod/.pod-id by `create`.
 set -euo pipefail
@@ -174,6 +175,12 @@ case ${1:-} in
     [[ $answer == terminate ]] || { echo "kept"; exit 1; }
     api DELETE "/pods/$id" >/dev/null
     exec "$0" verify-stopped "$id"
+    ;;
+  registry-auths)
+    out=$(api GET /containerregistryauth) && python3 -c 'import json,sys
+items = json.load(sys.stdin)
+for a in items: print(a.get("id"), " ", a.get("name"))
+print(f"{len(items)} credential(s); put the id of the ghcr.io one into .env as RUNPOD_REGISTRY_AUTH_ID")' <<<"$out"
     ;;
   running)
     out=$(api GET /pods) && python3 -c "$PYRUNNING" <<<"$out"

@@ -78,6 +78,10 @@ def check_token() -> None:
         raise Fail(2, "RHYTHM_API_TOKEN is not set. Create a Runpod secret (Settings -> Secrets, e.g. 'rhythm_api_token' "
                       "holding `openssl rand -hex 32`) and set RHYTHM_API_TOKEN={{ RUNPOD_SECRET_rhythm_api_token }} in "
                       "the template's environment variables. The public port refuses every request without it.")
+    if "{{" in tok:
+        raise Fail(2, "RHYTHM_API_TOKEN holds an unresolved secret reference: the Runpod secret it names does not "
+                      "exist. Check the secret's key in Runpod (Credentials -> Secrets) and the template's "
+                      "RHYTHM_API_TOKEN value, or name the secret RUNPOD_SECRET_RHYTHM_API_TOKEN (picked up directly).")
     if not TOKEN_RE.fullmatch(tok):        # fullmatch: a trailing newline would break Caddy's config
         raise Fail(2, "RHYTHM_API_TOKEN must be 32-256 characters of A-Z a-z 0-9 . _ ~ - (it is compared in Caddy and "
                       "carried in a cookie); generate one with `openssl rand -hex 32`.")
