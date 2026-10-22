@@ -10,15 +10,15 @@
 2. Settings from the deployment (static/rhythm-config.js, written by the entrypoint from the environment): the frame
    mode, and duplex settings (e.g. listen_prob_scale) merged under the page's own length-penalty slider.
 3. Coaching defaults: the "English Call" preset gets the Rhythm form-coaching prompt, and the length-penalty slider
-   starts at 0.8 (upstream 1.1, which makes turns longer). The page saves its settings under its own localStorage key,
-   so values saved by the unpatched page (length penalty 1.1, HD, an old prompt) on the same origin do not come back.
+   starts at 1.0 (upstream 1.1 was too chatty for coaching; 0.8 made replies too short: tried on the GPU). The page
+   saves its settings under its own localStorage key, so values saved by the unpatched page (length penalty 1.1, HD, an old prompt) on the same origin do not come back.
    HD (2 slices per image) is used only with one frame per step: with grid4 it would be 6 slices per step.
 4. A bounded duplex KV cache (core/processors/unified.py). Upstream never prunes it in this demo, and the page stops a
    session when it reaches 8192 tokens: each listening second costs ~79 tokens with one image and ~145 with two, so a
    grid4 session would end after ~55 s. The backend now uses the model's "basic" sliding window (the system prompt and
    reference voice are kept; the oldest seconds are dropped when the cache passes RHYTHM_KV_WINDOW_HIGH tokens, down
    to RHYTHM_KV_WINDOW_LOW). RHYTHM_KV_WINDOW=off restores upstream; "context" is the model's other mode.
-5. /mobile-omni/ loads the same rhythm-config.js and starts at 0.8 (it runs the same patched omni-app.js).
+5. /mobile-omni/ loads the same rhythm-config.js and starts at 1.0 (it runs the same patched omni-app.js).
 
 Every edit asserts that the upstream text is exactly as expected, so a changed upstream fails the build instead of
 being patched wrongly.
@@ -29,14 +29,15 @@ import sys
 
 APP = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/app")
 
-COACH_PROMPT = ("You are Rhythm, a personal fitness coach watching me through the camera. Always speak English. You may "
-                "greet me briefly when we start. Your main job is to watch my body position and form. If my form is "
-                "correct, say so in a few words, like \"Good, that's right\", at most once per set, then stay quiet. If "
-                "something is wrong, give one short, specific correction that names the body part and what to change, "
-                "such as \"Keep your knees behind your toes\" or \"Straighten your back.\" Give one correction at a time, "
-                "then watch whether I fix it before you say anything else. Keep every reply to one short sentence. Don't "
-                "describe the scene, lecture, or repeat a correction I've already fixed. If I ask a question, answer in "
-                "one short sentence.")
+COACH_PROMPT = ("You are Rhythm, a personal fitness coach watching me through the camera. Always speak English. Greet me "
+                "briefly when we start. Your job is to coach my form: watch my body position and movement. When you "
+                "speak, use one or two short sentences: say what you see and give one concrete cue that names the body "
+                "part and what to change or keep doing, for example \"Nice plank, keep your hips level with your "
+                "shoulders and squeeze your glutes\" or \"Your knees are drifting in; push them out over your toes.\" "
+                "If something is wrong, correct it, then watch whether I fix it before the next cue. When my form is "
+                "good, say so with a specific reason now and then, not every rep. Don't just name the exercise or "
+                "describe the room, don't lecture, and don't repeat a cue I've already fixed. If I ask a question, "
+                "answer in one or two sentences.")
 
 
 def edit(rel: str, pairs: list[tuple[str, str]]) -> None:
@@ -148,7 +149,7 @@ const FILE_MAX_DURATION = 120; // 2 minutes"""),
                     else if (chunk.frameBase64) msg.frame_base64_list = [chunk.frameBase64];"""),
         # 3. own settings key: the unpatched page saved 1.1 etc. under 'omni_settings' on this origin
         ("""const settingsPersistence = new SettingsPersistence('omni_settings', [""",
-         """const settingsPersistence = new SettingsPersistence('omni_settings_rhythm1', [  // Rhythm: see docker/patch_demo.py"""),
+         """const settingsPersistence = new SettingsPersistence('omni_settings_rhythm2', [  // Rhythm: see docker/patch_demo.py"""),
         # 3. HD only with one image per step (camera frame mode 1, or file playback); the hint says so
         ("""    if (hint) hint.textContent = active ? '192 tok' : '64 tok';
 }
@@ -178,14 +179,14 @@ function getEffectiveMaxSliceNums() {
          """<script src="/static/rhythm-config.js"></script>
 <script src="/static/ref-audio-player.js"></script>"""),
         # 3. shorter turns by default, with a preset button for it
-        ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="0.8\""""),
+        ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="1\""""),
         ("""<button type="button" class="lp-preset-btn active" data-lp="1.1" title""",
          """<button type="button" class="lp-preset-btn" data-lp="1.1" title"""),
         ("""                        <div style="display:flex;align-items:center;gap:6px;">
                             <button type="button" class="lp-preset-btn" data-lp="1.2" title""",
          """                        <div style="display:flex;align-items:center;gap:6px;">
-                            <button type="button" class="lp-preset-btn active" data-lp="0.8" title="Coach — one short sentence, then quiet">Coach</button>
-                            <span style="font-size:10px;color:#999;">One short sentence (Rhythm default)</span>
+                            <button type="button" class="lp-preset-btn active" data-lp="1" title="Coach — one or two short sentences with a cue">Coach</button>
+                            <span style="font-size:10px;color:#999;">One or two sentences with a cue (Rhythm default)</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <button type="button" class="lp-preset-btn" data-lp="1.2" title"""),
@@ -195,7 +196,7 @@ function getEffectiveMaxSliceNums() {
         ("""<script src="/static/ref-audio-player.js"></script>""",
          """<script src="/static/rhythm-config.js"></script>
 <script src="/static/ref-audio-player.js"></script>"""),
-        ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="0.8\""""),
+        ("""id="omniLengthPenalty" value="1.1\"""", """id="omniLengthPenalty" value="1\""""),
         ("""class="lp-preset-btn active" data-lp="1.1">""", """class="lp-preset-btn" data-lp="1.1">"""),
     ])
     # 4. bounded duplex KV cache (the backend process inherits the container environment; write_config.py validates it)

@@ -80,16 +80,16 @@ EOF' 2>&1) && ok "write_config.py inside the image: model path from MODEL_DIR, r
 
 out=$(run -e MODEL_DIR=/tmp/m -e RHYTHM_FRAME_MODE=2 --entrypoint bash "$REF" -c \
   'grep -q "_rhythmFrames(frameB64)" /app/static/omni/omni-app.js && grep -q "frameBase64List" /app/static/omni/omni-app.js \
-   && grep -q "/static/rhythm-config.js" /app/static/omni/omni.html && grep -q "id=\"omniLengthPenalty\" value=\"0.8\"" /app/static/omni/omni.html \
+   && grep -q "/static/rhythm-config.js" /app/static/omni/omni.html && grep -q "id=\"omniLengthPenalty\" value=\"1\"" /app/static/omni/omni.html \
    && grep -q "^system_prompt: \"You are Rhythm" /app/assets/presets/omni/english_call.yaml \
    && grep -q "\"frameMode\": \"grid4\"" /app/static/rhythm-config.js \
-   && grep -q "omni_settings_rhythm1" /app/static/omni/omni-app.js && grep -q "_hdToggleActive && _rhythmHdAllowed() ? 2 : 1" /app/static/omni/omni-app.js \
+   && grep -q "omni_settings_rhythm2" /app/static/omni/omni-app.js && grep -q "_hdToggleActive && _rhythmHdAllowed() ? 2 : 1" /app/static/omni/omni-app.js \
    && grep -q "/static/rhythm-config.js" /app/static/mobile-omni/index.html \
    && grep -q "\"sliding_window_mode\": os.environ.get(\"RHYTHM_KV_WINDOW\") or \"basic\"" /app/core/processors/unified.py \
    && python -m py_compile /app/core/processors/unified.py \
    && python /opt/rhythm/runtime/write_config.py --out /app/config.json >/dev/null && grep -q "\"frameMode\": \"2\"" /app/static/rhythm-config.js \
    && echo patched' 2>&1) && [[ $out == *patched* ]] \
-  && ok "demo patched: multi-frame camera capture, own settings key, HD only at 1 frame, rhythm-config.js on /omni and /mobile-omni, length penalty 0.8, coach preset, KV window in the backend; write_config sets the frame mode" \
+  && ok "demo patched: multi-frame camera capture, own settings key, HD only at 1 frame, rhythm-config.js on /omni and /mobile-omni, length penalty 1.0, coach preset, KV window in the backend; write_config sets the frame mode" \
   || bad "demo page patch: $out"
 out=$(run -e MODEL_DIR=/tmp/m -e "RHYTHM_COACH_PROMPT=Squat 💪: knees out" --entrypoint bash "$REF" -c \
   'python /opt/rhythm/runtime/write_config.py --out /app/config.json >/dev/null && python -c "

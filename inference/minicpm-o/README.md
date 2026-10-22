@@ -357,10 +357,16 @@ was created from; run `rp.sh template` as well so new Pods get the same image.
   session length.
 - Internal ports 8006/8007/22400/22500 listen on 127.0.0.1 only; only 8000 (HTTP) and 22 (SSH, key only) are exposed.
 - Session recording is off (`RHYTHM_RECORD_SESSIONS=0`).
-- **Unverified:** Runpod documents its HTTP proxy (Cloudflare, 100 s limit on HTTP requests) but does not state
-  WebSocket support. Measurement 6 checks it. If WebSockets fail or are cut, the fallback is a TCP port with TLS
-  terminated in the container (Caddy `tls internal` with the client pinning the certificate) or a tunnel; that is
-  not implemented here.
+- **Runpod's HTTP proxy cuts long WebSocket sessions (measured 2026-10-22).** Two 120 s `grid4` sessions from a
+  laptop through `wss://<POD_ID>-8000.proxy.runpod.net` were cut after 52 s and 116 s ("no close frame received or
+  sent"); the same two sessions through an SSH tunnel to the gateway completed (120/120 steps, p50 0.55-0.6 s). Earlier
+  short sessions lost about 4 in 100. On the page this shows as a session that stops by itself, or one stuck at
+  "Worker assigned, preparing..." when the cut comes right after `session.init`. For testing, bypass the proxy:
+  `ssh -N -L 127.0.0.1:8006:127.0.0.1:8006 -p <SSH_PORT> -i <key> root@<IP>` and open `http://localhost:8006/omni`
+  (no token: the SSH key authenticates; localhost counts as a secure context for the camera; Caddy's write-endpoint
+  block is not in this path, so don't use the page's upload/share buttons). For the app, the fix is a TCP port with
+  TLS terminated in the container (Caddy `tls internal`, the client pinning the certificate) or a tunnel, plus
+  reconnect in the app; not implemented here.
 
 ## 10a. Camera frames per second and coaching (the demo page)
 
@@ -396,8 +402,9 @@ per-step time and answers after the window slides.
 
 Coaching defaults on the page: the "English Call" preset carries the Rhythm form-coaching prompt (greet briefly, watch
 the body position, say if it is right or give one short correction, otherwise stay quiet), and the length-penalty
-slider starts at 0.8 with a "Coach" preset button (upstream 1.1; lower = shorter turns). The page keeps its settings
-under its own browser key (`omni_settings_rhythm1`), so values the unpatched page saved on the same Pod URL (1.1, HD,
+slider starts at 1.0 with a "Coach" preset button (upstream 1.1 was too chatty; 0.8, tried on the GPU on 2026-10-22,
+made replies too short; lower = shorter turns). The page keeps its settings
+under its own browser key (`omni_settings_rhythm2`; bump it whenever a patched default changes), so values the unpatched page saved on the same Pod URL (1.1, HD,
 an old prompt) are not restored. Pages and scripts are served with `Cache-Control: no-cache`, so a browser picks up a
 new image or a changed `RHYTHM_FRAME_MODE` on the next reload (a page cached before this header existed needs one
 hard reload, Cmd+Shift+R). `/mobile-omni/` loads the same settings but picks its preset from the browser language:
