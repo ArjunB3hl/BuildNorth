@@ -87,11 +87,12 @@ All pins live in `versions.env` (the CI build reads its build arguments from it)
 ```
 versions.env                 every pin (model, demo commit, base image, torch/CUDA, image name/version)
 docker/Dockerfile            the image (no weights, no secrets, no SSH host keys, no demo TLS key)
+docker/patch_demo.py         build-time patch of the demo page: more camera frames per second, coaching defaults
 requirements/                requirements.in + overrides.txt -> requirements.lock (lock.sh), build constraints
 runtime/entrypoint.sh        start order, readiness, supervision, shutdown
 runtime/preflight.py         start-up checks with exit codes 2 config, 3 model, 4 GPU, 5 disk/ports
 runtime/warmup.py            warm-up and the latency probe (same WebSocket protocol as the app)
-runtime/write_config.py      the demo's config.json from environment variables (recording off)
+runtime/write_config.py      the demo's config.json and the page's rhythm-config.js from environment variables
 runtime/clip_eval.py         runs a staged test-clip set through the model (chat + duplex), writes results/summary
 runtime/Caddyfile            token check, /healthz, /readyz, proxy to the gateway
 scripts/stage_model.py       model staging to the network volume via Runpod's S3 API (+ requirements-stage.txt)
@@ -276,8 +277,9 @@ hf download "$MOTION_LIBRARY_REPO" --repo-type dataset --local-dir "$TMPDIR/moti
 
 `runtime/clip_eval.py` runs inside the Pod against the local gateway (measurement 7). It makes two passes per clip:
 - **chat:** the whole mp4 plus a question; the answer is text only.
-- **duplex:** the clip is streamed like the camera, one frame and one second of silence per second, then 4 silent
-  chunks. The model is forced to listen for the first 3 steps of a session.
+- **duplex:** the clip is streamed like the camera, one second of silence per second plus the clip's frames for that
+  second as the page sends them (`--frame-mode`, default `grid4`, see section 10a; `1` = upstream's one frame), then
+  4 silent chunks, with the English voice (`--voice`). The model is forced to listen for the first 3 steps of a session.
 
 It writes `results.jsonl`, `summary.json` and `summary.md`. `label_match` is only a keyword check against the
 library name; read `summary.md` to judge the answers.
@@ -346,6 +348,32 @@ when the model is no longer needed.
   WebSocket support. Measurement 6 checks it. If WebSockets fail or are cut, the fallback is a TCP port with TLS
   terminated in the container (Caddy `tls internal` with the client pinning the certificate) or a tunnel; that is
   not implemented here.
+
+## 10a. Camera frames per second and coaching (the demo page)
+
+Upstream's page sends **one camera frame per 1-second step**, which is too little to judge form during a movement.
+`docker/patch_demo.py` patches the page at build time (each edit asserts the upstream text, so a changed upstream fails
+the build): the page samples the camera every 1000/N ms and sends, per step, `RHYTHM_FRAME_MODE`:
+
+| `RHYTHM_FRAME_MODE` | images per step | moments per second | model time per listening step (RTX 6000 Ada) |
+|---|---|---|---|
+| `1` (upstream) | 1 full frame | 1 | ~260 ms |
+| `grid4` (default) | the current full frame + one 2x2 grid of the second's 4 samples (640 px each) | 5 | ~420 ms |
+| `2` / `3` / `4` | N frames (640 px) | N | ~400 / not measured / ~790 ms |
+| 8 (not offered) | | | ~1500 ms: no longer real time |
+
+Each image costs about 150-190 ms of model time; a step must finish within 1 s, and a spoken answer needs headroom.
+`grid4` gives five moments per second for the cost of two images, the way MiniCPM-o's own examples combine frames.
+The app's own client can send the same thing: `frame_base64_list` takes several JPEGs per step.
+
+Coaching defaults on the page: the "English Call" preset carries the Rhythm form-coaching prompt (greet briefly, watch
+the body position, say if it is right or give one short correction, otherwise stay quiet), and the length-penalty
+slider starts at 0.8 (upstream 1.1; lower = shorter turns). Overrides, written at start-up by `write_config.py`:
+- `RHYTHM_COACH_PROMPT`: replaces the preset's prompt.
+- `RHYTHM_DUPLEX_CONFIG`: JSON object of duplex settings sent with every session (keys: `temperature`, `top_k`,
+  `top_p`, `listen_prob_scale` (> 1 = speaks less), `listen_top_k`, `length_penalty`, `decode_mode`,
+  `text_repetition_penalty`, `text_repetition_window_size`); the page's length-penalty slider wins over
+  `length_penalty`. Example: `{"listen_prob_scale": 1.2}`.
 
 ## 11. Start-up time vs `torch.compile`
 

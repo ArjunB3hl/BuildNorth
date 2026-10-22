@@ -137,13 +137,14 @@ async def eval_clip(a, root: str, c: dict) -> list[dict]:
         t0 = time.monotonic()
         row = {**meta, "mode": "duplex"}
         try:
-            data = file_chunks(path)
+            data = file_chunks(path, frame_mode=a.frame_mode)
             v = await with_reconnect(lambda: run_video(
                 a.url, a.token, a.timeout, len(data), None, a.drain, a.no_queue, system_prompt=a.coach_prompt,
-                data=data, tail_chunks=a.tail_chunks, realtime=not a.fast, duplex_config=a.duplex_config), row)
+                data=data, tail_chunks=a.tail_chunks, realtime=not a.fast, duplex_config=a.duplex_config,
+                init_extra={"voice": {"ref_audio_path": a.voice}} if a.voice else None), row)
             overlap = sorted(expected_words(c) & words(v["text"]))
             row.update(ok=True, said=v["text"], audio_out_s=v["audio_out_s"], events=v["events"],
-                       duplex_config=v["duplex_config"],
+                       duplex_config=v["duplex_config"], frame_mode=a.frame_mode, images_per_step=len(data[0][1]),
                        chunks_sent=v["chunks_sent"], chunks_answered=v["chunks_answered"],
                        chunk_latency_s=v["chunk_latency_s"], lag_after_last_chunk_s=v["lag_after_last_chunk_s"],
                        backend_wall_clock_ms=v["backend_wall_clock_ms"], first_event_s=v["first_event_s"],
@@ -242,6 +243,10 @@ def main() -> int:
     ap.add_argument("--drain", type=float, default=10.0)
     ap.add_argument("--tail-chunks", type=int, default=4, help="silent chunks after each clip in duplex mode")
     ap.add_argument("--fast", action="store_true", help="duplex: send chunks back to back instead of in real time")
+    ap.add_argument("--frame-mode", default="grid4", choices=["1", "2", "3", "4", "grid4"],
+                    help="duplex: images per 1-second step (grid4 = what the patched web page sends; 1 = upstream)")
+    ap.add_argument("--voice", default="assets/ref_audio/ref_en_dlc_1.wav",
+                    help="duplex reference voice (a file in the image; it sets the spoken language)")
     ap.add_argument("--no-queue", action="store_true", help="fail instead of waiting behind another session")
     ap.add_argument("--max-new-tokens", type=int, default=160)
     ap.add_argument("--question", default=QUESTION)

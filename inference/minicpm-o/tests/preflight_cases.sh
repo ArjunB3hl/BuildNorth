@@ -113,5 +113,44 @@ else
   failn=$((failn + 1)); echo "FAIL  English voice not in config.json"
 fi
 
+# write_config.py: the patched page's settings (static/rhythm-config.js) and the coach prompt override
+check() {  # check <description> <python assertion over cfg (rhythm-config.js) and preset (english_call.yaml text)> [env...]
+  local what=$1 assertion=$2; shift 2
+  if env MODEL_DIR=/m "$@" python3 runtime/write_config.py --out "$W/app/config.json" >/dev/null 2>"$W/wc.err" \
+     && python3 - "$W/app" "$assertion" <<'EOF'
+import json, sys
+app, assertion = sys.argv[1], sys.argv[2]
+js = open(app + "/static/rhythm-config.js").read()
+assert js.startswith("window.RHYTHM_CONFIG = ") and js.rstrip().endswith(";"), js
+cfg = json.loads(js[len("window.RHYTHM_CONFIG = "):].rstrip().rstrip(";"))
+preset = open(app + "/assets/presets/omni/english_call.yaml").read()
+assert eval(assertion), (cfg, preset)
+EOF
+  then pass=$((pass + 1)); echo "ok    $what"
+  else failn=$((failn + 1)); echo "FAIL  $what: $(cat "$W/wc.err")"; fi
+}
+reject() {  # reject <description> <expected message regex> [env...]
+  local what=$1 re=$2 out; shift 2
+  if out=$(env MODEL_DIR=/m "$@" python3 runtime/write_config.py --out "$W/app/config.json" 2>&1); then
+    failn=$((failn + 1)); echo "FAIL  $what: accepted"
+  elif grep -Eq "$re" <<<"$out"; then pass=$((pass + 1)); echo "ok    $what"
+  else failn=$((failn + 1)); echo "FAIL  $what: $out"; fi
+}
+mkdir -p "$W/app/assets/presets/omni"
+printf 'name: English Call\nsystem_prompt: "You are Rhythm, the default."\nother: 1\n' > "$W/app/assets/presets/omni/english_call.yaml"
+check "page config defaults: grid4 frames, no duplex overrides, preset untouched" \
+  'cfg == {"frameMode": "grid4", "duplexConfig": {}} and "the default." in preset'
+check "RHYTHM_FRAME_MODE=4 and RHYTHM_DUPLEX_CONFIG reach the page" \
+  'cfg == {"frameMode": "4", "duplexConfig": {"listen_prob_scale": 1.3, "length_penalty": 0.7}}' \
+  RHYTHM_FRAME_MODE=4 'RHYTHM_DUPLEX_CONFIG={"listen_prob_scale": 1.3, "length_penalty": 0.7}'
+check "RHYTHM_COACH_PROMPT replaces only the preset's system_prompt line (quotes escaped)" \
+  'preset == "name: English Call\nsystem_prompt: \"Say \\\"good\\\" once.\"\nother: 1\n"' \
+  'RHYTHM_COACH_PROMPT=Say "good" once.'
+reject "unknown frame mode -> clear error" "RHYTHM_FRAME_MODE='8'.*one of" RHYTHM_FRAME_MODE=8
+reject "duplex config that is not JSON -> clear error" "RHYTHM_DUPLEX_CONFIG is not valid JSON" 'RHYTHM_DUPLEX_CONFIG={listen'
+reject "duplex config with an unknown key -> clear error" "RHYTHM_DUPLEX_CONFIG must be a JSON object" \
+  'RHYTHM_DUPLEX_CONFIG={"listen_scale": 2}'
+reject "duplex config that is a list -> clear error" "RHYTHM_DUPLEX_CONFIG must be a JSON object" 'RHYTHM_DUPLEX_CONFIG=[1]'
+
 echo "preflight cases: $pass passed, $failn failed"
 [[ $failn == 0 ]]

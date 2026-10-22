@@ -78,5 +78,15 @@ assert c["audio"]["ref_audio_path"].endswith("ref_en_dlc_1.wav") and os.path.isf
 print("config ok")
 EOF' 2>&1) && ok "write_config.py inside the image: model path from MODEL_DIR, recording off, English reference voice present" || bad "write_config: $out"
 
+out=$(run -e MODEL_DIR=/tmp/m -e RHYTHM_FRAME_MODE=2 --entrypoint bash "$REF" -c \
+  'grep -q "_rhythmFrames(frameB64)" /app/static/omni/omni-app.js && grep -q "frameBase64List" /app/static/omni/omni-app.js \
+   && grep -q "/static/rhythm-config.js" /app/static/omni/omni.html && grep -q "id=\"omniLengthPenalty\" value=\"0.8\"" /app/static/omni/omni.html \
+   && grep -q "^system_prompt: \"You are Rhythm" /app/assets/presets/omni/english_call.yaml \
+   && grep -q "\"frameMode\": \"grid4\"" /app/static/rhythm-config.js \
+   && python /opt/rhythm/runtime/write_config.py --out /app/config.json >/dev/null && grep -q "\"frameMode\": \"2\"" /app/static/rhythm-config.js \
+   && echo patched' 2>&1) && [[ $out == *patched* ]] \
+  && ok "demo page patched: multi-frame camera capture, rhythm-config.js loaded, length penalty 0.8, English preset is the coach; write_config sets the frame mode" \
+  || bad "demo page patch: $out"
+
 echo "image smoke: $pass passed, $failn failed"
 [[ $failn == 0 ]]

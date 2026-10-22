@@ -100,10 +100,25 @@ s() { python -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys
 [[ $(s "d['duplex']['label_unknown']") == 1 ]] && ok "duplex: nothing said -> label_match unknown, not counted as a miss or match" || bad "label_unknown"
 [[ $(s "d['duplex']['unanswered_chunks']") == 0 ]] && ok "duplex: every chunk (clip + 2 silent tail) answered" || bad "unanswered"
 [[ $(s "d['set']['policy']['file']") == policy.json ]] && ok "summary records the clip set's policy" || bad "policy in summary"
-python - "$W/out/results.jsonl" <<'PY' && ok "duplex sent clip seconds + tail chunks (3+2) with the full default config" || bad "chunk counts/config"
+python - "$W/out/results.jsonl" <<'PY' && ok "duplex sent clip seconds + tail chunks (3+2) with the full default config, 2 images per step (grid4)" || bad "chunk counts/config"
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]) if '"duplex"' in l]
-sys.exit(0 if [r["chunks_sent"] for r in rows] == [5] and rows[0]["duplex_config"]["top_k"] == 20 else 1)
+sys.exit(0 if [r["chunks_sent"] for r in rows] == [5] and rows[0]["duplex_config"]["top_k"] == 20
+         and rows[0]["frame_mode"] == "grid4" and rows[0]["images_per_step"] == 2 else 1)
+PY
+clip=$(find "$W/vol/s1" -name '*.mp4' | head -1)
+python - "$clip" <<'PY' && ok "frame modes: 1 -> 1 frame, 3 -> 3 frames, grid4 -> frame + 2x2 grid (double width and height) per second" || bad "frame modes"
+import base64, io, sys
+sys.path.insert(0, "runtime")
+from PIL import Image
+from warmup import file_chunks
+size = lambda b: Image.open(io.BytesIO(base64.b64decode(b))).size
+one, three, grid = (file_chunks(sys.argv[1], frame_mode=m) for m in ("1", "3", "grid4"))
+assert len(one) == len(three) == len(grid) == 3, (len(one), len(three), len(grid))
+assert all(len(c[1]) == 1 for c in one) and all(len(c[1]) == 3 for c in three) and all(len(c[1]) == 2 for c in grid)
+(w, h), (gw, gh) = size(grid[0][1][0]), size(grid[0][1][1])
+assert (gw, gh) == (2 * w, 2 * h), ((w, h), (gw, gh))
+assert grid[0][1][1] != grid[1][1][1]
 PY
 [[ -s $W/out/summary.md ]] && grep -q 'clip-squat' "$W/out/summary.md" && ok "summary.md written" || bad "summary.md"
 rm "$W/vol/s1/.rhythm/COMPLETE.json"

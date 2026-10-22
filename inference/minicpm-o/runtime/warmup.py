@@ -25,9 +25,11 @@ import asyncio
 import base64
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 MAX_WS = 128 * 1024 * 1024
@@ -63,8 +65,33 @@ def synthetic_frame() -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def file_chunks(path: str, chunks: int | None = None) -> list[tuple[str, list[str]]]:
-    """1-second chunks of a clip: (base64 float32 16 kHz mono audio, [base64 JPEG frame]); silence if no audio track."""
+def grid_jpeg(jpegs: list[bytes]) -> bytes:
+    """2x2 grid of up to 4 JPEG frames (oldest top-left), like the patched web page sends (docker/patch_demo.py)."""
+    from PIL import Image  # noqa: PLC0415
+    ims = [Image.open(io.BytesIO(j)).convert("RGB") for j in jpegs]
+    while len(ims) < 4:
+        ims.insert(0, ims[0])
+    w, h = ims[0].size
+    g = Image.new("RGB", (2 * w, 2 * h))
+    for k, im in enumerate(ims[-4:]):
+        g.paste(im.resize((w, h)), ((k % 2) * w, (k // 2) * h))
+    buf = io.BytesIO()
+    g.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+def sampled_frames(path: str, per_second: int) -> list[bytes]:
+    """All frames of a clip sampled at per_second fps, at most 640 px wide."""
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vf", f"fps={per_second},scale='min(640,iw)':-2", "-q:v", "4",
+                        os.path.join(d, "f_%05d.jpg")], check=True)
+        return [open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d))]
+
+
+def file_chunks(path: str, chunks: int | None = None, frame_mode: str = "1") -> list[tuple[str, list[str]]]:
+    """1-second chunks of a clip: (base64 float32 16 kHz mono audio, [base64 JPEG frames]); silence if no audio track.
+    frame_mode "1" = one frame per second (upstream), "2".."4" = that many frames per second, "grid4" = the middle
+    frame + one 2x2 grid of the second's 4 samples (what the patched web page sends from the camera)."""
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise ProbeError("clips need ffmpeg and ffprobe")
     pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vn", "-ar", "16000", "-ac", "1", "-f", "f32le", "-"],
@@ -76,6 +103,19 @@ def file_chunks(path: str, chunks: int | None = None) -> list[tuple[str, list[st
     if chunks:
         n = min(n, chunks)
     second = 16000 * 4
+    if frame_mode != "1":
+        per = 4 if frame_mode == "grid4" else int(frame_mode)
+        fr = sampled_frames(path, per)
+        out = []
+        for i in range(min(n, len(fr) // per)):
+            group = fr[i * per:(i + 1) * per]
+            imgs = [group[len(group) // 2], grid_jpeg(group)] if frame_mode == "grid4" else group
+            audio = pcm[i * second:(i + 1) * second]
+            audio += b"\0" * (second - len(audio))
+            out.append((base64.b64encode(audio).decode(), [base64.b64encode(x).decode() for x in imgs]))
+        if not out:
+            raise ProbeError(f"no frames could be extracted from {path}")
+        return out
     out = []
     for i in range(n):
         jpg = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{i + 0.5:.3f}", "-i", path, "-frames:v", "1",

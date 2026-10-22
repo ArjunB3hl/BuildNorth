@@ -62,6 +62,8 @@ echo "--- A. happy path: ready only after the warm-up, then SIGTERM"
 run_case happy
 if wait_ready 60; then ok "became ready (/readyz 200)"; else bad "never became ready" "$W/happy.log"; fi
 L=$W/happy.log
+# /readyz turns 200 when the ready flag is touched, a moment before the entrypoint logs "t+...s ready"
+for _ in $(seq 1 25); do grep -qE 't\+[0-9.]+s ready' "$L" && break; sleep 0.2; done
 order=$(grep -oE 't\+[0-9.]+s (preflight_done|caddy_up|model_loaded|gateway_up|warmup_done|ready)' "$L" | awk '{print $2}' | tr '\n' ' ')
 [[ $order == "preflight_done caddy_up model_loaded gateway_up warmup_done ready " ]] \
   && ok "start order: $order" || bad "start order was: $order" "$L"

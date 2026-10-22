@@ -68,12 +68,57 @@ def build() -> dict:
     }
 
 
+# duplex settings the backend accepts (core/schemas/duplex.py); an unknown key would end every session
+DUPLEX_KEYS = {"decode_mode", "temperature", "top_k", "top_p", "text_repetition_penalty", "text_repetition_window_size",
+               "length_penalty", "listen_prob_scale", "listen_top_k"}
+FRAME_MODES = {"grid4", "1", "2", "3", "4"}
+
+
+def page_config() -> dict:
+    """Settings for the patched demo page (docker/patch_demo.py): frames per 1-second step and duplex settings."""
+    mode = os.environ.get("RHYTHM_FRAME_MODE", "grid4")
+    if mode not in FRAME_MODES:
+        raise SystemExit(f"[write_config] RHYTHM_FRAME_MODE={mode!r}: one of {', '.join(sorted(FRAME_MODES))} (grid4 = the "
+                         "current frame + one 2x2 grid of 4 samples per second; N = N frames per second)")
+    raw = os.environ.get("RHYTHM_DUPLEX_CONFIG", "").strip() or "{}"
+    try:
+        duplex = json.loads(raw)
+    except ValueError as e:
+        raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG is not valid JSON ({e})")
+    if not isinstance(duplex, dict) or set(duplex) - DUPLEX_KEYS:
+        raise SystemExit(f"[write_config] RHYTHM_DUPLEX_CONFIG must be a JSON object with keys from {sorted(DUPLEX_KEYS)}")
+    return {"frameMode": mode, "duplexConfig": duplex}
+
+
+def write_atomic(path: str, text: str) -> None:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def set_coach_prompt(app_dir: str, prompt: str) -> None:
+    """Replace the English preset's system prompt (the page loads it into the prompt box). A JSON string is a valid
+    YAML double-quoted scalar, so the one line is rewritten without a YAML library."""
+    path = os.path.join(app_dir, "assets", "presets", "omni", "english_call.yaml")
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError as e:
+        raise SystemExit(f"[write_config] RHYTHM_COACH_PROMPT set but {path} is unreadable ({e})")
+    hits = [i for i, line in enumerate(lines) if line.startswith("system_prompt:")]
+    if len(hits) != 1:
+        raise SystemExit(f"[write_config] {path}: expected one system_prompt line, found {len(hits)}")
+    lines[hits[0]] = "system_prompt: " + json.dumps(prompt)
+    write_atomic(path, "\n".join(lines) + "\n")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default="/app/config.json")
     ap.add_argument("--print", action="store_true", help="print the config instead of writing it")
     a = ap.parse_args()
     cfg = build()
+    page = page_config()
     ref = cfg["audio"]["ref_audio_path"]
     app_dir = os.path.dirname(os.path.abspath(a.out))
     if not a.print and not os.path.isfile(ref if os.path.isabs(ref) else os.path.join(app_dir, ref)):
@@ -81,13 +126,16 @@ def main() -> int:
     text = json.dumps(cfg, indent=2) + "\n"
     if a.print:
         sys.stdout.write(text)
+        sys.stdout.write("rhythm-config.js: " + json.dumps(page) + "\n")
         return 0
-    tmp = a.out + ".tmp"
-    with open(tmp, "w") as f:
-        f.write(text)
-    os.replace(tmp, a.out)
+    write_atomic(a.out, text)
+    os.makedirs(os.path.join(app_dir, "static"), exist_ok=True)
+    write_atomic(os.path.join(app_dir, "static", "rhythm-config.js"), "window.RHYTHM_CONFIG = " + json.dumps(page) + ";\n")
+    if os.environ.get("RHYTHM_COACH_PROMPT", "").strip():
+        set_coach_prompt(app_dir, os.environ["RHYTHM_COACH_PROMPT"].strip())
     print(f"[write_config] wrote {a.out}: model_path={cfg['model']['model_path']} attn={cfg['model']['attn_implementation']} "
-          f"compile={cfg['service']['compile']} recording={cfg['recording']['enabled']} voice={cfg['audio']['ref_audio_path']}")
+          f"compile={cfg['service']['compile']} recording={cfg['recording']['enabled']} voice={cfg['audio']['ref_audio_path']} "
+          f"page frames={page['frameMode']} duplex={page['duplexConfig']}")
     return 0
 
 
