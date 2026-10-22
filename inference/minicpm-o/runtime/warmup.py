@@ -199,7 +199,8 @@ async def run_chat(url: str, token: str | None, timeout: float, no_queue: bool =
 
 
 async def run_video(url: str, token: str | None, timeout: float, chunks: int, video_file: str | None,
-                    drain: float = 10.0, no_queue: bool = False, system_prompt: str = "You are a concise fitness coach.",
+                    drain: float = 10.0, no_queue: bool = False,
+                    system_prompt: str = "You are a concise fitness coach. Always speak English.",
                     data: list | None = None, init_extra: dict | None = None, tail_chunks: int = 0,
                     realtime: bool = True, duplex_config: dict | None = None) -> dict:
     """One omni full-duplex session: 1-second chunks (exactly 16000 float32 samples + frames), paced in real time

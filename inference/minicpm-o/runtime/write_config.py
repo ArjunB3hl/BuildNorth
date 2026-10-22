@@ -44,8 +44,13 @@ def build() -> dict:
         raise SystemExit("[write_config] ATTN_IMPLEMENTATION=flash_attention_2 needs the flash-attn package, which this "
                          "image does not include; use sdpa")
     state = os.environ.get("RHYTHM_STATE_DIR", "/workspace/rhythm")
+    # The duplex model speaks in the language of its reference voice: with the demo's default voice
+    # (ref_minicpm_signature.wav) it answers in Chinese even to an English system prompt. Sessions that send no voice
+    # of their own use this one; the demo's English preset uses ref_en_dlc_1.wav. Relative to the demo dir (/app).
+    ref_audio = os.environ.get("RHYTHM_REF_AUDIO", "assets/ref_audio/ref_en_dlc_1.wav")
     return {
         "model": {"model_path": model_dir, "pt_path": None, "attn_implementation": attn},
+        "audio": {"ref_audio_path": ref_audio},
         "service": {
             "gateway_port": int(env_num("GATEWAY_PORT", 8006, int)),
             "worker_base_port": int(env_num("WORKER_PORT", 22400, int)),
@@ -69,6 +74,10 @@ def main() -> int:
     ap.add_argument("--print", action="store_true", help="print the config instead of writing it")
     a = ap.parse_args()
     cfg = build()
+    ref = cfg["audio"]["ref_audio_path"]
+    app_dir = os.path.dirname(os.path.abspath(a.out))
+    if not a.print and not os.path.isfile(ref if os.path.isabs(ref) else os.path.join(app_dir, ref)):
+        raise SystemExit(f"[write_config] reference voice {ref} not found under {app_dir} (RHYTHM_REF_AUDIO)")
     text = json.dumps(cfg, indent=2) + "\n"
     if a.print:
         sys.stdout.write(text)
@@ -78,7 +87,7 @@ def main() -> int:
         f.write(text)
     os.replace(tmp, a.out)
     print(f"[write_config] wrote {a.out}: model_path={cfg['model']['model_path']} attn={cfg['model']['attn_implementation']} "
-          f"compile={cfg['service']['compile']} recording={cfg['recording']['enabled']}")
+          f"compile={cfg['service']['compile']} recording={cfg['recording']['enabled']} voice={cfg['audio']['ref_audio_path']}")
     return 0
 
 

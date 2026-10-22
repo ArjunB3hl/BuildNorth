@@ -65,7 +65,8 @@ RUN git init -q /app \
  && test "$(git -C /app rev-parse HEAD)" = "${DEMO_COMMIT}" \
  && rm -rf /app/.git /app/certs \
  && test -f /app/py_backend/server.py -a -f /app/worker.py -a -f /app/gateway.py \
- && test -f /app/assets/vad_model/silero_vad.onnx -a -f /app/assets/ref_audio/ref_minicpm_signature.wav
+ && test -f /app/assets/vad_model/silero_vad.onnx -a -f /app/assets/ref_audio/ref_minicpm_signature.wav \
+ && test -f /app/assets/ref_audio/ref_en_dlc_1.wav
 
 # Python dependencies from the hash-checked lock (no resolution at build time). uv itself is installed from a pinned,
 # hash-checked wheel; the one sdist (minicpmo-utils) is built with hash-pinned setuptools/wheel.

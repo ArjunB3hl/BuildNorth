@@ -94,5 +94,24 @@ expect 4 "driver 550.127.05 is older than R570" GPU=1 PATH="$W/bin"
 gpu "NVIDIA L40S, 46068, 580.65.06"
 expect 4 "PyTorch does not import|cannot use the GPU" GPU=1 PATH="$W/bin"
 
+# write_config.py: the default reference voice is the demo's English one, and a missing voice file stops start-up
+mkdir -p "$W/app/assets/ref_audio"
+if out=$(MODEL_DIR=/m python3 runtime/write_config.py --out "$W/app/config.json" 2>&1); then
+  failn=$((failn + 1)); echo "FAIL  write_config accepted a missing reference voice"
+else
+  if grep -q "reference voice assets/ref_audio/ref_en_dlc_1.wav not found" <<<"$out"; then
+    pass=$((pass + 1)); echo "ok    missing English reference voice -> clear error"
+  else
+    failn=$((failn + 1)); echo "FAIL  message: $out"
+  fi
+fi
+printf x > "$W/app/assets/ref_audio/ref_en_dlc_1.wav"
+if MODEL_DIR=/m python3 runtime/write_config.py --out "$W/app/config.json" >/dev/null \
+   && python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['audio']['ref_audio_path']=='assets/ref_audio/ref_en_dlc_1.wav'" "$W/app/config.json"; then
+  pass=$((pass + 1)); echo "ok    config.json sets the English reference voice by default"
+else
+  failn=$((failn + 1)); echo "FAIL  English voice not in config.json"
+fi
+
 echo "preflight cases: $pass passed, $failn failed"
 [[ $failn == 0 ]]

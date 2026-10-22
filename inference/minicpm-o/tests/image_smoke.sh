@@ -72,10 +72,11 @@ out=$(run -e RHYTHM_API_TOKEN=smoke-0123456789abcdef0123456789abcdef "$REF" 2>&1
 [[ $rc == 1 ]] && grep -q 'preflight failed (exit 3): model directory /workspace/models/openbmb/MiniCPM-o-4_5/.* does not exist' <<<"$out" \
   && ok "no volume -> exit 1, says to attach/stage the model (never downloads)" || bad "no-volume run (exit $rc): $(tail -5 <<<"$out")"
 out=$(run -e RHYTHM_API_TOKEN=smoke-0123456789abcdef0123456789abcdef -e MODEL_DIR=/tmp/m --entrypoint bash "$REF" -c \
-  'python /opt/rhythm/runtime/write_config.py --out /tmp/c.json >/dev/null && python - <<EOF
-import json; c = json.load(open("/tmp/c.json")); assert c["model"]["model_path"] == "/tmp/m"; assert c["recording"]["enabled"] is False
+  'python /opt/rhythm/runtime/write_config.py --out /app/c.json >/dev/null && cp /app/c.json /tmp/c.json && python - <<EOF
+import json, os; c = json.load(open("/tmp/c.json")); assert c["model"]["model_path"] == "/tmp/m"; assert c["recording"]["enabled"] is False
+assert c["audio"]["ref_audio_path"].endswith("ref_en_dlc_1.wav") and os.path.isfile("/app/" + c["audio"]["ref_audio_path"])
 print("config ok")
-EOF' 2>&1) && ok "write_config.py inside the image: model path from MODEL_DIR, recording off" || bad "write_config: $out"
+EOF' 2>&1) && ok "write_config.py inside the image: model path from MODEL_DIR, recording off, English reference voice present" || bad "write_config: $out"
 
 echo "image smoke: $pass passed, $failn failed"
 [[ $failn == 0 ]]

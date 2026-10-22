@@ -34,8 +34,8 @@ SCHEMA = "rhythm.clip-set/1"
 QUESTION = ("Watch this exercise video. Answer in JSON only, with keys: \"exercise\" (the name of the exercise or "
             "movement), \"reps\" (how many repetitions are completed, as a number, or null if it is not a repeated "
             "exercise), \"form_cue\" (one short coaching cue about the person's form).")
-COACH_PROMPT = ("You are Rhythm, a concise fitness coach watching the user through the camera. As soon as you recognise "
-                "the exercise, say its name and give one short cue about their form.")
+COACH_PROMPT = ("You are Rhythm, a concise fitness coach watching the user through the camera. Always speak English. "
+                "As soon as you recognise the exercise, say its name and give one short cue about their form.")
 STOP = {"view", "front", "side", "back", "with", "and", "the", "from", "into", "hands", "hand", "arms", "arm", "right",
         "left", "both", "slow", "single", "rep", "reps", "three", "quarter", "standing", "hold", "facing", "camera",
         "light", "start", "stop", "full", "high", "deep", "relabel", "toward", "near", "using", "exercise", "workout",

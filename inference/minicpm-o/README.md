@@ -326,6 +326,10 @@ when the model is no longer needed.
   uploads, queue/ETA edits, debug traces). The demo's `/api/admin/*` routes answer 404 (`ENABLE_PUBLIC_ADMIN` unset).
   The token is a single shared secret on every client: rotate it by changing the Runpod secret and restarting the Pod.
 - `GET /healthz` (liveness) and `GET /readyz` (200 only after the warm-up) need no token and reveal nothing else.
+- Language: the duplex model speaks in the language of its reference voice. The demo's default voice is Chinese, so
+  this deployment makes the demo's English voice (`assets/ref_audio/ref_en_dlc_1.wav`) the default for sessions that
+  send none (`RHYTHM_REF_AUDIO`); the app should also say "Always speak English." in its system prompt. A session can
+  send its own voice as `voice.ref_audio_path` (a file in the image) or `voice.ref_audio_base64` (float32 16 kHz).
 - Session limits (upstream gateway): one session at a time (others wait in a queue of `RHYTHM_MAX_QUEUE`, default 4);
   `mode=video` sessions end after **300 s** and `mode=audio` after 600 s with `{"type":"session.closed","reason":"timeout"}`.
   The model's conversation context ends with the session, so to continue a longer workout the app should end its own
@@ -366,7 +370,7 @@ accepting first-frame-per-chunk video. Not built, not tested.
 Run from this folder; the GitHub `validate` job runs the same.
 
 ```bash
-bash tests/preflight_cases.sh                       # 26 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
+bash tests/preflight_cases.sh                       # 28 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
 PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/auth_matrix.sh        # 46 checks: real Caddyfile, HTTP + WebSocket,
                                                                      # cross-Pod cookie use, write methods
 PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/entrypoint_cases.sh   # 43 checks: real entrypoint + stub demo
