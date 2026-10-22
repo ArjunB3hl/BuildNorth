@@ -112,12 +112,12 @@ tests/                       CPU tests (section 13) and the stub demo processes 
 | 1 | Permission to push this folder and the two workflows to `ArjunB3hl/BuildNorth` (**public repo**: the files become public; no secrets are in them) | git push | no |
 | 2 | (recommended) Repository secret `GHCR_TOKEN`: a classic PAT with only `write:packages`. The workflow pushes with it (GitHub's docs disagree on whether a package first pushed with `GITHUB_TOKEN` from a public repo starts public). Either way, the workflow first pushes a code-free placeholder and refuses to push the real image unless an anonymous pull of it is denied (the package must stay private: the demo code has no license, and public cannot be undone) | GitHub → Settings → Secrets → Actions | no (GHCR storage/bandwidth currently free) |
 | 3 | A GitHub classic PAT with only `read:packages`, saved in Runpod → Credentials → Container Registry Auth (registry `ghcr.io`, username `ArjunB3hl`). Put its id into `.env` as `RUNPOD_REGISTRY_AUTH_ID` (`runpod/rp.sh registry-auths` lists ids); the template made by `rp.sh template` attaches it | Runpod | no |
-| 4 | Runpod network volume: **30 GB in US-KS-2** (S3 API + RTX 6000 Ada / L40 / RTX A6000 in stock on 22 Oct) | Runpod → Storage | **yes: 30 × $0.07 = $2.10/month**, billed until deleted |
+| 4 | Runpod network volume: **30 GB in US-WA-1** (S3 API; RTX 6000 Ada offered there). A Pod can only use a volume in its own data centre | Runpod → Storage | **yes: 30 × $0.07 = $2.10/month**, billed until deleted |
 | 5 | Runpod S3 API key (`user_…` + `rps_…`) as repository secrets `RUNPOD_S3_ACCESS_KEY_ID` / `RUNPOD_S3_SECRET_ACCESS_KEY`, and the same values in your local `.env` (clip staging, section 8a, runs on the Mac; the secret is shown only once, so save it when you create the key) | GitHub → Settings → Secrets → Actions; local `.env` | no |
 | 6 | Runpod secret holding the output of `openssl rand -hex 32` (keep a copy in your password manager). Runpod's docs describe two naming conventions, and both work: a secret named `rhythm_api_token` (the template maps `{{ RUNPOD_SECRET_rhythm_api_token }}` into `RHYTHM_API_TOKEN`), or, where the console requires keys to start with `RUNPOD_SECRET_`, a secret named `RUNPOD_SECRET_RHYTHM_API_TOKEN` (the container reads it directly). A reference that does not resolve stops start-up with a clear message. For a published app, keep this token on Rhythm's backend rather than in the app bundle | Runpod → Credentials → Secrets | no |
 | 7 | Runpod API key in `.env` as `RUNPOD_API_KEY` for `runpod/rp.sh`. A restricted key works if it allows read/write on Pods (create, get, list, stop, start, delete), Templates (create, get) and read on Container Registry Auth; a read-only key cannot create or stop Pods | your machine, never committed | no |
 | 8 | (optional) Your SSH public key in Runpod → Settings → SSH Public Keys, for SSH administration | Runpod | no |
-| 9 | Approval of the first GPU test (section 8) | — | **yes: about $0.75 on an RTX A6000, capped at $5** |
+| 9 | Approval of the first GPU test (section 8) | — | **yes: about $1.25 on an RTX 6000 Ada, capped at $5** |
 | 10 | (optional) Confirmation to include the 10 'confirm' clips in the test set (section 8a) | — | no |
 
 ## 6. Build the image (GitHub Actions, CPU runner)
@@ -168,14 +168,14 @@ end-to-end latency, WebSocket behaviour through Runpod's proxy, and restart beha
 | | |
 |---|---|
 | Image | `IMAGE_REF` (digest from section 6) |
-| GPU | `NVIDIA RTX A6000` ($0.59/h Secure, 48 GB, Ampere), fallback `NVIDIA L40` ($0.82/h, Ada) if no A6000 is free. The cheapest 48 GB GPU first: if it keeps real-time pace (measurement 4), it is the production GPU; if not, repeat measurements 4–7 on an RTX 6000 Ada / L40 ($0.82–0.99/h). An A40 ($0.59/h) is equivalent, but the 22 Oct stock snapshot listed it in US-MO-1, not US-KS-2, and a network volume only attaches to Pods in its own data centre |
-| Location | Secure Cloud, US-KS-2, network volume attached at `/workspace` (must be chosen at creation) |
+| GPU | `NVIDIA RTX 6000 Ada Generation` (48 GB, Ada, about $0.99/h Secure Cloud). The cheaper RTX A6000 ($0.59/h) also meets every requirement; if the 6000 Ada keeps real-time pace with margin (measurement 4), an A6000 run of measurements 4–7 shows whether the cheaper GPU is enough for production |
+| Location | Secure Cloud, US-WA-1 (the volume's data centre), network volume attached at `/workspace` (must be chosen at creation) |
 | Start command | none (image entrypoint: `tini -g -- /opt/rhythm/runtime/entrypoint.sh`) |
 | Ports | `8000/http` (public, via Runpod proxy), `22/tcp` (SSH) |
 | Secrets | `RHYTHM_API_TOKEN={{ RUNPOD_SECRET_rhythm_api_token }}` (template env); registry auth id |
-| Disk | container disk 40 GB (wiped on stop), pod volume 0 GB, network volume 30 GB |
+| Disk | container disk 50 GB (wiped on stop), pod volume 0 GB, network volume 30 GB |
 | Settings | defaults (`TORCH_COMPILE=0`, `MODEL_VERIFY=size`, `WARMUP=1`) |
-| Budget | expected ~1.25 h of GPU incl. the clip run ≈ **$0.75** on an A6000 (≈ $1 if it falls back to an L40); hard stop at 2 h; **cap $5** including a repeat on an Ada GPU |
+| Budget | expected ~1.25 h of GPU incl. the clip run ≈ **$1.25** on an RTX 6000 Ada; hard stop at 2 h; **cap $5** including retries |
 
 Stop immediately (`rp.sh stop`) if: not ready after 40 min (with compile off, as in this test), the same step fails
 twice, or the budget is reached.
@@ -185,9 +185,30 @@ cd inference/minicpm-o && set -a && . ./.env && set +a      # IMAGE_REF, RUNPOD_
 runpod/rp.sh running                                         # expect: 0 pod(s) not stopped
 # before any Pod exists: model staged (section 7: verify) and test clips staged (section 8a: --verify-only -> VERIFY OK)
 runpod/rp.sh template                                        # once per image digest -> runpod/.template-id
-RUNPOD_GPU_TYPES="NVIDIA RTX A6000,NVIDIA L40" runpod/rp.sh create   # asks to confirm; paid from here
+RUNPOD_GPU_TYPES="NVIDIA RTX 6000 Ada Generation" runpod/rp.sh create   # asks to confirm; paid from here
 runpod/rp.sh wait-ready                                      # (1) start-to-ready, as seen by a client
 ```
+
+**Deploying from the Runpod console instead of `rp.sh create`.** Use exactly these settings; anything else in the
+form stays at its default:
+
+| Setting | Value |
+|---|---|
+| Cloud | Secure Cloud, On-Demand (not spot) |
+| Network volume | the volume with the staged model (pick it first: it limits the choice to its data centre) |
+| GPU | 1 × RTX 6000 Ada (48 GB); CUDA version filter 12.8 or newer (driver R570+; older drivers fail preflight) |
+| Container image | `IMAGE_REF` from `.env`, the full `ghcr.io/arjunb3hl/rhythm-minicpm-o@sha256:…` reference |
+| Registry credentials | the ghcr.io credential (`rhythm-ghcr`) |
+| Container start command | empty (the image's entrypoint runs) |
+| Container disk | 50 GB |
+| Volume disk | 0 GB (the network volume is used instead) |
+| Volume mount path | `/workspace` |
+| Expose HTTP ports | `8000` |
+| Expose TCP ports | `22` |
+| Environment variables | only `RHYTHM_API_TOKEN` = the secret, chosen with the console's secret picker (e.g. `{{ RUNPOD_SECRET_rhythm_api_token }}`); a secret named `RUNPOD_SECRET_RHYTHM_API_TOKEN` also works without any variable |
+
+Then give the Pod ID to `runpod/rp.sh wait-ready POD_ID`, `status POD_ID` and `stop POD_ID`. A Pod made in the
+console is not in `runpod/.pod-id`, so pass its ID explicitly.
 
 Measurements (SSH: `ssh root@<publicIp> -p <portMappings[22]>` from `rp.sh status`):
 
@@ -281,7 +302,7 @@ Equivalents (from your machine, with your API key): console → Pods → ⋮ →
 | Resource | After stop | After terminate | Billed while stopped |
 |---|---|---|---|
 | GPU | released | released | no |
-| Container disk (40 GB: image layer, `/tmp`, `/run`) | wiped | deleted | no ($0.10/GB-month only while running) |
+| Container disk (50 GB: image layer, `/tmp`, `/run`) | wiped | deleted | no ($0.10/GB-month only while running) |
 | Pod volume disk | none in this template (`volumeInGb: 0`) | — | — (would be $0.20/GB-month stopped) |
 | Network volume (model, logs, caches, SSH host key) | kept | kept | **yes: $0.07/GB-month (30 GB ≈ $2.10/month) until you delete the volume** |
 | Template, secrets, registry auth | kept | kept | no |
