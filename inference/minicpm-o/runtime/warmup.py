@@ -25,9 +25,11 @@ import asyncio
 import base64
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 MAX_WS = 128 * 1024 * 1024
@@ -51,6 +53,14 @@ def synthetic_chunk_audio(seconds: float = 1.0, rate: int = 16000) -> str:
     return base64.b64encode(pcm.tobytes()).decode()
 
 
+def synthetic_frames(frame_mode: str = "1") -> list[str]:
+    """One step's synthetic images in the given frame mode (see file_chunks)."""
+    one = synthetic_frame()
+    if frame_mode == "grid4":
+        return [one, base64.b64encode(grid_jpeg([base64.b64decode(one)] * 4)).decode()]
+    return [one] * int(frame_mode)
+
+
 def synthetic_frame() -> str:
     from PIL import Image  # noqa: PLC0415
     img = Image.new("RGB", (448, 448))
@@ -63,8 +73,33 @@ def synthetic_frame() -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def file_chunks(path: str, chunks: int | None = None) -> list[tuple[str, list[str]]]:
-    """1-second chunks of a clip: (base64 float32 16 kHz mono audio, [base64 JPEG frame]); silence if no audio track."""
+def grid_jpeg(jpegs: list[bytes]) -> bytes:
+    """2x2 grid of up to 4 JPEG frames (oldest top-left), like the patched web page sends (docker/patch_demo.py)."""
+    from PIL import Image  # noqa: PLC0415
+    ims = [Image.open(io.BytesIO(j)).convert("RGB") for j in jpegs]
+    while len(ims) < 4:
+        ims.insert(0, ims[0])
+    w, h = ims[0].size
+    g = Image.new("RGB", (2 * w, 2 * h))
+    for k, im in enumerate(ims[-4:]):
+        g.paste(im.resize((w, h)), ((k % 2) * w, (k // 2) * h))
+    buf = io.BytesIO()
+    g.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+def sampled_frames(path: str, per_second: int) -> list[bytes]:
+    """All frames of a clip sampled at per_second fps, at most 640 px wide."""
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vf", f"fps={per_second},scale='min(640,iw)':-2", "-q:v", "4",
+                        os.path.join(d, "f_%05d.jpg")], check=True)
+        return [open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d))]
+
+
+def file_chunks(path: str, chunks: int | None = None, frame_mode: str = "1") -> list[tuple[str, list[str]]]:
+    """1-second chunks of a clip: (base64 float32 16 kHz mono audio, [base64 JPEG frames]); silence if no audio track.
+    frame_mode "1" = one frame per second (upstream), "2".."4" = that many frames per second, "grid4" = the middle
+    frame + one 2x2 grid of the second's 4 samples (what the patched web page sends from the camera)."""
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise ProbeError("clips need ffmpeg and ffprobe")
     pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vn", "-ar", "16000", "-ac", "1", "-f", "f32le", "-"],
@@ -76,6 +111,22 @@ def file_chunks(path: str, chunks: int | None = None) -> list[tuple[str, list[st
     if chunks:
         n = min(n, chunks)
     second = 16000 * 4
+    if frame_mode != "1":
+        per = 4 if frame_mode == "grid4" else int(frame_mode)
+        fr = sampled_frames(path, per)
+        out = []
+        for i in range(n):
+            group = fr[i * per:(i + 1) * per]
+            if not group:
+                break
+            group += group[-1:] * (per - len(group))            # a clip's last, partial second: repeat its last sample
+            imgs = [group[len(group) // 2], grid_jpeg(group)] if frame_mode == "grid4" else group
+            audio = pcm[i * second:(i + 1) * second]
+            audio += b"\0" * (second - len(audio))
+            out.append((base64.b64encode(audio).decode(), [base64.b64encode(x).decode() for x in imgs]))
+        if not out:
+            raise ProbeError(f"no frames could be extracted from {path}")
+        return out
     out = []
     for i in range(n):
         jpg = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{i + 0.5:.3f}", "-i", path, "-frames:v", "1",
@@ -199,20 +250,23 @@ async def run_chat(url: str, token: str | None, timeout: float, no_queue: bool =
 
 
 async def run_video(url: str, token: str | None, timeout: float, chunks: int, video_file: str | None,
-                    drain: float = 10.0, no_queue: bool = False, system_prompt: str = "You are a concise fitness coach.",
+                    drain: float = 10.0, no_queue: bool = False,
+                    system_prompt: str = "You are a concise fitness coach. Always speak English.",
                     data: list | None = None, init_extra: dict | None = None, tail_chunks: int = 0,
-                    realtime: bool = True, duplex_config: dict | None = None) -> dict:
+                    realtime: bool = True, duplex_config: dict | None = None, frame_mode: str = "1") -> dict:
     """One omni full-duplex session: 1-second chunks (exactly 16000 float32 samples + frames), paced in real time
     unless realtime=False. tail_chunks appends that many silent chunks repeating the last frame: the model is forced to
     listen for the first 3 steps of a session and can only answer on a later step. The full duplex config is sent
     (default: DEFAULT_DUPLEX_CONFIG), because the backend otherwise keeps the previous session's sampling settings."""
     if data is None:
-        data = file_chunks(video_file, chunks) if video_file else [(synthetic_chunk_audio(), [synthetic_frame()])] * chunks
+        data = (file_chunks(video_file, chunks, frame_mode) if video_file
+                else [(synthetic_chunk_audio(), synthetic_frames(frame_mode))] * chunks)
     if tail_chunks:
         silence = base64.b64encode(b"\0" * 16000 * 4).decode()
         data = list(data) + [(silence, data[-1][1])] * tail_chunks
     kinds: dict[str, int] = {}
     first: dict[str, float] = {}
+    kv_by_chunk: dict[int, int] = {}
     answered: dict[int, float] = {}           # chunk number -> seconds after t_start of its first answer
     texts: list[str] = []
     audio_samples = 0
@@ -282,6 +336,10 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
                         w = (msg.get("metrics") or {}).get("wall_clock_ms")
                         if w is not None:
                             wall.append(w)
+                    # the model's KV-cache length after this step (it shrinks when the sliding window drops seconds)
+                    kv = (msg.get("metrics") or {}).get("kv_cache_length", msg.get("kv_cache_length"))
+                    if idx is not None and isinstance(kv, int):
+                        kv_by_chunk[idx] = kv
                 elif t == "error":
                     raise ProbeError(f"video session error: {msg}")
                 elif t == "session.closed":
@@ -309,6 +367,10 @@ async def run_video(url: str, token: str | None, timeout: float, chunks: int, vi
             if last in answered and last < len(sent) else None,
             "backend_wall_clock_ms": {"n": len(wall), "max": max(wall) if wall else None,
                                       "mean": round(sum(wall) / len(wall), 1) if wall else None},
+            "kv_cache_length": {"max": max(kv_by_chunk.values()) if kv_by_chunk else None,
+                                "last": kv_by_chunk[max(kv_by_chunk)] if kv_by_chunk else None,
+                                "drops": sum(1 for i in kv_by_chunk if i - 1 in kv_by_chunk and kv_by_chunk[i] < kv_by_chunk[i - 1]),
+                                "by_chunk": [kv_by_chunk.get(i) for i in range(len(data))]},
             "text": "".join(texts)[:2000], "audio_out_s": round(audio_samples / 24000, 2),
             "closed_reason": closed.get("reason"), "duplex_config": config,
             "send_times_s": [round(t - t_start, 3) for t in sent], "answer_times_s": answered}
@@ -320,10 +382,14 @@ async def main_async(a) -> dict:
         out["chat"] = await run_chat(a.url, a.token, a.timeout, a.no_queue)
         print(f"[warmup] chat ok: {out['chat']['response_s']}s -> {out['chat']['text']!r}", flush=True)
     if not a.skip_video:
-        out["video"] = await run_video(a.url, a.token, a.timeout, a.chunks, a.video_file, a.drain, a.no_queue)
+        out["video"] = await run_video(a.url, a.token, a.timeout, a.chunks, a.video_file, a.drain, a.no_queue,
+                                       frame_mode=a.frame_mode)
         v = out["video"]
+        kv = v["kv_cache_length"]
         print(f"[warmup] video duplex ok: {v['chunks_answered']}/{v['chunks_sent']} chunks answered, events "
-              f"{v['events']}, chunk latency {v['chunk_latency_s']}", flush=True)
+              f"{v['events']}, chunk latency {v['chunk_latency_s']}"
+              + (f", kv cache max {kv['max']} last {kv['last']} drops {kv['drops']}" if kv["max"] is not None else ""),
+              flush=True)
     return out
 
 
@@ -335,6 +401,8 @@ def main() -> int:
     ap.add_argument("--total-timeout", type=float, help="hard limit for the whole run (default: 3 x --timeout + chunks + 60)")
     ap.add_argument("--chunks", type=int, default=3, help="1-second video-duplex chunks to send")
     ap.add_argument("--video-file", help="use this (permitted) clip instead of synthetic input")
+    ap.add_argument("--frame-mode", default="1", choices=["1", "2", "3", "4", "grid4"],
+                    help="images per 1-second step: 1 (the warm-up), or what the patched page sends (grid4 by default)")
     ap.add_argument("--drain", type=float, default=10.0,
                     help="after the last chunk, stop this many seconds after the last answer")
     ap.add_argument("--no-queue", action="store_true", help="fail instead of waiting in the gateway queue")

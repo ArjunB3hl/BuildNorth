@@ -5,7 +5,7 @@
   "category": "NVIDIA",
   "isServerless": false,
   "isPublic": false,
-  "containerDiskInGb": 40,
+  "containerDiskInGb": 50,
   "volumeInGb": 0,
   "volumeMountPath": "/workspace",
   "ports": ["8000/http", "22/tcp"],

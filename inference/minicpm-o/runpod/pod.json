@@ -4,7 +4,7 @@
   "computeType": "GPU",
   "cloudType": "SECURE",
   "gpuCount": 1,
-  "gpuTypeIds": ["NVIDIA RTX A6000", "NVIDIA A40", "NVIDIA L40", "NVIDIA RTX 6000 Ada Generation", "NVIDIA L40S"],
+  "gpuTypeIds": ["NVIDIA RTX 6000 Ada Generation", "NVIDIA L40", "NVIDIA L40S", "NVIDIA RTX A6000", "NVIDIA A40"],
   "gpuTypePriority": "custom",
   "dataCenterIds": ["__RUNPOD_DATACENTER__"],
   "networkVolumeId": "__RUNPOD_VOLUME_ID__",

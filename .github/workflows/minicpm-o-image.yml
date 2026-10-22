@@ -44,7 +44,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45   # apt mirrors (ffmpeg) can be slow during GitHub incidents
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,7 +77,7 @@ jobs:
           if ATTN_IMPLEMENTATION=flash_attention_2 MODEL_DIR=/x python3 runtime/write_config.py --print; then exit 1; fi
           bash tests/preflight_cases.sh
 
-      - name: Auth matrix, entrypoint lifecycle, probe client, test-clip path (stub demo, no GPU)
+      - name: Auth matrix, entrypoint lifecycle, probe client, test-clip path, rp.sh (stubs, no GPU, no Runpod)
         run: |
           python3 -m venv "$RUNNER_TEMP/v" && "$RUNNER_TEMP/v/bin/pip" install -q --require-hashes -r tests/requirements-tests.txt
           PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/auth_matrix.sh
@@ -85,6 +85,7 @@ jobs:
           PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/probe_cases.sh
           command -v ffmpeg >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg; }
           PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/clips_cases.sh
+          bash tests/rp_cases.sh
 
       - name: Hub listing of the pinned revision (dry run, no download)
         run: |

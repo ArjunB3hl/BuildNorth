@@ -100,10 +100,42 @@ s() { python -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys
 [[ $(s "d['duplex']['label_unknown']") == 1 ]] && ok "duplex: nothing said -> label_match unknown, not counted as a miss or match" || bad "label_unknown"
 [[ $(s "d['duplex']['unanswered_chunks']") == 0 ]] && ok "duplex: every chunk (clip + 2 silent tail) answered" || bad "unanswered"
 [[ $(s "d['set']['policy']['file']") == policy.json ]] && ok "summary records the clip set's policy" || bad "policy in summary"
-python - "$W/out/results.jsonl" <<'PY' && ok "duplex sent clip seconds + tail chunks (3+2) with the full default config" || bad "chunk counts/config"
+python - "$W/out/results.jsonl" <<'PY' && ok "duplex sent clip seconds + tail chunks (3+2) with the full default config, 2 images per step (grid4)" || bad "chunk counts/config"
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]) if '"duplex"' in l]
-sys.exit(0 if [r["chunks_sent"] for r in rows] == [5] and rows[0]["duplex_config"]["top_k"] == 20 else 1)
+sys.exit(0 if [r["chunks_sent"] for r in rows] == [5] and rows[0]["duplex_config"]["top_k"] == 20
+         and rows[0]["frame_mode"] == "grid4" and rows[0]["images_per_step"] == 2 else 1)
+PY
+[[ $(grep -c 'stub gateway: chunk [0-9]* images=2$' "$W/gw2.log") == 5 && $(grep -c 'stub gateway: chunk' "$W/gw2.log") == 5 ]] \
+  && ok "the stub gateway received 2 images in each of the 5 duplex chunks" || bad "images per chunk at the gateway" "$W/gw2.log"
+grep -q 'session.init mode=video voice=assets/ref_audio/ref_en_dlc_1.wav' "$W/gw2.log" \
+  && ok "duplex session.init carries the English reference voice" || bad "voice at the gateway" "$W/gw2.log"
+# a clip that gets brighter over time: the grid's quadrants must be 4 increasing moments within each second
+ffmpeg -v error -f lavfi -i "color=c=black:s=320x240:r=20:d=3,format=gray,geq=lum='16+T*70'" -pix_fmt yuv420p "$W/ramp.mp4"
+ffmpeg -v error -f lavfi -i "testsrc=duration=0.8:size=320x240:rate=30" -pix_fmt yuv420p "$W/short.mp4"
+python - "$W/ramp.mp4" "$W/short.mp4" <<'PY' && ok "frame modes: 1/3/grid4 give 1/3/2 images per second; grid quadrants are 4 moments in order, inside their own second; a 0.8 s clip still gives one step" || bad "frame modes"
+import base64, io, sys
+sys.path.insert(0, "runtime")
+from PIL import Image, ImageStat
+from warmup import file_chunks, synthetic_frames
+img = lambda b: Image.open(io.BytesIO(base64.b64decode(b))).convert("L")
+one, three, grid = (file_chunks(sys.argv[1], frame_mode=m) for m in ("1", "3", "grid4"))
+assert len(one) == len(three) == len(grid) == 3, (len(one), len(three), len(grid))
+assert all(len(c[1]) == 1 for c in one) and all(len(c[1]) == 3 for c in three) and all(len(c[1]) == 2 for c in grid)
+prev_max = -1
+for i, (_, (main, g)) in enumerate(grid):
+    m, gi = img(main), img(g)
+    assert gi.size == (2 * m.size[0], 2 * m.size[1]), (m.size, gi.size)
+    w, h = m.size
+    q = [ImageStat.Stat(gi.crop(((k % 2) * w, (k // 2) * h, (k % 2 + 1) * w, (k // 2 + 1) * h))).mean[0] for k in range(4)]
+    assert q == sorted(q) and q[3] - q[0] > 20, (i, q)                # 4 distinct moments, oldest top-left
+    assert q[0] > prev_max, (i, q, prev_max)                          # all inside second i, after second i-1
+    assert q[0] <= ImageStat.Stat(m).mean[0] <= q[3], (i, q)          # the full frame is from the same second
+    prev_max = q[3]
+for mode, k in (("1", 1), ("2", 2), ("4", 4), ("grid4", 2)):
+    c = file_chunks(sys.argv[2], frame_mode=mode)
+    assert len(c) == 1 and len(c[0][1]) == k, (mode, len(c), [len(x[1]) for x in c])
+assert [len(synthetic_frames(m)) for m in ("1", "3", "grid4")] == [1, 3, 2]
 PY
 [[ -s $W/out/summary.md ]] && grep -q 'clip-squat' "$W/out/summary.md" && ok "summary.md written" || bad "summary.md"
 rm "$W/vol/s1/.rhythm/COMPLETE.json"

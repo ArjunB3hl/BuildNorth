@@ -87,19 +87,20 @@ All pins live in `versions.env` (the CI build reads its build arguments from it)
 ```
 versions.env                 every pin (model, demo commit, base image, torch/CUDA, image name/version)
 docker/Dockerfile            the image (no weights, no secrets, no SSH host keys, no demo TLS key)
+docker/patch_demo.py         build-time patch of the demo: more camera frames per second, coaching defaults, KV window
 requirements/                requirements.in + overrides.txt -> requirements.lock (lock.sh), build constraints
 runtime/entrypoint.sh        start order, readiness, supervision, shutdown
 runtime/preflight.py         start-up checks with exit codes 2 config, 3 model, 4 GPU, 5 disk/ports
 runtime/warmup.py            warm-up and the latency probe (same WebSocket protocol as the app)
-runtime/write_config.py      the demo's config.json from environment variables (recording off)
+runtime/write_config.py      the demo's config.json and the page's rhythm-config.js from environment variables
 runtime/clip_eval.py         runs a staged test-clip set through the model (chat + duplex), writes results/summary
 runtime/Caddyfile            token check, /healthz, /readyz, proxy to the gateway
 scripts/stage_model.py       model staging to the network volume via Runpod's S3 API (+ requirements-stage.txt)
 scripts/stage_clips.py       builds and stages a private test-clip set (policy, metadata stripping, checksums)
 runpod/template.json         Runpod template (REST TemplateCreateInput)
 runpod/pod.json              GPU Pod request (REST PodCreateInput)
-runpod/rp.sh                 template / create / status / wait-ready / stop / start / verify-stopped / terminate / running
-tests/                       CPU tests (section 13) and the stub demo processes they use
+runpod/rp.sh                 template / create / status / wait-ready / stop / start / set-image / verify-stopped / terminate / running
+tests/                       CPU tests (section 13) and the stubs they use (demo processes, Runpod REST API)
 .env.example                 every setting, placeholders only
 ../../.github/workflows/minicpm-o-image.yml        CPU validation + image build/push (GitHub-hosted runner)
 ../../.github/workflows/minicpm-o-stage-model.yml  model staging job (GitHub-hosted runner)
@@ -112,12 +113,12 @@ tests/                       CPU tests (section 13) and the stub demo processes 
 | 1 | Permission to push this folder and the two workflows to `ArjunB3hl/BuildNorth` (**public repo**: the files become public; no secrets are in them) | git push | no |
 | 2 | (recommended) Repository secret `GHCR_TOKEN`: a classic PAT with only `write:packages`. The workflow pushes with it (GitHub's docs disagree on whether a package first pushed with `GITHUB_TOKEN` from a public repo starts public). Either way, the workflow first pushes a code-free placeholder and refuses to push the real image unless an anonymous pull of it is denied (the package must stay private: the demo code has no license, and public cannot be undone) | GitHub → Settings → Secrets → Actions | no (GHCR storage/bandwidth currently free) |
 | 3 | A GitHub classic PAT with only `read:packages`, saved in Runpod → Credentials → Container Registry Auth (registry `ghcr.io`, username `ArjunB3hl`). Put its id into `.env` as `RUNPOD_REGISTRY_AUTH_ID` (`runpod/rp.sh registry-auths` lists ids); the template made by `rp.sh template` attaches it | Runpod | no |
-| 4 | Runpod network volume: **30 GB in US-KS-2** (S3 API + RTX 6000 Ada / L40 / RTX A6000 in stock on 22 Oct) | Runpod → Storage | **yes: 30 × $0.07 = $2.10/month**, billed until deleted |
+| 4 | Runpod network volume: **30 GB in US-WA-1** (S3 API; RTX 6000 Ada offered there). A Pod can only use a volume in its own data centre | Runpod → Storage | **yes: 30 × $0.07 = $2.10/month**, billed until deleted |
 | 5 | Runpod S3 API key (`user_…` + `rps_…`) as repository secrets `RUNPOD_S3_ACCESS_KEY_ID` / `RUNPOD_S3_SECRET_ACCESS_KEY`, and the same values in your local `.env` (clip staging, section 8a, runs on the Mac; the secret is shown only once, so save it when you create the key) | GitHub → Settings → Secrets → Actions; local `.env` | no |
 | 6 | Runpod secret holding the output of `openssl rand -hex 32` (keep a copy in your password manager). Runpod's docs describe two naming conventions, and both work: a secret named `rhythm_api_token` (the template maps `{{ RUNPOD_SECRET_rhythm_api_token }}` into `RHYTHM_API_TOKEN`), or, where the console requires keys to start with `RUNPOD_SECRET_`, a secret named `RUNPOD_SECRET_RHYTHM_API_TOKEN` (the container reads it directly). A reference that does not resolve stops start-up with a clear message. For a published app, keep this token on Rhythm's backend rather than in the app bundle | Runpod → Credentials → Secrets | no |
 | 7 | Runpod API key in `.env` as `RUNPOD_API_KEY` for `runpod/rp.sh`. A restricted key works if it allows read/write on Pods (create, get, list, stop, start, delete), Templates (create, get) and read on Container Registry Auth; a read-only key cannot create or stop Pods | your machine, never committed | no |
 | 8 | (optional) Your SSH public key in Runpod → Settings → SSH Public Keys, for SSH administration | Runpod | no |
-| 9 | Approval of the first GPU test (section 8) | — | **yes: about $0.75 on an RTX A6000, capped at $5** |
+| 9 | Approval of the first GPU test (section 8) | — | **yes: about $1.25 on an RTX 6000 Ada, capped at $5** |
 | 10 | (optional) Confirmation to include the 10 'confirm' clips in the test set (section 8a) | — | no |
 
 ## 6. Build the image (GitHub Actions, CPU runner)
@@ -146,7 +147,8 @@ With the network volume (input 4) and the S3 secrets (input 5):
 
 1. Actions → **minicpm-o stage model** → `volume_id`, `datacenter`, `mode: dry-run`: lists the 54 files to upload.
 2. Same with `mode: stage`. Per file: download at the pinned revision, verify sha256 (LFS) or git blob id against the
-   Hub listing, multipart upload (256 MB parts; Runpod's limit is 500 MB), compare the uploaded size, delete the local
+   Hub listing, multipart upload (64 MiB parts: Runpod documents 500 MB, but its gateway refuses 256 MiB requests
+   with HTTP 413), compare the uploaded size, delete the local
    copy. The runner needs free disk for one file (~5 GB). Files already on the volume at the right size are skipped,
    so after any failure just run it again. `.rhythm/manifest.json` (every file's size and hash) and, last,
    `.rhythm/COMPLETE.json` are written next to the model. Expected: ~20 GB, tens of minutes.
@@ -167,14 +169,14 @@ end-to-end latency, WebSocket behaviour through Runpod's proxy, and restart beha
 | | |
 |---|---|
 | Image | `IMAGE_REF` (digest from section 6) |
-| GPU | `NVIDIA RTX A6000` ($0.59/h Secure, 48 GB, Ampere), fallback `NVIDIA L40` ($0.82/h, Ada) if no A6000 is free. The cheapest 48 GB GPU first: if it keeps real-time pace (measurement 4), it is the production GPU; if not, repeat measurements 4–7 on an RTX 6000 Ada / L40 ($0.82–0.99/h). An A40 ($0.59/h) is equivalent, but the 22 Oct stock snapshot listed it in US-MO-1, not US-KS-2, and a network volume only attaches to Pods in its own data centre |
-| Location | Secure Cloud, US-KS-2, network volume attached at `/workspace` (must be chosen at creation) |
+| GPU | `NVIDIA RTX 6000 Ada Generation` (48 GB, Ada, about $0.99/h Secure Cloud). The cheaper RTX A6000 ($0.59/h) also meets every requirement; if the 6000 Ada keeps real-time pace with margin (measurement 4), an A6000 run of measurements 4–7 shows whether the cheaper GPU is enough for production |
+| Location | Secure Cloud, US-WA-1 (the volume's data centre), network volume attached at `/workspace` (must be chosen at creation) |
 | Start command | none (image entrypoint: `tini -g -- /opt/rhythm/runtime/entrypoint.sh`) |
 | Ports | `8000/http` (public, via Runpod proxy), `22/tcp` (SSH) |
 | Secrets | `RHYTHM_API_TOKEN={{ RUNPOD_SECRET_rhythm_api_token }}` (template env); registry auth id |
-| Disk | container disk 40 GB (wiped on stop), pod volume 0 GB, network volume 30 GB |
+| Disk | container disk 50 GB (wiped on stop), pod volume 0 GB, network volume 30 GB |
 | Settings | defaults (`TORCH_COMPILE=0`, `MODEL_VERIFY=size`, `WARMUP=1`) |
-| Budget | expected ~1.25 h of GPU incl. the clip run ≈ **$0.75** on an A6000 (≈ $1 if it falls back to an L40); hard stop at 2 h; **cap $5** including a repeat on an Ada GPU |
+| Budget | expected ~1.25 h of GPU incl. the clip run ≈ **$1.25** on an RTX 6000 Ada; hard stop at 2 h; **cap $5** including retries |
 
 Stop immediately (`rp.sh stop`) if: not ready after 40 min (with compile off, as in this test), the same step fails
 twice, or the budget is reached.
@@ -184,9 +186,30 @@ cd inference/minicpm-o && set -a && . ./.env && set +a      # IMAGE_REF, RUNPOD_
 runpod/rp.sh running                                         # expect: 0 pod(s) not stopped
 # before any Pod exists: model staged (section 7: verify) and test clips staged (section 8a: --verify-only -> VERIFY OK)
 runpod/rp.sh template                                        # once per image digest -> runpod/.template-id
-RUNPOD_GPU_TYPES="NVIDIA RTX A6000,NVIDIA L40" runpod/rp.sh create   # asks to confirm; paid from here
+RUNPOD_GPU_TYPES="NVIDIA RTX 6000 Ada Generation" runpod/rp.sh create   # asks to confirm; paid from here
 runpod/rp.sh wait-ready                                      # (1) start-to-ready, as seen by a client
 ```
+
+**Deploying from the Runpod console instead of `rp.sh create`.** Use exactly these settings; anything else in the
+form stays at its default:
+
+| Setting | Value |
+|---|---|
+| Cloud | Secure Cloud, On-Demand (not spot) |
+| Network volume | the volume with the staged model (pick it first: it limits the choice to its data centre) |
+| GPU | 1 × RTX 6000 Ada (48 GB); CUDA version filter 12.8 or newer (driver R570+; older drivers fail preflight) |
+| Container image | `IMAGE_REF` from `.env`, the full `ghcr.io/arjunb3hl/rhythm-minicpm-o@sha256:…` reference |
+| Registry credentials | the ghcr.io credential (`rhythm-ghcr`) |
+| Container start command | empty (the image's entrypoint runs) |
+| Container disk | 50 GB |
+| Volume disk | 0 GB (the network volume is used instead) |
+| Volume mount path | `/workspace` |
+| Expose HTTP ports | `8000` |
+| Expose TCP ports | `22` |
+| Environment variables | only `RHYTHM_API_TOKEN` = the secret, chosen with the console's secret picker (e.g. `{{ RUNPOD_SECRET_rhythm_api_token }}`); a secret named `RUNPOD_SECRET_RHYTHM_API_TOKEN` also works without any variable |
+
+Then give the Pod ID to `runpod/rp.sh wait-ready POD_ID`, `status POD_ID` and `stop POD_ID`. A Pod made in the
+console is not in `runpod/.pod-id`, so pass its ID explicitly.
 
 Measurements (SSH: `ssh root@<publicIp> -p <portMappings[22]>` from `rp.sh status`):
 
@@ -195,7 +218,7 @@ Measurements (SSH: `ssh root@<publicIp> -p <portMappings[22]>` from `rp.sh statu
 | 1 | Start-to-ready | `rp.sh wait-ready` (Pod created → `/readyz` 200, includes image pull); `startup.json` `marks_s.ready` (container start → ready) |
 | 2 | Model load / warm-up | `startup.json`: `model_loaded − caddy_up` (load), `warmup_done − gateway_up` (warm-up); `warmup.json` |
 | 3 | Peak VRAM | `python3 -c "import csv,sys; print(max(float(r[1]) for r in csv.reader(open(sys.argv[1]))), 'MiB')" /workspace/rhythm/logs/<run>/gpu.csv` after step 4 (covers load, warm-up and the session) |
-| 4 | One-session speed (in the Pod) | `python /opt/rhythm/runtime/warmup.py --skip-chat --chunks 60 --json /workspace/rhythm/logs/probe-local.json`: `backend_wall_clock_ms` mean/max (< 1000 ms per 1 s unit = keeps up with real time), `lag_after_last_chunk_s` |
+| 4 | One-session speed (in the Pod) | `python /opt/rhythm/runtime/warmup.py --skip-chat --chunks 60 --frame-mode grid4 --json /workspace/rhythm/logs/probe-local.json` (what the page sends; `--frame-mode 1` for upstream's load): `backend_wall_clock_ms` mean/max (< 1000 ms per 1 s unit = keeps up with real time), `lag_after_last_chunk_s` |
 | 5 | End-to-end latency (from the laptop, through the proxy) | `python runtime/warmup.py --url wss://<POD_ID>-8000.proxy.runpod.net/v1/realtime --token "$RHYTHM_API_TOKEN" --skip-chat --chunks 60 --json probe-proxy.json` (venv from `tests/requirements-tests.txt`); compare `first_event_s` and `lag_after_last_chunk_s` with #4; network baseline: `for i in 1 2 3 4 5; do curl -so /dev/null -w '%{time_total}\n' https://<POD_ID>-8000.proxy.runpod.net/healthz; done` |
 | 6 | WebSocket through the proxy, session cap | #5 succeeding answers it; then `--chunks 130` (a session longer than Cloudflare's 100 s request limit must not be cut); then `--chunks 310 --timeout 60`: the gateway's 300 s cap must end it with `closed by the server: reason=timeout` (exit 1 is the expected result); then immediately run #5 again with `--chunks 5` and record whether the first attempt gets `session_failed` (the reconnect window in section 10) |
 | 7 | Test clips (section 8a) | `python /opt/rhythm/runtime/clip_eval.py --clips /workspace/rhythm/test-clips/ready-2026-10-22 --out /workspace/rhythm/logs/clip-eval-1`: per clip, the chat answer (exercise, reps, form cue) and what the coach says unprompted in a streamed session, with per-chunk latency; `summary.md` for review. About 15 min of GPU for 46 clips (5.7 min of video, streamed in real time, plus the chat pass) |
@@ -254,8 +277,10 @@ hf download "$MOTION_LIBRARY_REPO" --repo-type dataset --local-dir "$TMPDIR/moti
 
 `runtime/clip_eval.py` runs inside the Pod against the local gateway (measurement 7). It makes two passes per clip:
 - **chat:** the whole mp4 plus a question; the answer is text only.
-- **duplex:** the clip is streamed like the camera, one frame and one second of silence per second, then 4 silent
-  chunks. The model is forced to listen for the first 3 steps of a session.
+- **duplex:** the clip is streamed like the camera, one second of silence per second plus the clip's frames for that
+  second as the page sends them (`--frame-mode`, default `grid4`, see section 10a; `1` = upstream's one frame; a
+  last partial second repeats its last sample), then
+  4 silent chunks, with the English voice (`--voice`). The model is forced to listen for the first 3 steps of a session.
 
 It writes `results.jsonl`, `summary.json` and `summary.md`. `label_match` is only a keyword check against the
 library name; read `summary.md` to judge the answers.
@@ -280,7 +305,7 @@ Equivalents (from your machine, with your API key): console → Pods → ⋮ →
 | Resource | After stop | After terminate | Billed while stopped |
 |---|---|---|---|
 | GPU | released | released | no |
-| Container disk (40 GB: image layer, `/tmp`, `/run`) | wiped | deleted | no ($0.10/GB-month only while running) |
+| Container disk (50 GB: image layer, `/tmp`, `/run`) | wiped | deleted | no ($0.10/GB-month only while running) |
 | Pod volume disk | none in this template (`volumeInGb: 0`) | — | — (would be $0.20/GB-month stopped) |
 | Network volume (model, logs, caches, SSH host key) | kept | kept | **yes: $0.07/GB-month (30 GB ≈ $2.10/month) until you delete the volume** |
 | Template, secrets, registry auth | kept | kept | no |
@@ -288,6 +313,18 @@ Equivalents (from your machine, with your API key): console → Pods → ⋮ →
 
 Nothing in this folder deletes a network volume or any other resource. Delete the volume yourself in Runpod → Storage
 when the model is no longer needed.
+
+**Switching a running Pod to a new image** (keeps its GPU host, volume and URL; no new template needed):
+
+```bash
+runpod/rp.sh set-image POD_ID         # PATCH /pods/POD_ID with imageName=IMAGE_REF; asks first ('switch image')
+runpod/rp.sh wait-ready POD_ID        # the Pod restarts: image pull + model load, about 5 min
+```
+
+The PATCH resets the Pod, and Runpod does not say whether settings left out of it are kept, so `set-image` sends every
+setting back as it is (env, ports, disks, registry auth) with only the image changed, then reads the Pod again and
+fails if anything else changed. Env values are compared by hash and never printed. The Pod keeps the template id it
+was created from; run `rp.sh template` as well so new Pods get the same image.
 
 ## 10. Access
 
@@ -304,6 +341,10 @@ when the model is no longer needed.
   uploads, queue/ETA edits, debug traces). The demo's `/api/admin/*` routes answer 404 (`ENABLE_PUBLIC_ADMIN` unset).
   The token is a single shared secret on every client: rotate it by changing the Runpod secret and restarting the Pod.
 - `GET /healthz` (liveness) and `GET /readyz` (200 only after the warm-up) need no token and reveal nothing else.
+- Language: the duplex model speaks in the language of its reference voice. The demo's default voice is Chinese, so
+  this deployment makes the demo's English voice (`assets/ref_audio/ref_en_dlc_1.wav`) the default for sessions that
+  send none (`RHYTHM_REF_AUDIO`); the app should also say "Always speak English." in its system prompt. A session can
+  send its own voice as `voice.ref_audio_path` (a file in the image) or `voice.ref_audio_base64` (float32 16 kHz).
 - Session limits (upstream gateway): one session at a time (others wait in a queue of `RHYTHM_MAX_QUEUE`, default 4);
   `mode=video` sessions end after **300 s** and `mode=audio` after 600 s with `{"type":"session.closed","reason":"timeout"}`.
   The model's conversation context ends with the session, so to continue a longer workout the app should end its own
@@ -316,10 +357,65 @@ when the model is no longer needed.
   session length.
 - Internal ports 8006/8007/22400/22500 listen on 127.0.0.1 only; only 8000 (HTTP) and 22 (SSH, key only) are exposed.
 - Session recording is off (`RHYTHM_RECORD_SESSIONS=0`).
-- **Unverified:** Runpod documents its HTTP proxy (Cloudflare, 100 s limit on HTTP requests) but does not state
-  WebSocket support. Measurement 6 checks it. If WebSockets fail or are cut, the fallback is a TCP port with TLS
-  terminated in the container (Caddy `tls internal` with the client pinning the certificate) or a tunnel; that is
-  not implemented here.
+- **Runpod's HTTP proxy cuts long WebSocket sessions (measured 2026-10-22).** Two 120 s `grid4` sessions from a
+  laptop through `wss://<POD_ID>-8000.proxy.runpod.net` were cut after 52 s and 116 s ("no close frame received or
+  sent"); the same two sessions through an SSH tunnel to the gateway completed (120/120 steps, p50 0.55-0.6 s). Earlier
+  short sessions lost about 4 in 100. On the page this shows as a session that stops by itself, or one stuck at
+  "Worker assigned, preparing..." when the cut comes right after `session.init`. For testing, bypass the proxy:
+  `ssh -N -L 127.0.0.1:8006:127.0.0.1:8006 -p <SSH_PORT> -i <key> root@<IP>` and open `http://localhost:8006/omni`
+  (no token: the SSH key authenticates; localhost counts as a secure context for the camera; Caddy's write-endpoint
+  block is not in this path, so don't use the page's upload/share buttons). For the app, the fix is a TCP port with
+  TLS terminated in the container (Caddy `tls internal`, the client pinning the certificate) or a tunnel, plus
+  reconnect in the app; not implemented here.
+
+## 10a. Camera frames per second and coaching (the demo page)
+
+Upstream's page sends **one camera frame per 1-second step**, which is too little to judge form during a movement.
+`docker/patch_demo.py` patches the page at build time (each edit asserts the upstream text, so a changed upstream fails
+the build): the page samples the camera every 1000/N ms and sends, per step, `RHYTHM_FRAME_MODE`:
+
+| `RHYTHM_FRAME_MODE` | images per step | moments per second | model time per listening step (RTX 6000 Ada) |
+|---|---|---|---|
+| `1` (upstream) | 1 full frame | 1 | ~260 ms |
+| `grid4` (default) | the current full frame + one 2x2 grid of the second's 4 samples (640 px each) | 5 | ~420 ms |
+| `2` / `3` / `4` | N frames (640 px) | N | ~400 / not measured / ~790 ms |
+| 8 (not offered) | | | ~1500 ms: no longer real time |
+
+Each image costs about 150-190 ms of model time; a step must finish within 1 s, and a spoken answer needs headroom.
+`grid4` gives five moments per second for the cost of two images, the way MiniCPM-o's own examples combine frames.
+The app's own client can send the same thing: `frame_base64_list` takes several JPEGs per step. The page's "HD"
+toggle (2 slices per image) applies only in mode `1` and to file playback (the hint says "HD: frame mode 1 only"
+otherwise): with `grid4` it would be 6 slices per step, not real time.
+
+**Session length and the KV window.** Every second adds to the model's KV cache: about 79 tokens with one image, about
+145 with two (`grid4`, `2`), about 277 with four, plus a few dozen when the coach speaks. Upstream never prunes the
+duplex cache in this demo, and the page stops a session when it reaches 8192 tokens, so a `grid4` session would end
+after about 55 s (upstream's one frame: about 100 s). `docker/patch_demo.py` therefore turns on the model's own
+**basic sliding window** in the backend: the system prompt and reference voice are kept, and when the cache passes
+`RHYTHM_KV_WINDOW_HIGH` (6000) tokens the oldest seconds are dropped down to `RHYTHM_KV_WINDOW_LOW` (4500). With
+`grid4` the coach then always sees the last ~30-40 s, and a page session runs until the gateway's 300 s cap (the page
+logs "KV pruned" when it slides). `RHYTHM_KV_WINDOW=off` restores upstream; `context` is the model's other mode (it
+carries a summary of dropped text). A slide drops one unit at a time and each drop rewrites the remaining cache, so
+the step after a slide starts later (estimated ~0.1-0.2 s with `grid4`; much more for audio-only sessions, whose units
+are small). The backend's `wall_clock_ms` does not include it; chunk latency does. **Not yet measured on the GPU:**
+per-step time and answers after the window slides.
+
+Coaching defaults on the page: the "English Call" preset carries the Rhythm form-coaching prompt (greet briefly, watch
+the body position, say if it is right or give one short correction, otherwise stay quiet), and the length-penalty
+slider starts at 1.0 with a "Coach" preset button (upstream 1.1 was too chatty; 0.8, tried on the GPU on 2026-10-22,
+made replies too short; lower = shorter turns). The page keeps its settings
+under its own browser key (`omni_settings_rhythm2`; bump it whenever a patched default changes), so values the unpatched page saved on the same Pod URL (1.1, HD,
+an old prompt) are not restored. Pages and scripts are served with `Cache-Control: no-cache`, so a browser picks up a
+new image or a changed `RHYTHM_FRAME_MODE` on the next reload (a page cached before this header existed needs one
+hard reload, Cmd+Shift+R). `/mobile-omni/` loads the same settings but picks its preset from the browser language:
+choose "English Call" there. `/omni` is the page that was tested. Overrides, written at start-up by `write_config.py` (a bad value stops start-up with a message):
+- `RHYTHM_COACH_PROMPT`: replaces the preset's prompt.
+- `RHYTHM_DUPLEX_CONFIG`: JSON object of duplex settings sent with every session (keys: `temperature`, `top_k`,
+  `top_p`, `listen_prob_scale` (> 1 = speaks less), `listen_top_k`, `length_penalty`, `decode_mode`,
+  `text_repetition_penalty`, `text_repetition_window_size`), checked against the backend's ranges; the page's
+  length-penalty slider wins over `length_penalty`. Example: `{"listen_prob_scale": 1.2}`.
+- `RHYTHM_KV_WINDOW` (`basic` | `context` | `off`), `RHYTHM_KV_WINDOW_HIGH` / `RHYTHM_KV_WINDOW_LOW` (6000 / 4500;
+  HIGH at most 7192, so one more second always fits under the page's 8192).
 
 ## 11. Start-up time vs `torch.compile`
 
@@ -344,7 +440,7 @@ accepting first-frame-per-chunk video. Not built, not tested.
 Run from this folder; the GitHub `validate` job runs the same.
 
 ```bash
-bash tests/preflight_cases.sh                       # 26 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
+bash tests/preflight_cases.sh                       # 28 cases: exit codes + messages, incl. stub 24 GB GPU / old driver
 PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/auth_matrix.sh        # 46 checks: real Caddyfile, HTTP + WebSocket,
                                                                      # cross-Pod cookie use, write methods
 PATH="<venv>/bin:<caddy dir>:$PATH" bash tests/entrypoint_cases.sh   # 43 checks: real entrypoint + stub demo

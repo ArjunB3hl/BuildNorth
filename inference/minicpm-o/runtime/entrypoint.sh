@@ -146,16 +146,22 @@ start_sshd() {
   if [[ ! -f $keys/ssh_host_ed25519_key ]]; then
     ssh-keygen -q -t ed25519 -N '' -f "$keys/ssh_host_ed25519_key" || { log "WARNING: ssh-keygen failed; sshd not started"; return 0; }
   fi
-  chmod 600 "$keys/ssh_host_ed25519_key" || true
+  # sshd refuses a host key that others can read, and the network volume does not keep chmod 600, so sshd gets a
+  # private copy on the container's local disk (the volume copy keeps the fingerprint stable across Pods)
+  if ! { install -m 600 "$keys/ssh_host_ed25519_key" /run/sshd/ssh_host_ed25519_key \
+         && install -m 644 "$keys/ssh_host_ed25519_key.pub" /run/sshd/ssh_host_ed25519_key.pub; }; then
+    log "WARNING: cannot copy the SSH host key to /run/sshd; sshd not started"
+    return 0
+  fi
   if ! { printf '%s\n' "$PUBLIC_KEY" > /root/.ssh/authorized_keys && chmod 700 /root/.ssh \
          && chmod 600 /root/.ssh/authorized_keys; }; then
     log "WARNING: cannot write authorized_keys; sshd not started"
     return 0
   fi
-  if /usr/sbin/sshd -o "HostKey=$keys/ssh_host_ed25519_key" -o PasswordAuthentication=no -o PidFile=/run/sshd.pid; then
+  if /usr/sbin/sshd -o HostKey=/run/sshd/ssh_host_ed25519_key -o PasswordAuthentication=no -o PidFile=/run/sshd.pid; then
     log "sshd started (key auth only, host key in $keys)"
   else
-    log "WARNING: sshd did not start; SSH administration is unavailable (the service itself is unaffected)"
+    log "WARNING: sshd did not start; SSH administration is unavailable (the service itself is unaffected): $(/usr/sbin/sshd -t -o HostKey=/run/sshd/ssh_host_ed25519_key 2>&1 | head -3)"
   fi
 }
 
