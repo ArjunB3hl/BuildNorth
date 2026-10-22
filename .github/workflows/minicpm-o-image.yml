@@ -1,0 +1,218 @@
+# MiniCPM-o 4.5 inference image for Rhythm (inference/minicpm-o). Runs on GitHub's hosted Linux AMD64 CPU runners:
+# no GPU, no model weights (they live on the Runpod network volume), nothing built on a laptop.
+#
+#   validate (every push / PR touching inference/minicpm-o, and every manual run): lints, syntax, config parsing,
+#            lock consistency, Caddy config, preflight failure messages, the Hub listing of the pinned revision.
+#   image    (manual runs only): builds linux/amd64, smoke-tests the image on the runner's CPU, and only then pushes
+#            ghcr.io/arjunb3hl/rhythm-minicpm-o:<IMAGE_VERSION> and reports its digest in the job summary.
+name: minicpm-o image
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Push the image to GHCR after the smoke test (false = build and test only)"
+        type: boolean
+        default: true
+      overwrite:
+        description: "Allow replacing an existing IMAGE_VERSION tag (normally bump IMAGE_VERSION in versions.env)"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["inference/minicpm-o/**", ".github/workflows/minicpm-o-image.yml"]
+  pull_request:
+    paths: ["inference/minicpm-o/**", ".github/workflows/minicpm-o-image.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minicpm-o-image-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: inference/minicpm-o
+    shell: bash
+
+env:
+  UV_WHEEL: "uv==0.12.17 --hash=sha256:9e25bb39e1674799c408345a6397ebc2c7c719d498be0ce9d935466d36ceacf5"
+  CADDY_VERSION: "2.11.7"
+  CADDY_SHA512: "a7a433a1b133efc3c8d10eb0b99d52a24b5ef5c322dc77f5282182b1c0402139ab83f3a99f0c52409df77d20123fb0b523edad8a66d8f5e49136197bf61ef0e7"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tools (uv and Caddy, both hash-checked)
+        run: |
+          printf '%s\n' "$UV_WHEEL" > "$RUNNER_TEMP/uv.txt"
+          python3 -m pip install --user --require-hashes --no-deps -r "$RUNNER_TEMP/uv.txt"
+          curl -fsSL -o "$RUNNER_TEMP/caddy.tgz" \
+            "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
+          echo "${CADDY_SHA512}  $RUNNER_TEMP/caddy.tgz" | sha512sum -c -
+          tar -xzf "$RUNNER_TEMP/caddy.tgz" -C "$RUNNER_TEMP" caddy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Shell and Python syntax
+        run: |
+          shellcheck runtime/entrypoint.sh requirements/lock.sh scripts/lock-stage.sh tests/*.sh runpod/*.sh
+          python3 -m py_compile runtime/*.py scripts/*.py
+
+      - name: Locks match their inputs (resolution is pinned by --exclude-newer)
+        run: |
+          (cd requirements && ./lock.sh) && scripts/lock-stage.sh && tests/lock-tests.sh
+          git diff --exit-code -- requirements/requirements.lock scripts/requirements-stage.txt tests/requirements-tests.txt
+
+      - name: Caddy config, demo config, preflight failure messages
+        run: |
+          RHYTHM_API_TOKEN=validation-only-0123456789abcdef0123 caddy validate --config runtime/Caddyfile --adapter caddyfile
+          MODEL_DIR=/workspace/models/check python3 runtime/write_config.py --print
+          if ATTN_IMPLEMENTATION=flash_attention_2 MODEL_DIR=/x python3 runtime/write_config.py --print; then exit 1; fi
+          bash tests/preflight_cases.sh
+
+      - name: Auth matrix, entrypoint lifecycle, probe client, test-clip path (stub demo, no GPU)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/v" && "$RUNNER_TEMP/v/bin/pip" install -q --require-hashes -r tests/requirements-tests.txt
+          PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/auth_matrix.sh
+          PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/entrypoint_cases.sh
+          PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/probe_cases.sh
+          command -v ffmpeg >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg; }
+          PATH="$RUNNER_TEMP/v/bin:$PATH" bash tests/clips_cases.sh
+
+      - name: Hub listing of the pinned revision (dry run, no download)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/s" && "$RUNNER_TEMP/s/bin/pip" install -q --require-hashes -r scripts/requirements-stage.txt
+          "$RUNNER_TEMP/s/bin/python" scripts/stage_model.py --target local --dest "$RUNNER_TEMP/none" --dry-run | tail -3
+
+  image:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Free runner disk (the image unpacks to about 10 GB)
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read versions.env
+        id: v
+        run: |
+          set -a; . ./versions.env; set +a
+          {
+            echo "image=${IMAGE_NAME}"
+            echo "version=${IMAGE_VERSION}"
+            echo "ref=${IMAGE_NAME}:${IMAGE_VERSION}"
+            echo "build_args<<EOF"
+            grep -E '^[A-Z_]+=' versions.env
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          df -h / | tail -1
+
+      # GHCR_TOKEN (optional repository secret): a classic PAT with write:packages. Packages first published with a PAT
+      # start private; GitHub's docs disagree on what GITHUB_TOKEN does for a public repository, hence the probe below.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # The image must stay private (the upstream demo code has no license). Before the real image is ever pushed,
+      # the package is created with a placeholder that holds only a text file, and an anonymous pull of it must be
+      # refused. A public package (visibility cannot be reverted) stops the job here, with nothing but the placeholder
+      # exposed.
+      - name: Make sure the package is private
+        if: ${{ inputs.push }}
+        env:
+          IMAGE: ${{ steps.v.outputs.image }}
+        run: |
+          probe="$IMAGE:visibility-probe"
+          if ! docker buildx imagetools inspect "$probe" >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/probe"
+            echo "Visibility probe for $IMAGE. Contains no code." > "$RUNNER_TEMP/probe/README.txt"
+            printf 'FROM scratch\nCOPY README.txt /\n' > "$RUNNER_TEMP/probe/Dockerfile"
+            docker build -q -t "$probe" "$RUNNER_TEMP/probe"
+            docker push -q "$probe"
+          fi
+          bash scripts/ghcr_private.sh "$probe"
+
+      - name: Refuse to overwrite a published version
+        if: ${{ inputs.push && !inputs.overwrite }}
+        env:
+          REF: ${{ steps.v.outputs.ref }}
+        run: |
+          if docker buildx imagetools inspect "$REF" >/dev/null 2>&1; then
+            echo "::error::$REF already exists. Bump IMAGE_VERSION in inference/minicpm-o/versions.env (or re-run with overwrite)."
+            exit 1
+          fi
+
+      # The runner's own Docker engine (docker driver): the built image stays local for the smoke test, and is pushed
+      # only if that passes.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
+
+      - name: Build linux/amd64
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: inference/minicpm-o
+          file: inference/minicpm-o/docker/Dockerfile
+          platforms: linux/amd64
+          build-args: ${{ steps.v.outputs.build_args }}
+          tags: ${{ steps.v.outputs.ref }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          load: true
+          push: false
+          provenance: false
+
+      - name: Smoke test on CPU (no GPU, no model)
+        env:
+          REF: ${{ steps.v.outputs.ref }}
+        run: bash tests/image_smoke.sh "$REF"
+
+      - name: Push and record the digest
+        if: ${{ inputs.push }}
+        env:
+          REF: ${{ steps.v.outputs.ref }}
+          IMAGE: ${{ steps.v.outputs.image }}
+        run: |
+          # visibility could have changed during the build: check again, immediately before the real push
+          bash scripts/ghcr_private.sh "$IMAGE:visibility-probe"
+          docker push "$REF"
+          digest=$(docker image inspect "$REF" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)
+          size=$(docker image inspect "$REF" --format '{{.Size}}')
+          {
+            echo "### rhythm-minicpm-o image"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| tag | \`$REF\` |"
+            echo "| digest | \`$digest\` |"
+            echo "| pull by digest | \`$IMAGE@$digest\` |"
+            echo "| unpacked size | $((size / 1000000)) MB |"
+            echo "| commit | \`$GITHUB_SHA\` |"
+            echo
+            echo "Use the **pull by digest** reference as IMAGE_REF, then runpod/rp.sh template (README.md, section 8)."
+            echo "Check that the package is **private**: https://github.com/users/${GITHUB_REPOSITORY_OWNER}/packages/container/rhythm-minicpm-o/settings"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=$digest"
