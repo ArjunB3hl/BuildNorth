@@ -1,0 +1,33 @@
+# MiniCPM-o 4.5 PyTorch streaming backend (OpenBMB/MiniCPM-o-Demo @ 47709a92, py_backend + worker + gateway).
+# Mirrors the demo's docker/Dockerfile.worker-backend + requirements.txt (runtime only; pytest dropped), with every
+# version pinned. Resolved for Linux x86_64 / CPython 3.12 into requirements.lock by lock.sh. Do not add packages
+# from another inference backend (vLLM, SGLang, llama.cpp bindings) to this file.
+
+# PyTorch stack: the demo installs these from the cu128 index; torch 2.8.0's PyPI Linux x86_64 wheel is the same
+# CUDA 12.8 build (it pulls the nvidia-*-cu12 12.8 runtime wheels), so the lock uses PyPI.
+torch==2.8.0
+torchaudio==2.8.0
+
+# model card: transformers==4.51.0, minicpmo-utils[all]>=1.0.5,<=1.0.6; demo: transformers==4.51.0, accelerate==1.12.0
+transformers==4.51.0
+accelerate==1.12.0
+minicpmo-utils[all]==1.0.6
+safetensors>=0.7.0
+
+# demo service dependencies (requirements.txt @ 47709a92, test-only packages removed)
+fastapi>=0.128.0
+uvicorn>=0.40.0
+httpx>=0.28.0
+websockets>=16.0
+python-multipart
+markdown>=3.6
+Pygments>=2.18.0
+PyYAML>=6.0
+librosa>=0.10.2
+soundfile>=0.12.1
+pydantic>=2.11.0
+numpy>=2.2.0
+tqdm>=4.67.0
+
+# deployment helpers (this folder): Hugging Face offline file checks in preflight
+huggingface_hub

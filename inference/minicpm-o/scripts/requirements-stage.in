@@ -1,0 +1,3 @@
+# scripts/stage_model.py only (runs on a CPU machine / CI runner, not in the image). Lock: see lock-stage.sh.
+huggingface_hub==0.36.2
+boto3

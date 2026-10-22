@@ -1,0 +1,4 @@
+# CPU tests (tests/*.sh): the stub gateway and runtime/warmup.py. Same versions as the image lock. Lock: lock-tests.sh
+websockets==17.1
+numpy==2.5.3
+pillow==10.4.0

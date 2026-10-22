@@ -1,0 +1,15 @@
+{
+  "name": "rhythm-minicpm-o-gpu-test",
+  "templateId": "__RUNPOD_TEMPLATE_ID__",
+  "computeType": "GPU",
+  "cloudType": "SECURE",
+  "gpuCount": 1,
+  "gpuTypeIds": ["NVIDIA RTX A6000", "NVIDIA A40", "NVIDIA L40", "NVIDIA RTX 6000 Ada Generation", "NVIDIA L40S"],
+  "gpuTypePriority": "custom",
+  "dataCenterIds": ["__RUNPOD_DATACENTER__"],
+  "networkVolumeId": "__RUNPOD_VOLUME_ID__",
+  "allowedCudaVersions": ["12.8", "12.9", "13.0"],
+  "minRAMPerGPU": 32,
+  "minVCPUPerGPU": 8,
+  "interruptible": false
+}
