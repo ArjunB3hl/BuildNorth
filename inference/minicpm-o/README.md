@@ -146,7 +146,8 @@ With the network volume (input 4) and the S3 secrets (input 5):
 
 1. Actions → **minicpm-o stage model** → `volume_id`, `datacenter`, `mode: dry-run`: lists the 54 files to upload.
 2. Same with `mode: stage`. Per file: download at the pinned revision, verify sha256 (LFS) or git blob id against the
-   Hub listing, multipart upload (256 MB parts; Runpod's limit is 500 MB), compare the uploaded size, delete the local
+   Hub listing, multipart upload (64 MiB parts: Runpod documents 500 MB, but its gateway refuses 256 MiB requests
+   with HTTP 413), compare the uploaded size, delete the local
    copy. The runner needs free disk for one file (~5 GB). Files already on the volume at the right size are skipped,
    so after any failure just run it again. `.rhythm/manifest.json` (every file's size and hash) and, last,
    `.rhythm/COMPLETE.json` are written next to the model. Expected: ~20 GB, tens of minutes.

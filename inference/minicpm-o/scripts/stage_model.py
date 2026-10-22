@@ -40,7 +40,9 @@ MANIFEST = ".rhythm/manifest.json"
 COMPLETE = ".rhythm/COMPLETE.json"
 MANIFEST_SCHEMA = "rhythm.model-manifest/1"
 INCLUDE_MANIFEST = ".rhythm/manifest.include.json"       # --include runs (testing) never touch the real manifest
-PART = 256 * 1024 * 1024                      # multipart part size (Runpod: at most 500 MB per part / per PutObject)
+# Multipart part size. Runpod documents up to 500 MB per part, but its S3 gateway answers 413 (Request Entity Too
+# Large) to a 256 MiB part, consistent with a ~100 MB proxy body limit; 64 MiB stays well below it.
+PART = int(os.environ.get("RUNPOD_S3_PART_MB", "64")) * 1024 * 1024
 VERSIONS = Path(__file__).resolve().parent.parent / "versions.env"
 S3_DATACENTERS = {"EU-CZ-1", "EU-RO-1", "EUR-IS-1", "EUR-NO-1", "US-CA-2", "US-GA-2", "US-IL-1", "US-KS-2", "US-MD-1",
                   "US-MO-1", "US-MO-2", "US-NC-1", "US-NC-2", "US-NE-1", "US-WA-1"}
