@@ -264,11 +264,17 @@ When you click one, Rhythm:
 1. Checks that page details are allowed for your account (*Process permitted page details* and YouTube; turning
    learning on allows both). If they aren't, it reads nothing and says "Page details are off for your account, so
    Rhythm didn't read this video." with a *Rhythm settings ↗* link.
-2. Reads the video's title, channel, description excerpt and length, as *Use this page* does.
-3. Checks on this computer that the video is about one of Rhythm's topics, with the rule the backend applies to
-   reactions. If it isn't, nothing is sent: "Rhythm can't tell what this video is about, so nothing was sent."
-4. Sends the details with your choice and shows the backend's answer under the buttons, for example "Saved to Rhythm.
-   You'll see more like this." If the backend refuses because page details are off, the settings link appears too.
+2. Reads the video's title, channel, description excerpt and length, as *Use this page* does. For **Save to Rhythm**
+   it also reads the video's transcript: it presses YouTube's **Show transcript**, reads the displayed lines (up to 400
+   lines and 20,000 characters), and closes the transcript again. A transcript you already had open is read and left
+   open. *Not interested* doesn't read the transcript.
+3. Checks on this computer that the video is about one of Rhythm's topics (title, description excerpt and any
+   transcript), with the rule the backend applies to reactions. If it isn't, nothing is sent: "Rhythm can't tell what
+   this video is about, so nothing was sent."
+4. Sends the details (and the transcript) with your choice and shows the backend's answer under the buttons, for
+   example "Saved to Rhythm. It counts toward your interest in karate. Its transcript was saved too." For a video
+   without a transcript it says only its details were saved. If the backend refuses because page details are off, the
+   settings link appears too.
 
 ### 4. Answer Rhythm's question
 
@@ -680,7 +686,7 @@ What leaves the browser, and where it goes:
 | Learning on, once a minute of a fitness, health or food video has played in view | Video ID and link, title, channel, description excerpt, length, capture time, up to 60 lines of a transcript you had already opened, and the seconds played in view | BuildNorth backend, 60 days |
 | Learning on, leaving such a video after watching at least another minute | The same details once more, with the new seconds played | BuildNorth backend; it keeps the larger number |
 | Learning on, any other video, or less than a minute played in view | Nothing, and nothing about it is kept once the tab moves on | |
-| *Save to Rhythm* or *Not interested* on a fitness, health or food video | Video ID and link, title, channel, description excerpt, length, capture time, and your choice | BuildNorth backend, with the watched videos (see below) |
+| *Save to Rhythm* or *Not interested* on a fitness, health or food video | Video ID and link, title, channel, description excerpt, length, capture time, and your choice. *Save to Rhythm* also sends the video's transcript (up to 400 lines and 20,000 characters) | BuildNorth backend, with the watched videos (see below) |
 | *Save to Rhythm* or *Not interested* on any other video, or with page details off | Nothing | |
 | *Yes*, *Not interested* or *Forget this* on the question | Your choice for that topic, with your other choices | BuildNorth backend, in your profile |
 | The backend's learning, when it has an AI provider | Titles and channels of up to 25 recent watched videos and up to 20 of your recent coach messages, to refine what was learned | BuildNorth's configured AI provider (`aiProvider` in the backend's `/health`) |
@@ -714,6 +720,11 @@ needs a privacy-policy URL and Google's review.
 
 Agents connect to the backend, not to the extension, and the phone approves them.
 
+**Claude, ChatGPT and Codex** connect by signing in, with no token: in **Profile → Content library → Connections**,
+choose **Connect Claude** (or ChatGPT, Codex), then follow the steps shown there. You add Rhythm's address as a custom
+connector in Claude or ChatGPT, or run `codex mcp add` and `codex mcp login` in Codex, and sign in with your BuildNorth
+account. The backend must have its public HTTPS address running (`mobile/scripts/mcp-tunnel.sh`). For other clients:
+
 1. On the phone, turn on **Share approved context with my chosen agent** in Interests & sharing.
 2. Open Profile → **Content library** → **Connections**. It shows the agent connection address, for example
    `http://localhost:8000/rhythm/mcp`. Then either:
@@ -739,6 +750,7 @@ Once an agent is active, it appears in the panel's **Who will help?** list.
 | Phone label | Permission | Allows the agent to |
 |---|---|---|
 | Your interests | `interests` | Read the profile, with the interests Rhythm learned |
+| Saved videos | `saved` | Read the videos you saved with **Save to Rhythm**, with their transcripts, and store a summary of each |
 | Selected page | `page` | Read a permitted page's details and attach it to a task |
 | Video search | `search` | Search YouTube within a task |
 | Transcript reading | `transcripts` | Get transcript text for shortlisted videos |
@@ -746,11 +758,17 @@ Once an agent is active, it appears in the panel's **Who will help?** list.
 | Memory context | `memory` | See confirmed memory and suggest new context |
 | Feedback suggestions | `feedback` | Suggest feedback, which you confirm on the phone |
 
-A new token gets every permission except *Memory context* unless you change the selection. The server offers 14 tools:
+A new token gets every permission except *Memory context* unless you change the selection. The server offers 16 tools:
 - `connect_rhythm`, `get_interests`, `get_selected_page`
 - `create_video_task`, `list_video_tasks`, `get_task_status`
 - `add_selected_video`, `shortlist_videos`, `search_videos`, `get_video_transcript`
 - `show_recommendations`, `remember_interest`, `record_feedback`, `request_forget`
+- `list_saved_videos`, `save_video_summary`: with the *Saved videos* permission, your agent reads the videos you saved
+  with **Save to Rhythm** (with their transcripts) and stores a summary of each. The summary stays with the video and
+  helps Rhythm learn your interests; the apps don't show it.
+
+While recommendations are off, only `connect_rhythm`, `get_interests`, `request_forget` and the two saved-video tools
+are offered, and a new token starts with *Your interests* and *Saved videos*.
 
 Their inputs and results are in the integration guide's *MCP contracts*.
 

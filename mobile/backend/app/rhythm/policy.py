@@ -44,6 +44,23 @@ class Actor:
     label: str = ""
 
 
+# Assistants the user can approve ahead of time from the app ("Connect Claude"), recognised by where their OAuth
+# client ID (a Client ID Metadata Document URL the token verifier already checked) lives. Codex before ChatGPT:
+# both are on chatgpt.com.
+ASSISTANT_CLIENTS = {
+    "claude": ("https://claude.ai/", "https://claude.com/"),
+    "codex": ("https://chatgpt.com/oauth/codex/",),
+    "chatgpt": ("https://chatgpt.com/",),
+}
+
+
+def assistant_of(client_id: str | None) -> str | None:
+    for name, prefixes in ASSISTANT_CLIENTS.items():
+        if client_id and client_id.startswith(prefixes):
+            return name
+    return None
+
+
 class Policy:
     def __init__(self, db: Session, actor: Actor, settings: RhythmSettings):
         self.db, self.actor, self.settings = db, actor, settings
@@ -77,12 +94,18 @@ class Policy:
         p = self.require_profile()
         if not p.data["consent"]["agent"]:
             raise Denied("permission_required", "Allow your chosen agent in your phone interests.")
-        grant = self.db.scalar(select(RhythmAgent).where(
-            RhythmAgent.user_id == self.user_id, RhythmAgent.client_id == self.actor.client_id))
+        grant = self.grant_for(self.actor.client_id)
         if grant is None or grant.status != "active" or capability not in grant.capabilities:
             raise Denied("permission_required", "Authorize this agent and this action on your phone.")
         self.check_connection(grant)
         return grant
+
+    def grant_for(self, client_id: str) -> RhythmAgent | None:
+        """This client's own grant, or the assistant approval the user made in the app; an active one first."""
+        assistant = assistant_of(client_id)
+        ids = [client_id, f"assistant:{assistant}"] if assistant else [client_id]
+        rows = self.db.scalars(select(RhythmAgent).where(RhythmAgent.user_id == self.user_id, RhythmAgent.client_id.in_(ids))).all()
+        return min(rows, key=lambda r: (r.status != "active", r.client_id != client_id), default=None)
 
     def check_connection(self, grant: RhythmAgent) -> None:
         if grant.client_id.startswith("connection-token:"):

@@ -164,7 +164,8 @@ def react(p: Policy, body: ReactionInput) -> Result:
     if body.captured_at.tzinfo is None or not now - timedelta(days=1) <= body.captured_at <= now + timedelta(seconds=10):
         raise Denied("stale_context", "Use this page again; its details are out of date.")
     md = body.metadata
-    found = kept_video(" ".join(v for v in (md.title, md.description_excerpt) if v))
+    transcript = " ".join(s.text for s in body.transcript.segments)[:20_000] if body.transcript else None
+    found = kept_video(" ".join(v for v in (md.title, md.description_excerpt, transcript) if v))
     if found is None:
         return Result(status="irrelevant", message="Rhythm can't tell what this video is about, so nothing was kept.")
     row = p.db.scalar(select(RhythmSignal).where(RhythmSignal.user_id == p.user_id, RhythmSignal.video_id == md.video_id))
@@ -173,6 +174,7 @@ def react(p: Policy, body: ReactionInput) -> Result:
         p.db.add(row)
     row.title, row.channel, row.description = md.title, md.channel_name, md.description_excerpt
     row.duration_seconds, row.topics, row.reaction, row.observed_at = md.duration_seconds, found.topics, body.reaction, body.captured_at
+    row.transcript = transcript or row.transcript
     if body.reaction == "more" and not profile.data["consent"].get("learn"):
         # Without learning, "Save to Rhythm" is an explicit choice: pin what the video is about.
         c = choices_of(profile.data)
@@ -205,7 +207,8 @@ class Snapshot:
 def gather(db, user_id: str, now: datetime) -> Snapshot:
     since = now - timedelta(days=WINDOW_DAYS)
     signals = [
-        {"title": s.title, "channel": s.channel, "text": " ".join(v for v in (s.title, s.description, s.transcript) if v),
+        {"title": s.title, "channel": s.channel,
+         "text": " ".join(v for v in (s.title, s.description, s.transcript, s.summary) if v),
          "duration": s.duration_seconds, "views": s.views, "at": s.observed_at,
          "played": s.played_seconds, "reaction": s.reaction}
         for s in db.scalars(select(RhythmSignal).where(RhythmSignal.user_id == user_id, RhythmSignal.observed_at >= since)
@@ -610,9 +613,10 @@ def view(p: Policy) -> Result:
 
 
 def has_new_evidence(db, user_id: str, since: datetime) -> bool:
-    """A watched video or a coach message newer than the last learning pass."""
+    """A watched video, an agent's summary of a saved one, or a coach message newer than the last learning pass."""
     return bool(
         db.scalar(select(RhythmSignal.id).where(RhythmSignal.user_id == user_id, RhythmSignal.observed_at > since).limit(1))
+        or db.scalar(select(RhythmSignal.id).where(RhythmSignal.user_id == user_id, RhythmSignal.summarized_at > since).limit(1))
         or db.scalar(select(CoachMessage.id).where(
             CoachMessage.user_id == user_id, CoachMessage.role == "user", CoachMessage.created_at > since).limit(1))
     )

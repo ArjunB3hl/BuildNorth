@@ -92,14 +92,17 @@ export const signalText = (signal: WatchSignal) => [
   signal.metadata.title, signal.metadata.descriptionExcerpt, ...(signal.transcript?.segments ?? []).map((s) => s.text),
 ].filter(Boolean).join(' ');
 
-/** At most 60 displayed segments, in order, within the backend's limits (so a send can't be refused as invalid). */
-export function transcriptExcerpt(segments: TranscriptSegment[]): TranscriptSegment[] {
+/**
+ * At most `max` displayed segments (60 for learning), in order, within the backend's limits (so a send can't be
+ * refused as invalid).
+ */
+export function transcriptExcerpt(segments: TranscriptSegment[], max = MAX_SEGMENTS): TranscriptSegment[] {
   const kept: TranscriptSegment[] = [];
   let characters = 0;
   for (const segment of [...segments].sort((a, b) => a.startSeconds - b.startSeconds)) {
     const text = segment.text.trim().slice(0, 1500);
     if (!text || !(segment.startSeconds >= 0 && segment.startSeconds <= MAX_SECONDS)) continue;
-    if (kept.length >= MAX_SEGMENTS || characters + text.length > MAX_TRANSCRIPT_CHARACTERS) break;
+    if (kept.length >= max || characters + text.length > MAX_TRANSCRIPT_CHARACTERS) break;
     kept.push({ startSeconds: segment.startSeconds, text });
     characters += text.length;
   }

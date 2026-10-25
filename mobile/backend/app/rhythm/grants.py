@@ -6,7 +6,9 @@ from app.mcp_auth import RHYTHM_TOKEN_PREFIX, TOKEN_LIFETIME, new_token
 from app.models import ConnectionToken, RhythmAgent, RhythmBrowser, RhythmBrowserRequest, RhythmTask, utcnow
 from app.rhythm import browser
 from app.rhythm.policy import Denied, Policy
-from app.rhythm.schemas import AgentApproval, AgentView, Result
+from app.rhythm.schemas import AgentApproval, AgentView, Assistant, Result
+
+ASSISTANT_LABELS = {"claude": "Claude", "chatgpt": "ChatGPT", "codex": "Codex"}
 
 
 def view(agent: RhythmAgent) -> AgentView:
@@ -18,8 +20,7 @@ def connect(p: Policy) -> Result:
     p.require_profile()
     if not p.actor.client_id:
         raise Denied("permission_required", "Connect from your chosen MCP client.")
-    row = p.db.scalar(select(RhythmAgent).where(
-        RhythmAgent.user_id == p.user_id, RhythmAgent.client_id == p.actor.client_id))
+    row = p.grant_for(p.actor.client_id)
     if row is None:
         pending = p.db.scalars(select(RhythmAgent.id).where(
             RhythmAgent.user_id == p.user_id, RhythmAgent.status != "revoked")).all()
@@ -52,6 +53,25 @@ def approve(p: Policy, agent_id: str, body: AgentApproval) -> Result:
     row.status = "active"
     row.capabilities = sorted(set(body.capabilities))
     return Result(agents=[view(row)], message="Agent permissions saved.")
+
+
+def approve_assistant(p: Policy, assistant: Assistant, body: AgentApproval) -> Result:
+    """"Connect Claude / ChatGPT / Codex" in the app: approve that assistant before it signs in, so its first
+    request works without a separate approval. It still signs in with the user's own account (OAuth)."""
+    p.trusted()
+    profile = p.require_profile()
+    if not profile.data["consent"]["agent"]:
+        raise Denied("permission_required", "Turn on Share with my chosen agent in Interests & sharing first.")
+    client_id = f"assistant:{assistant}"
+    row = p.db.scalar(select(RhythmAgent).where(RhythmAgent.user_id == p.user_id, RhythmAgent.client_id == client_id))
+    if row is None:
+        row = RhythmAgent(user_id=p.user_id, client_id=client_id, label=ASSISTANT_LABELS[assistant])
+        p.db.add(row)
+    row.status = "active"
+    row.capabilities = sorted(set(body.capabilities))
+    p.db.flush()
+    return Result(agents=[view(row)], mcp_url=p.settings.mcp_public_url,
+                  message=f"{ASSISTANT_LABELS[assistant]} is approved. Finish connecting in {ASSISTANT_LABELS[assistant]}.")
 
 
 def revoke(p: Policy, agent_id: str) -> Result:

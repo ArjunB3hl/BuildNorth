@@ -6,6 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Accent, Button, Notice, TextField } from '@/components/form';
+import { AssistantConnections } from '@/components/profile/assistants';
 import { ActionRow, DestructiveButton, FormActions, SegmentedControl } from '@/components/profile/controls';
 import { Enter, FadeIn, Skeleton, SkeletonCard } from '@/components/motion';
 import { Grid, PageIntro, useColumns, useContentWidth } from '@/components/profile/layout';
@@ -19,6 +20,7 @@ import {
   AGENT_CAPABILITIES,
   RECOMMENDATIONS_ENABLED,
   type AgentConnection,
+  type Assistant,
   type BrowserSession,
   type Capability,
   type MemorySuggestion,
@@ -28,7 +30,7 @@ import {
 } from '@/lib/rhythm';
 
 const LABELS: Record<Capability, string> = {
-  interests: 'Your interests', page: 'Selected page', search: 'Video search', transcripts: 'Transcript reading',
+  interests: 'Your interests', saved: 'Saved videos', page: 'Selected page', search: 'Video search', transcripts: 'Transcript reading',
   recommend: 'Recommendations', memory: 'Memory context', feedback: 'Feedback suggestions',
 };
 
@@ -60,7 +62,7 @@ export default function RhythmVideos() {
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState('My chosen agent');
   const [capabilities, setCapabilities] = useState<Capability[]>(
-    RECOMMENDATIONS_ENABLED ? ['interests', 'page', 'search', 'transcripts', 'recommend', 'feedback'] : ['interests']);
+    RECOMMENDATIONS_ENABLED ? ['interests', 'page', 'search', 'transcripts', 'recommend', 'feedback'] : ['interests', 'saved']);
   const [token, setToken] = useState<string>();
   const [deleting, setDeleting] = useState<string>();
   const [deleteData, setDeleteData] = useState(false);
@@ -103,23 +105,44 @@ export default function RhythmVideos() {
     finally { setBusy(false); }
   }
 
+  async function approveAssistant(assistant: Assistant, chosen: Capability[]): Promise<boolean> {
+    setBusy(true);
+    try {
+      const result = await api.rhythm.approveAssistant(assistant, chosen);
+      setMessage(result.message || (result.status === 'ok' ? 'Approved.' : result.status.replaceAll('_', ' ')));
+      await query.refetch();
+      return result.status === 'ok';
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'That couldn’t be approved. Try again.');
+      return false;
+    } finally { setBusy(false); }
+  }
+
   const data = query.data;
   const videos = (data?.recommendations?.recommendations ?? []).filter((r) => !savedOnly || r.feedback === 'saved');
-  const agents = data?.connections.agents ?? [];
+  const allAgents = data?.connections.agents ?? [];
+  // Claude, ChatGPT and Codex approvals live in their own card.
+  const agents = allAgents.filter((agent) => !agent.clientId.startsWith('assistant:'));
   const browsers = data?.connections.browsers ?? [];
   const memories = data?.memories.memories ?? [];
   const tasks = data?.tasks?.tasks ?? [];
   const selectedPermissions = capabilities.map((c) => LABELS[c]).join(', ');
 
+  const assistantCard = (
+    <AssistantConnections mcpUrl={data?.connections.mcpUrl ?? undefined} agents={allAgents} options={AGENT_CAPABILITIES}
+      labels={LABELS} busy={busy} onApprove={approveAssistant} onMessage={setMessage}
+      onDisconnect={(id) => void act(() => api.rhythm.revokeAgent(id))} />
+  );
+
   const connectCard = (
     <SectionCard
-      title="Connect an agent"
+      title="Other agents"
       icon={{ ios: 'cpu', android: 'smart_toy', web: 'smart_toy' }}>
       <Field label="Agent connection address">
         <CodeBox value={data?.connections.mcpUrl || 'Loading…'} />
         <Muted>
-          OAuth clients sign in with this account, call connect_rhythm, then appear under Agents for approval.
-          For a client that uses a private connection token, choose its permissions here and copy the token once.
+          For other MCP clients. OAuth clients sign in with this account, call connect_rhythm, then appear under Agents
+          for approval. For a client that uses a private connection token, choose its permissions here and copy the token once.
         </Muted>
       </Field>
       <Divider />
@@ -225,14 +248,15 @@ export default function RhythmVideos() {
               : 'Your agent runs in the app you choose. It can read your approved interests through Rhythm’s tools; that provider’s retention policy applies.'}
           </Notice>
         </Enter>
+        <Enter index={3}>{assistantCard}</Enter>
         {cardColumns > 1 ? (
           <View style={styles.columns}>
-            <Enter index={3} style={styles.column}>{connectCard}</Enter>
-            <Enter index={4} style={styles.column}>{connectionLists}</Enter>
+            <Enter index={4} style={styles.column}>{connectCard}</Enter>
+            <Enter index={5} style={styles.column}>{connectionLists}</Enter>
           </View>
         ) : <>
-          <Enter index={3}>{connectCard}</Enter>
-          <Enter index={4}>{connectionLists}</Enter>
+          <Enter index={4}>{connectCard}</Enter>
+          <Enter index={5}>{connectionLists}</Enter>
         </>}
       </>}
 

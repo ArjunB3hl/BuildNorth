@@ -17,7 +17,8 @@ limits. References to phone setup below also apply to the web profile screens.
 Video recommendations are switched off for now, along with what exists to produce them: video tasks (*Evaluate this
 video*, *Find videos*, agent tasks), page grants (*Use this page*), YouTube search and transcript reading. What stays:
 learning, *Rhythm noticed*, *Save to Rhythm* / *Not interested*, the editable interest profile, agent connections that
-read interests (`connect_rhythm`, `get_interests`, `request_forget`), memory and data deletion.
+read interests (`connect_rhythm`, `get_interests`, `request_forget`) and summarise saved videos (`list_saved_videos`,
+`save_video_summary`), memory and data deletion.
 
 - **Server:** `RHYTHM_RECOMMENDATIONS` (off unless `on`). While off, the task, browser, search, transcript,
   recommendation and metrics routes answer 404 "Video recommendations are turned off.", and the Rhythm MCP resource
@@ -38,7 +39,7 @@ reload the apps. The rest of this document describes the full feature.
 | Phone | Expo 57.0.30, Expo Router, React Native 0.86.3, Clerk Expo 4.x | Profile → Interests & sharing: an opt-in learning switch, an editable **What Rhythm learned** list (keep, remove, forget; level, length, equipment) with quick picks to start from, and the sharing switches, each saved when changed |
 | App records | SQLAlchemy + Alembic; SQLite locally, PostgreSQL supported | Separate versioned `rhythm_profiles`; migration `0006`; ownership from verified authentication |
 | App sign-in | Clerk session JWT verification | Reused by phone and extension; no owner ID supplied by clients |
-| MCP | Python MCP 2.3.0, Streamable HTTP, Clerk OAuth and revocable bearer connections | Dedicated `/rhythm/mcp` resource, 14 tools, separate OAuth audience and `bnr_` credentials |
+| MCP | Python MCP 2.3.0, Streamable HTTP, Clerk OAuth and revocable bearer connections | Dedicated `/rhythm/mcp` resource, 16 tools, separate OAuth audience and `bnr_` credentials |
 | Memory | SurrealDB Agent Memory, one configured Context with user scopes | Explicit per-user bindings; the existing Context can serve its declared owner across both features |
 | Browser | No extension toolchain | WXT + React + TypeScript, Manifest V3, side panel |
 | Video search | Absent | Backend YouTube Data API adapter; API key must be configured |
@@ -451,6 +452,14 @@ the camelCase schema names. Errors from policy are typed results with `status` a
 | `remember_interest` | `proposal, evidence_ref` | Pending context with an owned candidate/recommendation source; `memory` |
 | `record_feedback` | `recommendation_id, feedback: {feedback, reason?}` | Pending phone-confirmed feedback; `feedback` |
 | `request_forget` | `memory_ref` | Pending deletion request; `memory` |
+| `list_saved_videos` | `unsummarized_only=false, limit=5` (1–10) | The videos saved with **Save to Rhythm**, newest first: link, title, channel, length, topics, description excerpt, the transcript Rhythm read, and any stored summary; `saved` |
+| `save_video_summary` | `video_id, summary` (1–2,000 characters) | Stores the agent's summary with that saved video (replacing an earlier one), adds any topics it names, and re-runs learning's vocabulary pass; `saved` |
+
+**Saved-video summaries.** With the **Saved videos** permission and *Share with my chosen agent* on, the user's agent
+can read what they saved with **Save to Rhythm**, including the transcript, and store a summary of each
+(`rhythm_signals.summary`, `summarized_at`, `summary_by`; migration `0009`). The summary is part of that video's
+evidence for learning (vocabulary and model passes) and is deleted with the video. The apps don't show it. Both tools
+work whether recommendations are on or off.
 
 Recommendation items are `{candidateId, analysisBasis, citations?}`.
 Input bases: `metadata`, `transcript`, `user_text`. Citations are
@@ -487,7 +496,7 @@ Profile and learning routes:
 | `GET /rhythm/interests` | The profile with `consent` (including `learn`), `enabledSites`, `profileRevision` and `confirmed`. `profile_required` and a "hasn't learned yet" message until something is learned |
 | `PUT /rhythm/settings` | `{expectedRevision, enabledSites: ["youtube"], consent: {metadata, transcripts, agent, memory, learn}}`. Changes switches only and never learned interests; creates the profile when missing (`expectedRevision` 0). A stale revision returns `stale_context` |
 | `POST /rhythm/signals` | One watched video from the user's own extension, accepted only while learning and YouTube are on. Videos outside fitness, health and food return `irrelevant` and are not kept |
-| `POST /rhythm/reactions` | `{metadata, capturedAt, reaction: "more" \| "less"}` from the side panel's **Save to Rhythm** / **Not interested**. Needs YouTube page details on, not learning; with learning off, "more" pins the video's topics |
+| `POST /rhythm/reactions` | `{metadata, capturedAt, reaction: "more" \| "less", transcript?}` from the side panel's **Save to Rhythm** / **Not interested**. **Save to Rhythm** opens, reads and closes YouTube's transcript panel and sends up to 400 segments and 20,000 characters, which are stored with the video and also used to place it. Needs YouTube page details on, not learning; with learning off, "more" pins the video's topics |
 | `GET /rhythm/learned` | `learned`: each interest with its `state` (`pinned`, `learned`, `noticed`, `blocked`) and evidence counts (`videos`, `saved`, `chats`, `feedback`, `notInterested`); `experienceLevel`, `preferredDurationMinutes`, `availableEquipment` as `{value, source: "you" \| "learned" \| null}`; `avoid`; the stored `choices`; `suggestion` (`{topic, text}` or null); `learning`, `confirmed`, `deferred`. `profile_required` without a profile. Shown in Interests & sharing and the web Overview |
 | `PUT /rhythm/choices` | `{expectedRevision, pinned, blocked, acknowledged, experienceLevel, preferredDurationMinutes, availableEquipment}`. The user's own choices, which win over inference; `null` means "learn it". Every list replaces the stored one and omitted fields reset, so send them all. Creates the profile when missing (`expectedRevision` 0). Returns the new `learned` view; a stale revision returns `stale_context` |
 | `POST /rhythm/forget` | `{topic}`. Deletes the stored videos behind one interest, stops counting earlier chats and feedback about it, unpins it and answers its prompt. Returns the new `learned` view |
@@ -500,6 +509,18 @@ permitted pages, turning transcripts off deletes cached transcripts, and turning
 memory off erases Rhythm's private memory copies.
 
 ## Connecting clients
+
+**Claude, ChatGPT and Codex (sign-in, no token).** *Content library → Connections → Connect Claude, ChatGPT or Codex*
+works like a website's "Connect" button. Choosing **Connect Claude** (or ChatGPT, Codex) approves that assistant with
+the chosen permissions (`PUT /rhythm/assistants/{claude|chatgpt|codex}`, stored as a grant with client ID
+`assistant:<name>`), then shows the steps: add Rhythm's address as a custom connector in Claude or ChatGPT (or
+`codex mcp add rhythm --url …` and `codex mcp login rhythm` in Codex), and sign in with the BuildNorth account. The
+assistant's OAuth token is matched to that approval by its Client ID Metadata Document address (`claude.ai` /
+`claude.com`; `chatgpt.com/oauth/codex/` for Codex; other `chatgpt.com` for ChatGPT), so its first request works
+without `connect_rhythm` and a second approval. **Disconnect** revokes it at once. The address must be the public HTTPS
+one (`mobile/scripts/mcp-tunnel.sh` and `MCP_PUBLIC_URL`, see `mobile/README.md`): these assistants connect from the
+internet, and the card warns when the address is `localhost`. Claude and ChatGPT use Clerk's CIMD support (already
+configured for `/mcp`); Codex uses CIMD too when Clerk advertises it, which it does.
 
 For a bearer client, create a token in **Profile → Content library → Connections**.
 Set `RHYTHM_MCP_TOKEN` privately in the agent host and

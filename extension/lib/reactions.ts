@@ -1,6 +1,7 @@
+import { transcriptExcerpt } from './learning';
 import { keptVideo } from './relevance';
 import type {
-  InterestChoices, LearnedView, Reaction, RhythmApi, RhythmResult, Topic, VideoMetadata,
+  InterestChoices, LearnedView, Reaction, RhythmApi, RhythmResult, Topic, TranscriptSegment, VideoMetadata,
 } from '../../mobile/src/lib/rhythm';
 
 /**
@@ -8,7 +9,11 @@ import type {
  * learned-interest prompt. Kept apart from React so the tests can drive them with a stand-in backend.
  */
 type Api = Pick<RhythmApi, 'interests' | 'react' | 'learned' | 'saveChoices' | 'forgetTopic'>;
-export type Capture = () => Promise<{ metadata: VideoMetadata; capturedAt: string }>;
+/** Reads the current video; with `withTranscript`, also its transcript (opening YouTube's panel if needed). */
+export type Capture = (withTranscript: boolean) => Promise<{ metadata: VideoMetadata; capturedAt: string; transcript?: TranscriptSegment[] }>;
+
+/** The most of a saved video's transcript that's sent: the backend's limit of 400 segments and 20,000 characters. */
+export const SAVED_TRANSCRIPT_SEGMENTS = 400;
 
 export type ReactionOutcome = {
   status: RhythmResult['status'] | 'error';
@@ -24,8 +29,9 @@ export const CANT_TELL = 'Rhythm can’t tell what this video is about, so nothi
 
 /**
  * "Save to Rhythm" ('more') or "Not interested" ('less') on the video in the active tab. Works with learning off.
- * With page details off for the account, nothing is read. A video the backend couldn't place (its kept_video rule,
- * applied here first to the title and description excerpt) isn't sent.
+ * Save to Rhythm also reads the video's transcript and sends it with the details. With page details off for the
+ * account, nothing is read. A video the backend couldn't place (its kept_video rule, applied here first to the title,
+ * description excerpt and transcript) isn't sent.
  */
 export async function reactToVideo(api: Api, capture: Capture, reaction: Reaction): Promise<ReactionOutcome> {
   try {
@@ -33,14 +39,19 @@ export async function reactToVideo(api: Api, capture: Capture, reaction: Reactio
     if (!profile?.consent.metadata || !profile.enabledSites.includes('youtube')) {
       return { status: 'permission_required', message: PAGE_DETAILS_OFF, title: null, needsSettings: true };
     }
-    const { metadata, capturedAt } = await capture();
-    if (!keptVideo([metadata.title, metadata.descriptionExcerpt].filter(Boolean).join(' '))) {
+    const { metadata, capturedAt, transcript } = await capture(reaction === 'more');
+    const segments = transcriptExcerpt(transcript ?? [], SAVED_TRANSCRIPT_SEGMENTS);
+    const text = [metadata.title, metadata.descriptionExcerpt, ...segments.map((s) => s.text)].filter(Boolean).join(' ');
+    if (!keptVideo(text)) {
       return { status: 'irrelevant', message: CANT_TELL, title: metadata.title, needsSettings: false };
     }
-    const result = await api.react(metadata, capturedAt, reaction);
+    const result = await api.react(metadata, capturedAt, reaction, segments.length ? { segments } : undefined);
+    const saved = result.status === 'ok' && reaction === 'more'
+      ? segments.length ? ' Its transcript was saved too.' : ' YouTube had no transcript for it, so only its details were saved.'
+      : '';
     return {
       status: result.status, title: metadata.title, needsSettings: result.status === 'permission_required',
-      message: result.message || (result.status === 'ok' ? 'Saved.' : result.status.replaceAll('_', ' ')),
+      message: (result.message || (result.status === 'ok' ? 'Saved.' : result.status.replaceAll('_', ' '))) + saved,
     };
   } catch (e) {
     return { status: 'error', message: e instanceof Error ? e.message : 'That didn’t save. Try again.', title: null, needsSettings: false };

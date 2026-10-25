@@ -70,7 +70,7 @@ export type BrowserSession = {
   id: string; label: string; status: string; pageRef: string; videoId: string; metadata: VideoMetadata | null;
   capturedAt: string; available: boolean; allowTranscripts: boolean;
 };
-export const CAPABILITIES = ['interests', 'page', 'search', 'transcripts', 'recommend', 'memory', 'feedback'] as const;
+export const CAPABILITIES = ['interests', 'saved', 'page', 'search', 'transcripts', 'recommend', 'memory', 'feedback'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 /**
@@ -80,7 +80,9 @@ export type Capability = (typeof CAPABILITIES)[number];
  */
 export const RECOMMENDATIONS_ENABLED = false;
 /** The agent permissions that still mean something while recommendations are off. */
-export const AGENT_CAPABILITIES: readonly Capability[] = RECOMMENDATIONS_ENABLED ? CAPABILITIES : ['interests', 'memory'];
+export const AGENT_CAPABILITIES: readonly Capability[] = RECOMMENDATIONS_ENABLED ? CAPABILITIES : ['interests', 'saved', 'memory'];
+/** Assistants that connect by signing in (OAuth) rather than with a token. Their approval's clientId is `assistant:<name>`. */
+export type Assistant = 'claude' | 'chatgpt' | 'codex';
 export type AgentConnection = { id: string; label: string; clientId: string; status: string; capabilities: Capability[] };
 export type VideoTask = {
   id: string; action: 'evaluate' | 'recommend'; request: string; status: string; profileRevision: number;
@@ -152,8 +154,9 @@ export function createRhythmApi(request: Request) {
     /** Switches only; interests themselves are learned by the backend. */
     saveSettings: (settings: RhythmSettings, expectedRevision: number) => call('PUT', '/settings', { ...settings, expectedRevision }),
     recordSignal: (signal: WatchSignal) => call('POST', '/signals', signal),
-    react: (metadata: VideoMetadata, capturedAt: string, reaction: Reaction) =>
-      call('POST', '/reactions', { metadata, capturedAt, reaction }),
+    /** `transcript`: what Save to Rhythm read from YouTube's transcript panel, when the video has one. */
+    react: (metadata: VideoMetadata, capturedAt: string, reaction: Reaction, transcript?: { segments: TranscriptSegment[] }) =>
+      call('POST', '/reactions', { metadata, capturedAt, reaction, ...(transcript ? { transcript } : {}) }),
     /** What Rhythm learned, with the user's choices and any "You've watched…" prompt (`result.learned`). */
     learned: () => call('GET', '/learned'),
     /** Only the fields you send change; send a whole list to replace it, and null to hand a value back to learning. */
@@ -165,6 +168,8 @@ export function createRhythmApi(request: Request) {
     connections: () => call('GET', '/connections'),
     approveAgent: (id: string, capabilities: Capability[]) => call('POST', `/agents/${id}/approve`, { capabilities }),
     revokeAgent: (id: string) => call('DELETE', `/agents/${id}`),
+    /** "Connect Claude / ChatGPT / Codex": approve it here; it then signs in with this account from the assistant. */
+    approveAssistant: (assistant: Assistant, capabilities: Capability[]) => call('PUT', `/assistants/${assistant}`, { capabilities }),
     createAgentToken: async (label: string, capabilities: Capability[]) => {
       const result = await request<{ token?: string; agent?: AgentConnection; message?: string }>(
         'POST', '/rhythm/agents/token', { label, capabilities });
