@@ -443,6 +443,9 @@ that is needed (see [docs/work-log.md](docs/work-log.md)).
    `SIMCTL_CHILD_BN_API_URL=http://127.0.0.1:8000 SIMCTL_CHILD_BN_WATCH_TOKEN=<bnw_ token> xcrun simctl launch <watch-udid> com.arjun273773.buildnorth.watch`.
 4. The watch simulator has no sensors and no Health app. In Debug, *Sleep → Add sample sleep* can save sample nights. Live heart-rate sensors require a real watch.
 
+Keep simulator signing enabled when building the watch separately. An unsigned build can launch but fail to
+save the phone link in Keychain (`-34018`). See the [signed build command and recovery notes](docs/watch-ui-validation-2026-10-25.md#supplied-simulator-binary-could-not-save-the-link).
+
 **A real watch and iPhone** need:
 - `ios.appleTeamId` in `app.json` (Expo picked team `TJ6V35S7GQ` automatically for the simulator build)
 - HealthKit enabled on both App IDs
@@ -454,7 +457,20 @@ Real watches block WebSockets, so the watch uses plain HTTPS requests only.
 **Checks**: `cd backend && .venv/bin/python -m pytest -q`, `bash scripts/check-watch-models.sh` (encodes and decodes
 the watch's JSON against the contract and typechecks `targets/watch` for watchOS), `npx tsc --noEmit && npx expo lint`.
 
-### What was tested (2026-10-21)
+### UI validation (2026-10-25)
+
+Computer Use on the paired iPhone 17 / Apple Watch Series 12 simulators verified phone-to-watch sign-in,
+the two-option home, sleep permissions and empty state, fictional sleep duration/stages/seven-night history,
+workout timing and pause/resume, navigation persistence, end/save, and phone summary sync. AI health sharing
+stayed off, and the watch was left home with no active workout. Lint, typecheck and 174 watch model checks
+passed, including watchOS typechecking. The supplied watch binary's signing issue and a simulator service
+stall were resolved before completing the run.
+
+See the [dated validation report and screenshots](docs/watch-ui-validation-2026-10-25.md) for observed values,
+reproduction commands, recovery details and the distinction between simulator readings and physical sensors.
+The UI evidence is for `d843a88`, before the later Rhythm branding integration.
+
+### Earlier automated and API verification (2026-10-21)
 
 - **Automated checks:**
   - Backend: 234 tests pass, 54 of them in `test_watch.py`. They cover the token rules, cross-user isolation, the
@@ -479,10 +495,8 @@ the watch's JSON against the contract and typechecks `targets/watch` for watchOS
     `get_user_context` ("How did I sleep and recover this week?") detected the *health* topic and included them.
   - Rerun after the final fixes and again after the move to `~/Developer`, each time from a clean prebuild and a
     fresh scratch database: same results.
-- **Not yet done:**
-  - Looking at or tapping the watch UI.
-  - Linking from the phone over WatchConnectivity (needs a Clerk sign-in in the simulator).
-  - Real Apple Health data and a physical watch.
+- **Not covered in that run:** the watch UI and phone-to-watch linking (subsequently exercised on 25 October,
+  above). Real Apple Health data and a physical watch remain unverified.
   - Running `scripts/live_check.py` against the real SurrealDB Agent Memory.
 
 ## Setup
