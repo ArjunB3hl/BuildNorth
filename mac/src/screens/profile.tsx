@@ -59,6 +59,7 @@ export function ProfileScreen() {
         onPress={() => nav.push({ name: 'memory' })}
       />
 
+      <ListItem title="AI connections" subtitle="ChatGPT, Claude and your demo API key" onPress={() => nav.push({ name: 'connections' })} />
       <SectionHeader title="This Mac" />
       <Card>
         <Summary

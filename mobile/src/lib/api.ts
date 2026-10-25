@@ -7,6 +7,7 @@ import type {
   AcceptResult,
   AssistantProposal,
   ConnectionsInfo,
+  ClaudeConnection,
   ConnectionToken,
   ActivitySession,
   ChangePreview,
@@ -76,6 +77,7 @@ export class ApiError extends Error {
 }
 
 function friendlyHttpMessage(status: number, detail: string | undefined, path: string): string {
+  if (path === '/connections/claude' && detail && [400, 422, 429, 502, 503].includes(status)) return detail;
   const isAi = path.startsWith('/coach') || path.endsWith('/extract');
   // Planner errors carry a specific, user-facing explanation (what still works without AI, stale plans…).
   const isPlanner = path.startsWith('/planner') || path.startsWith('/plan/changes');
@@ -132,6 +134,7 @@ export function createApi(getToken: TokenGetter) {
       response = await fetch(`${API_URL}${path}`, {
         method,
         headers,
+        ...(path === '/connections/claude' ? { redirect: 'error' as const } : {}),
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
       });
@@ -268,6 +271,9 @@ export function createApi(getToken: TokenGetter) {
       review: (end: string) => get<WeeklyReview>(`/review/week${q({ end })}`),
     },
     connections: {
+      claude: () => get<ClaudeConnection>('/connections/claude'),
+      connectClaude: (apiKey: string, model: string) => send<ClaudeConnection>('PUT', '/connections/claude', { apiKey, model }),
+      disconnectClaude: () => send<void>('DELETE', '/connections/claude'),
       info: () => get<ConnectionsInfo>('/connections'),
       createToken: (label: string) => send<ConnectionToken & { token: string }>('POST', '/connections/tokens', { label }),
       revokeToken: (id: string) => send<void>('DELETE', `/connections/tokens/${id}`),

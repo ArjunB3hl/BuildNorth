@@ -25,7 +25,8 @@ export type Route =
   | { name: 'shopping' }
   | { name: 'routine'; id: string }
   | { name: 'session'; id: string }
-  | { name: 'memory' };
+  | { name: 'memory' }
+  | { name: 'connections' };
 
 export const SECTIONS: {
   key: Section;
@@ -67,6 +68,7 @@ const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
   routine: 'Routine',
   session: 'Session',
   memory: 'Memory',
+  connections: 'AI connections',
 };
 
 function routeTitle(section: Section, route: Route): string {

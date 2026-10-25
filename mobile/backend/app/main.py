@@ -25,7 +25,8 @@ from app.config import load_settings
 from app.db import make_engine, make_session_factory, migrate
 from app import mcp_server
 from app.memory import MemoryService
-from app.routers import account, activity, calendar, coach, connections, daily, meals, planner, profile, watch
+from app.routers import account, activity, calendar, claude, coach, connections, daily, meals, planner, profile, watch
+from app.provider_credentials import credential_cipher
 from app.rhythm import router as rhythm
 from app.rhythm.config import RhythmSettings
 from app.rhythm.memory import Registry as RhythmMemoryRegistry
@@ -40,6 +41,7 @@ log = logging.getLogger("buildnorth")
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = load_settings()
     app.state.settings = settings
+    app.state.credential_cipher = credential_cipher(settings)
     app.state.rhythm_settings = RhythmSettings.load()
     app.state.rhythm_youtube = YouTube(app.state.rhythm_settings.youtube_api_key)
     app.state.rhythm_memory = RhythmMemoryRegistry(
@@ -112,11 +114,12 @@ app = FastAPI(title="BuildNorth API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=list(load_settings().web_allowed_origins),
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for module in (account, calendar, profile, coach, meals, activity, daily, planner, connections, watch, rhythm):
+for module in (account, calendar, profile, claude, coach, meals, activity, daily, planner, connections, watch, rhythm):
     app.include_router(module.router)
 app.include_router(rhythm.videos)
 

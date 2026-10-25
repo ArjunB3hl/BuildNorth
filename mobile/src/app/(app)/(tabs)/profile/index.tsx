@@ -108,8 +108,8 @@ export default function ProfileScreen() {
       <SettingsGroup title="Connections" index={4}>
         <SettingsRow
           icon={{ ios: 'link', android: 'link', web: 'link' }}
-          title="Connect AI assistants"
-          subtitle="OpenCode, ChatGPT or Claude over MCP"
+          title="AI connections"
+          subtitle="ChatGPT, Claude and your demo API key"
           onPress={() => router.push('/profile/connections')}
         />
         {Platform.OS === 'ios' ? (

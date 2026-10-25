@@ -329,6 +329,15 @@ export type ConnectionsInfo = {
   tokens: ConnectionToken[];
 };
 
+export type ClaudeConnection = {
+  configured: boolean;
+  storageAvailable: boolean;
+  usable: boolean;
+  hint: string | null;
+  model: string;
+  scope: 'coach';
+};
+
 export type AssistantProposal = {
   id: string;
   kind: 'plan_changes' | 'recipe' | 'preference' | 'preference_update' | 'preference_delete';

@@ -212,7 +212,7 @@ def test_tool_discovery_and_reads_do_not_mutate(live: SimpleNamespace) -> None:
     assert names == {"get_profile", "list_recipes", "get_recipe", "list_routines", "get_routine", "get_week_plan",
                      "get_activity_summary", "list_proposals", "get_proposal", "propose_plan_changes", "propose_recipe",
                      "propose_preference", "apply_proposal", "get_user_context", "propose_preference_correction",
-                     "propose_preference_removal", "get_health_summary"}
+                     "propose_preference_removal", "get_health_summary", "get_calendar"}
     before = snapshot(ALICE)
     profile = ok(call(live, token, "get_profile"))
     assert profile["equipment"] == ["Dumbbells"] and profile["goals"] == ["Build strength"]
@@ -426,6 +426,34 @@ def prefs_of(live: SimpleNamespace, user: str = ALICE) -> dict[str, dict[str, An
 def alice(live: SimpleNamespace) -> str:
     """One connection token for these tests (users may hold at most 10)."""
     return connection_token(live, ALICE, "Context tests")
+
+
+def test_calendar_mcp_is_owned_and_respects_health_sharing(live: SimpleNamespace) -> None:
+    from datetime import UTC, datetime
+    from app.models import CalendarEntry
+    owner, other = "user_CalendarDemo", "user_CalendarOther"
+    rest(live, "PUT", "/profile", owner, json={"goals": ["Demo"]})
+    with app.state.session_factory() as db:
+        db.add(CalendarEntry(user_id=owner, kind="meal", title="Calendar demo meal", source="demo", source_key="demo:1",
+                             occurred_at=datetime(2026, 10, 20, 12, tzinfo=UTC), time_estimated=False))
+        db.add(CalendarEntry(user_id=other, kind="meal", title="Another account meal", source="manual", source_key="manual:1",
+                             occurred_at=datetime(2026, 10, 20, 12, tzinfo=UTC), time_estimated=False))
+        db.add(HealthDay(user_id=owner, date="2026-10-20", workouts=[{
+            "external_id": "calendar-watch-demo", "activity_type": "running",
+            "started_at": "2026-10-20T21:00:00Z", "duration_minutes": 25.0}]))
+        db.commit()
+    token = connection_token(live, owner)
+    args = {"start": "2026-10-20", "days": 1, "timezone": "America/Toronto"}
+    result = ok(call(live, token, "get_calendar", args))
+    rows = result["result"]
+    assert [r["title"] for r in rows] == ["Calendar demo meal"]
+    assert rows[0]["source"] == "demo"
+    with app.state.session_factory() as db:
+        db.get(Profile, owner).share_health = True
+        db.commit()
+    shared = ok(call(live, token, "get_calendar", args))["result"]
+    assert [r["source"] for r in shared] == ["demo", "watch"]
+    assert "timezone" in err(call(live, token, "get_calendar", {**args, "timezone": "invalid-zone"})).lower()
 
 
 def test_user_context_over_mcp_matches_the_app(live: SimpleNamespace, alice: str) -> None:
