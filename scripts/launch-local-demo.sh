@@ -40,7 +40,7 @@ case "$target" in
     rhythm_adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"
     [[ -x "$rhythm_adb" ]] || rhythm_adb="$(command -v adb)"
     device="$("$rhythm_adb" devices | awk '$1 ~ /^emulator-/ && $2 == "device" {print $1; exit}')"
-    [[ -n "$device" ]] || { echo 'Start an Android emulator, then run this again.'; exit 1; }
+    [[ -n "$device" ]] || { echo 'Start an Android emulator (python3 start-android-demo-emulator.py), then run this again.'; exit 1; }
     apk="$(find "$release_dir/android" -maxdepth 1 -name '*-release.apk' -print -quit)"
     [[ -n "$apk" ]] || { echo 'The Android Release APK is not ready.'; exit 1; }
     # A signing conflict fails safely; never uninstall the existing app or erase its data.
@@ -49,7 +49,9 @@ case "$target" in
     ;;
   4|macos|mac)
     [[ -d "$release_dir/macos/Rhythm.app" ]] || { echo 'Unzip the Mac release into the macos folder first.'; exit 1; }
-    open "$release_dir/macos/Rhythm.app"
+    # Debug and Release share a bundle ID. Force this packaged copy to launch
+    # instead of activating an older instance; never quit another app or reset data.
+    open -n "$release_dir/macos/Rhythm.app"
     ;;
   *) echo 'Choose ios, watchos, android or macos.'; exit 2 ;;
 esac

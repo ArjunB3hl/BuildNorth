@@ -119,7 +119,7 @@ Connects Meals, Activity, Coach preferences and Today. Everything below lives in
 API: `GET /plan`, `POST /planner/proposals`, `POST /planner/accept`, `POST /planner/changes` (preview),
 `POST /plan/changes` (apply), `GET /review/week`. Logic: `backend/app/planner.py`; migration `0002_weekly_planner`.
 
-## AI assistants over MCP (OpenCode, ChatGPT, Claude)
+## AI assistants over MCP (ChatGPT and Claude)
 
 The backend also serves an MCP server at **`/mcp`** (Streamable HTTP, official Python MCP SDK `mcp==2.3.0`).
 Assistants bring their **own** models; no model runs in the app or the MCP server, and Ollama is not needed for
@@ -160,7 +160,7 @@ External MCP connections do **not** supply inference to the built-in Coach. Text
 - Code: `backend/app/mcp_server.py` (tools), `assistant_proposals.py` (validate/approve/apply),
   `mcp_auth.py` (credentials), `plan_changes.py` (shared with the app's `/plan/changes`), migration `0003`.
 
-### Shared memory (Coach, Claude, OpenCode)
+### Shared memory (Coach and connected assistants)
 
 One service, `backend/app/user_context.py`, gathers what BuildNorth knows about the signed-in user for a request. The
 Coach calls it on every message; assistants get the same result from the MCP tool `get_user_context`.
