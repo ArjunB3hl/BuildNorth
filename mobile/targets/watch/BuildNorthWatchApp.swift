@@ -25,12 +25,15 @@ struct RootView: View {
         }
       } else {
         NavigationStack {
-          TodayView()
+          MonitorView()
         }
       }
     }
     .onChange(of: scenePhase, initial: true) { _, phase in
       if phase == .active { model.becameActive() }
+    }
+    .onChange(of: model.workout.savedCount) { _, _ in
+      Task { await model.syncHealth(manual: false, force: true) }
     }
   }
 }

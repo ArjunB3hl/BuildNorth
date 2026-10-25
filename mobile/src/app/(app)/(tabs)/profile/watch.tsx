@@ -94,7 +94,7 @@ export default function WatchScreen() {
     const ok = await confirmAction({
       title: 'Unlink Apple Watch?',
       message:
-        'Your watch signs out and stops showing your plan. Health summaries it already uploaded stay in Rhythm until you delete your data.',
+        'Your watch signs out and stops monitoring sleep and workouts. Health summaries it already uploaded stay in Rhythm until you delete your data.',
       confirmLabel: 'Unlink',
       destructive: true,
     });
@@ -121,30 +121,29 @@ export default function WatchScreen() {
       }}>
       <Stagger>
         <ThemedText type="small" themeColor="textSecondary">
-          See today&apos;s plan, tick items off and check in from your wrist. The watch can also upload a daily summary from
-          Apple Health: sleep, resting heart rate, HRV, steps, active energy and workouts.
+          Sign in your watch using your iPhone account. Your watch has just two options: Sleep for nightly patterns,
+          and Workout for live heart rate while you exercise.
         </ThemedText>
 
         <SectionCard
           title="Apple Watch"
           icon={{ ios: 'applewatch', android: 'watch', web: 'watch' }}
           description={state.message}
-          action={<Pill label={state.ready ? 'Ready to link' : 'Not ready'} tone={state.ready ? 'success' : 'muted'} />}>
+          action={<Pill label={state.ready ? 'Ready to sign in' : 'Not ready'} tone={state.ready ? 'success' : 'muted'} />}>
           {link.isSuccess ? (
-            <Notice tone="success">Link sent. Open Rhythm on your watch; it signs in by itself.</Notice>
+            <Notice tone="success">Sign-in sent. Open Rhythm on your watch; Sleep and Workout appear automatically when it connects.</Notice>
           ) : null}
           {link.data?.notRevoked ? (
             <Notice tone="warning">An earlier link couldn&apos;t be revoked. It&apos;s still listed under Linked watches; revoke it there.</Notice>
           ) : null}
           {link.isError ? <Notice tone="error">{linkErrorMessage(link.error)}</Notice> : null}
           <ThemedText type="small" themeColor="textSecondary">
-            The watch gets its own key, valid for 90 days, that only reaches your plan, check-ins and health summaries.
-            Rhythm doesn&apos;t store it on this iPhone, though iOS holds on to the last link sent to the watch until
-            you link again or unlink.
+            No password to type on your wrist. Sign in here, then allow sleep access or start a workout on your watch.
+            You can manage sharing and sign out your watch from this screen.
           </ThemedText>
           <FormActions>
             <Button
-              title={active.length ? 'Link again' : 'Link Apple Watch'}
+              title={active.length ? 'Sign in again' : 'Sign in Apple Watch'}
               onPress={() => link.mutate()}
               loading={link.isPending}
               disabled={!state.ready || link.isPending}
@@ -224,7 +223,7 @@ export default function WatchScreen() {
           {health.data && days.length === 0 ? (
             <EmptyState
               title="No health summaries yet"
-              body="Open Rhythm on your watch and allow Health access. It uploads yesterday and today each time it syncs."
+              body="Open Sleep on your watch and allow Health access, or record a workout. Sleep and workout summaries sync to your account when connected."
             />
           ) : null}
           {days.length ? (
@@ -312,7 +311,8 @@ function healthFacts(day: HealthDay): string[] {
 }
 
 function workoutLabel(workout: HealthWorkout): string {
-  return `${Math.round(workout.durationMinutes)} min ${workout.activityType.replace(/_/g, ' ')}`;
+  const heartRate = workout.averageHeartRateBpm == null ? '' : ` · avg ${Math.round(workout.averageHeartRateBpm)} bpm`;
+  return `${Math.round(workout.durationMinutes)} min ${workout.activityType.replace(/_/g, ' ')}${heartRate}`;
 }
 
 function memoryLabel(day: HealthDay, shareHealth: boolean): { label: string; tone: 'success' | 'muted' } {

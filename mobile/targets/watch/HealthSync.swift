@@ -16,18 +16,10 @@ struct HealthSync: Sendable {
 
   static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
-  private static var readTypes: Set<HKObjectType> {
+  static var readTypes: Set<HKObjectType> {
     [
       HKCategoryType(.sleepAnalysis),
-      HKQuantityType(.restingHeartRate),
-      HKQuantityType(.heartRateVariabilitySDNN),
-      HKQuantityType(.stepCount),
-      HKQuantityType(.activeEnergyBurned),
-      // Workout statistics: average heart rate and distance.
       HKQuantityType(.heartRate),
-      HKQuantityType(.distanceWalkingRunning),
-      HKQuantityType(.distanceCycling),
-      HKQuantityType(.distanceSwimming),
       HKObjectType.workoutType(),
     ]
   }
@@ -37,10 +29,6 @@ struct HealthSync: Sendable {
       // Only for saveSampleData(): the simulator has no sensors.
       return [
         HKCategoryType(.sleepAnalysis),
-        HKQuantityType(.restingHeartRate),
-        HKQuantityType(.heartRateVariabilitySDNN),
-        HKQuantityType(.stepCount),
-        HKQuantityType(.activeEnergyBurned),
       ]
     #else
       return []
@@ -51,7 +39,7 @@ struct HealthSync: Sendable {
 
   func access() async -> HealthAccess {
     guard Self.isAvailable else { return .unavailable }
-    let status = try? await store.statusForAuthorizationRequest(toShare: Self.shareTypes, read: Self.readTypes)
+    let status = try? await store.statusForAuthorizationRequest(toShare: [], read: Self.readTypes)
     return status == .unnecessary ? .requested : .notRequested
   }
 
@@ -62,7 +50,7 @@ struct HealthSync: Sendable {
   /// The summaries for `days` (finished days `complete: true`, today `complete: false`), in the same order.
   func summaries(for days: [HealthBackfill.Day]) async throws -> [(day: HealthBackfill.Day, summary: HealthDayIn)] {
     var result: [(day: HealthBackfill.Day, summary: HealthDayIn)] = []
-    // One day at a time: each summary already runs its six queries together.
+    // One day at a time: each summary already runs its sleep and workout queries together.
     for day in days {
       result.append((day, try await summary(for: day.start, complete: day.complete)))
     }
@@ -78,19 +66,10 @@ struct HealthSync: Sendable {
     let inDay = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
 
     async let sleep = sleepMinutes(nightEndingOn: start)
-    async let resting = latest(.restingHeartRate, unit: Self.bpm, matching: inDay)
-    async let hrv = statistic(
-      .heartRateVariabilitySDNN, .discreteAverage, unit: .secondUnit(with: .milli), matching: inDay)
-    async let steps = statistic(.stepCount, .cumulativeSum, unit: .count(), matching: inDay)
-    async let energy = statistic(.activeEnergyBurned, .cumulativeSum, unit: .kilocalorie(), matching: inDay)
     async let workouts = workouts(matching: inDay)
 
     return HealthDayIn(
       sleepMinutes: try await sleep,
-      restingHeartRateBpm: (try await resting).map { Int($0.rounded()) }.flatMap { (20...250).contains($0) ? $0 : nil },
-      hrvSdnnMs: (try await hrv).flatMap { (0...500).contains($0) ? Self.rounded($0) : nil },
-      steps: (try await steps).map { Int($0.rounded()) }.flatMap { (0...200_000).contains($0) ? $0 : nil },
-      activeEnergyKcal: (try await energy).flatMap { (0...20_000).contains($0) ? Self.rounded($0) : nil },
       workouts: try await workouts,
       complete: complete
     )
@@ -112,31 +91,32 @@ struct HealthSync: Sendable {
     return SleepNight.asleepMinutes(samples.map { (start: $0.startDate, end: $0.endDate) }, in: window)
   }
 
-  private func latest(_ id: HKQuantityTypeIdentifier, unit: HKUnit, matching predicate: NSPredicate) async throws
-    -> Double?
-  {
-    let descriptor = HKSampleQueryDescriptor(
-      predicates: [.quantitySample(type: HKQuantityType(id), predicate: predicate)],
-      sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)],
-      limit: 1
-    )
-    return try await descriptor.result(for: store).first?.quantity.doubleValue(for: unit)
-  }
-
-  private func statistic(
-    _ id: HKQuantityTypeIdentifier, _ option: HKStatisticsOptions, unit: HKUnit, matching predicate: NSPredicate
-  ) async throws -> Double? {
-    let descriptor = HKStatisticsQueryDescriptor(
-      predicate: .quantitySample(type: HKQuantityType(id), predicate: predicate),
-      options: option
-    )
-    do {
-      let stats = try await descriptor.result(for: store)
-      let quantity = option.contains(.cumulativeSum) ? stats?.sumQuantity() : stats?.averageQuantity()
-      return quantity?.doubleValue(for: unit)
-    } catch let error as HKError where error.code == .errorNoData {
-      return nil
+  /// Seven local nights, including missing nights, for an honest trend with gaps.
+  func sleepHistory(now: Date = Date(), calendar: Calendar = .current) async throws -> [SleepSummary] {
+    var result: [SleepSummary] = []
+    for offset in -6...0 {
+      guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)),
+        let window = SleepNight.window(endingOn: day, calendar: calendar) else { continue }
+      let predicate = HKQuery.predicateForSamples(withStart: window.start, end: min(window.end, now), options: [])
+      let descriptor = HKSampleQueryDescriptor(
+        predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
+        sortDescriptors: [SortDescriptor(\.startDate)]
+      )
+      let samples = try await descriptor.result(for: store).compactMap { sample -> SleepSample? in
+        let stage: SleepStage
+        switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
+        case .asleepCore: stage = .core
+        case .asleepDeep: stage = .deep
+        case .asleepREM: stage = .rem
+        case .asleepUnspecified: stage = .unspecified
+        case .awake: stage = .awake
+        default: return nil
+        }
+        return SleepSample(stage: stage, start: sample.startDate, end: min(sample.endDate, now))
+      }
+      result.append(SleepSummary(day: day, samples: samples, window: window))
     }
+    return result
   }
 
   private func workouts(matching predicate: NSPredicate) async throws -> [HealthWorkout] {
@@ -147,20 +127,15 @@ struct HealthSync: Sendable {
     )
     let iso = ISO8601DateFormatter()
     iso.formatOptions = [.withInternetDateTime]
-    let distanceTypes: [HKQuantityTypeIdentifier] = [
-      .distanceWalkingRunning, .distanceCycling, .distanceSwimming,
-    ]
     return try await descriptor.result(for: store).map { workout in
-      let energy = workout.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()
-      let distance = distanceTypes.lazy.compactMap { workout.statistics(for: HKQuantityType($0))?.sumQuantity() }.first
       let heartRate = workout.statistics(for: HKQuantityType(.heartRate))?.averageQuantity()
       return HealthWorkout(
         externalId: workout.uuid.uuidString,
         activityType: Self.activityName(workout.workoutActivityType),
         startedAt: iso.string(from: workout.startDate),
         durationMinutes: Self.rounded(min(max(workout.duration / 60, 0), 1440)),
-        energyKcal: energy.map { Self.rounded($0.doubleValue(for: .kilocalorie())) }.flatMap(Self.nonNegative),
-        distanceMeters: distance.map { Self.rounded($0.doubleValue(for: .meter())) }.flatMap(Self.nonNegative),
+        energyKcal: nil,
+        distanceMeters: nil,
         averageHeartRateBpm: heartRate.map { Self.rounded($0.doubleValue(for: Self.bpm)) }.flatMap(Self.nonNegative)
       )
     }
@@ -239,7 +214,7 @@ struct HealthSync: Sendable {
   // MARK: Simulator test data
 
   #if DEBUG && targetEnvironment(simulator)
-    /// Saves a night of sleep plus a few metrics for yesterday and today, so the sync has something to send.
+    /// Saves sleep for yesterday and today, so the simulator has nights to display and sync.
     /// Sync identifiers make it idempotent: saving again replaces the earlier samples instead of adding more.
     func saveSampleData(now: Date = Date()) async throws {
       let calendar = Calendar.current
@@ -258,18 +233,6 @@ struct HealthSync: Sendable {
             HKMetadataKeySyncVersion: version,
           ]
         }
-        func add(
-          _ key: String, _ id: HKQuantityTypeIdentifier, _ value: Double, _ unit: HKUnit, from start: Date,
-          minutes: Double
-        ) {
-          let end = min(start.addingTimeInterval(minutes * 60), cutoff)
-          guard start < end else { return }
-          let quantity = HKQuantity(unit: unit, doubleValue: value)
-          samples.append(
-            HKQuantitySample(
-              type: HKQuantityType(id), quantity: quantity, start: start, end: end, metadata: metadata(key)))
-        }
-
         let stages: [(HKCategoryValueSleepAnalysis, Double)] = [
           (.asleepCore, 80), (.asleepDeep, 55), (.asleepREM, 25), (.awake, 10),
           (.asleepCore, 110), (.asleepREM, 40), (.asleepCore, 95 - jitter * 20),
@@ -284,15 +247,6 @@ struct HealthSync: Sendable {
           }
           cursor = cursor.addingTimeInterval(minutes * 60)
         }
-        let morning = day.addingTimeInterval(8 * 3600)
-        let afternoon = day.addingTimeInterval(14 * 3600)
-        add("rhr", .restingHeartRate, 57 + jitter * 2, Self.bpm, from: morning, minutes: 1)
-        add("hrv-am", .heartRateVariabilitySDNN, 44 - jitter * 3, .secondUnit(with: .milli), from: morning, minutes: 1)
-        add("hrv-pm", .heartRateVariabilitySDNN, 39 + jitter, .secondUnit(with: .milli), from: afternoon, minutes: 1)
-        add("steps-am", .stepCount, 4_200 - jitter * 900, .count(), from: morning, minutes: 60)
-        add("steps-pm", .stepCount, 3_850, .count(), from: afternoon, minutes: 90)
-        add("energy-am", .activeEnergyBurned, 310 - jitter * 60, .kilocalorie(), from: morning, minutes: 60)
-        add("energy-pm", .activeEnergyBurned, 180, .kilocalorie(), from: afternoon, minutes: 90)
       }
       guard !samples.isEmpty else { return }
       try await store.save(samples)

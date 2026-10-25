@@ -118,7 +118,7 @@ export default function ProfileScreen() {
           <SettingsRow
             icon={{ ios: 'applewatch', android: 'watch', web: 'watch' }}
             title="Apple Watch"
-            subtitle="Today's plan, check-ins and health summaries on your wrist"
+            subtitle="Sign in your watch for sleep and workout heart monitoring"
             onPress={() => router.push('/profile/watch')}
           />
         ) : null}

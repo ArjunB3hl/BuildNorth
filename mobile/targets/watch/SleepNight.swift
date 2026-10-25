@@ -1,9 +1,50 @@
 import Foundation
 
+enum SleepStage: String, CaseIterable, Sendable {
+  case core = "Core", deep = "Deep", rem = "REM", unspecified = "Asleep", awake = "Awake"
+}
+
+struct SleepSample: Sendable {
+  let stage: SleepStage
+  let start: Date
+  let end: Date
+}
+
+struct SleepSummary: Identifiable, Sendable {
+  let day: Date
+  let minutes: Int?
+  let startedAt: Date?
+  let endedAt: Date?
+  let stages: [SleepStage: Int]
+  var id: Date { day }
+
+  init(day: Date, samples: [SleepSample], window: DateInterval) {
+    self.day = day
+    let asleep = samples.filter {
+      $0.stage != .awake && $0.start < $0.end && $0.start < window.end && $0.end > window.start
+    }
+    minutes = SleepNight.asleepMinutes(asleep.map { ($0.start, $0.end) }, in: window)
+    startedAt = asleep.map { max($0.start, window.start) }.min()
+    endedAt = asleep.map { min($0.end, window.end) }.max()
+    // Each stage merges duplicate sources independently. Stage totals can overlap between sources,
+    // so the UI presents durations separately rather than a misleading stacked percentage.
+    stages = Dictionary(uniqueKeysWithValues: SleepStage.allCases.compactMap { stage in
+      SleepNight.asleepMinutes(samples.filter { $0.stage == stage }.map { ($0.start, $0.end) }, in: window)
+        .map { (stage, $0) }
+    })
+  }
+}
+
 // Foundation only, so scripts/check-watch-models.sh can compile and check it on a Mac. HealthSync reads the samples.
 
 /// Asleep time for the night that ended on a given local day.
 enum SleepNight {
+  static func display(minutes: Int) -> String {
+    let hours = minutes / 60
+    let remainder = minutes % 60
+    return hours > 0 ? "\(hours) h \(remainder) min" : "\(remainder) min"
+  }
+
   /// 18:00 the previous day to 12:00 on `day`, in `calendar`'s time zone.
   static func window(endingOn day: Date, calendar: Calendar = .current) -> DateInterval? {
     let start = calendar.startOfDay(for: day)
