@@ -11,6 +11,8 @@ import {
   ThemedText,
 } from '../components/ui';
 import { useStore } from '../data/store';
+import { useDemoClaude } from '../lib/claude-demo';
+import { useNav } from '../navigation';
 import type { CoachContext, CoachMessage, Suggestion } from '../data/types';
 import { Accent, MaxContentWidth, Spacing, useTheme } from '../theme';
 
@@ -20,15 +22,30 @@ const STARTERS = [
   'Help me plan meals for tomorrow',
 ];
 
-// Until the Mac app talks to the BuildNorth backend the coach can't reply, so it behaves
-// like the iPhone app does when the AI service is unavailable.
-const COACH_CONNECTED = false;
-
 export function CoachScreen() {
   const { state, dispatch } = useStore();
+  const claude = useDemoClaude(), nav = useNav();
+  const connected = !!claude.connection;
   const theme = useTheme();
   const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const messages = state.coach;
+
+  async function send() {
+    const message = draft.trim();
+    if (!message || !connected || busy) return;
+    setBusy(true); setError('');
+    try {
+      const reply = await claude.reply(message, {
+        source: 'Mac local demo', profile: state.profile,
+        preferences: state.preferences.map(p => p.text), plan: state.plan.slice(0, 20),
+        calendar: state.calendarEntries.slice(-30),
+      }, messages);
+      dispatch({ type: 'coach/exchange', message, reply });
+      setDraft('');
+    } catch (e) { setError(e instanceof Error && e.name !== 'AbortError' ? e.message : 'The request timed out or was cancelled. Try again.'); }
+    finally { setBusy(false); }
+  }
 
   const clear = () =>
     Alert.alert(
@@ -43,6 +60,12 @@ export function CoachScreen() {
         },
       ],
     );
+
+  if (!connected) return <View style={styles.connectionGate}>
+    <PageHeader title="Connect your coach first" />
+    <ThemedText>Verify a Claude API key in AI connections to unlock this Mac’s demo Coach. ElevenLabs and account assistants are available through the website.</ThemedText>
+    <Button title="Open AI connections" onPress={() => nav.go('profile', { name: 'connections' })} />
+  </View>;
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.background }]}>
@@ -61,17 +84,20 @@ export function CoachScreen() {
                     size="small"
                     variant="quiet"
                     onPress={clear}
+                    disabled={busy}
                   />
                 ) : null
               }
             />
-            {!COACH_CONNECTED ? (
+            <Button title={connected ? 'Claude connected · AI settings' : 'Connect Claude or ChatGPT'} variant="quiet" onPress={() => nav.go('profile', { name: 'connections' })} />
+            {error ? <Notice tone="error">{error}</Notice> : null}
+            {busy ? <Notice tone="info">Claude is replying…</Notice> : null}
+            {!connected ? (
               <Notice tone="info">
-                The coach isn’t connected on Mac yet. The conversation below is
-                sample data; replies will come from the BuildNorth backend, as
-                on iPhone.
+                Connect a Claude API key to try the Mac demo Coach. The existing
+                conversation is local demo data.
               </Notice>
-            ) : null}
+            ) : <Notice tone="info">Claude uses this Mac’s local demo profile, preferences, plan and Calendar. Your conversation is saved only on this Mac.</Notice>}
             {messages.length === 0 ? (
               <Card>
                 <ThemedText type="smallBold">Your personal coach</ThemedText>
@@ -89,7 +115,7 @@ export function CoachScreen() {
                       size="small"
                       variant="secondary"
                       onPress={() => setDraft(s)}
-                      disabled={!COACH_CONNECTED}
+                      disabled={!connected || busy}
                     />
                   </View>
                 ))}
@@ -110,13 +136,14 @@ export function CoachScreen() {
             value={draft}
             onChangeText={setDraft}
             placeholder={
-              COACH_CONNECTED ? 'Message your coach' : 'Coach unavailable'
+              connected ? 'Message your coach' : 'Connect Claude to chat'
             }
             placeholderTextColor={theme.textSecondary}
             multiline
             maxLength={4000}
-            editable={COACH_CONNECTED}
+            editable={connected && !busy}
             accessibilityLabel="Message to coach"
+            onSubmitEditing={send}
             // macOS: Return sends, Shift-Return adds a new line.
             {...({ submitKeyEvents: [{ key: 'Enter' }] } as object)}
             style={[
@@ -126,8 +153,8 @@ export function CoachScreen() {
           />
           <Button
             title="Send"
-            onPress={() => {}}
-            disabled={!COACH_CONNECTED || !draft.trim()}
+            onPress={send}
+            disabled={!connected || busy || !draft.trim()}
           />
         </Row>
       </View>
@@ -254,6 +281,7 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 }
 
 const styles = StyleSheet.create({
+  connectionGate: { padding: 28, gap: 16 },
   fill: { flex: 1 },
   start: { alignItems: 'flex-start' },
   list: {

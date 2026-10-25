@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "topics": {
+    "boxing": ["boxing", "shadowboxing", "shadow boxing"],
+    "karate": ["karate", "kata", "kumite"],
+    "gym": ["gym", "workout", "strength training", "weightlifting", "resistance training"],
+    "home exercise": ["home workout", "home exercise", "no equipment", "without equipment", "bodyweight", "body weight"],
+    "food": ["recipe", "recipes", "cooking", "cook", "meal prep", "baking"]
+  },
+  "purposes": {
+    "learn technique": ["tutorial", "technique", "techniques", "drill", "drills", "lesson", "fundamentals", "basics", "how to", "form", "beginner guide"],
+    "follow a workout": ["workout", "workouts", "follow along", "circuit", "exercise routine", "training session", "home exercise"],
+    "find recipes": ["recipe", "recipes", "cooking", "cook", "meal prep", "baking", "how to make"]
+  },
+  "exclusions": {
+    "bjj": ["bjj", "brazilian jiu jitsu", "jiu jitsu", "jiujitsu", "guard passing", "grappling"],
+    "weight loss": ["weight loss", "lose weight", "fat loss", "fat burning", "burn fat", "slimming"],
+    "fight news": ["fight news", "boxing news", "fight announcement", "press conference", "weigh in"],
+    "fight highlights": ["fight highlights", "highlights", "knockouts", "knockout compilation"],
+    "news": ["news", "press conference", "fight announcement", "weigh in"],
+    "competition": ["championship", "tournament", "competition", "fight highlights"],
+    "reaction": ["reaction", "reacts", "reacting"]
+  },
+  "outOfScope": ["bjj", "brazilian jiu jitsu", "jiu jitsu", "jiujitsu", "guard passing"],
+  "spectator": ["highlights", "championship", "knockout compilation", "fight night", "press conference", "boxing news", "fight news"],
+  "equipment": {
+    "dumbbells": ["dumbbell", "dumbbells"],
+    "kettlebell": ["kettlebell", "kettlebells"],
+    "resistance bands": ["resistance band", "resistance bands"],
+    "heavy bag": ["heavy bag", "punching bag"],
+    "barbell": ["barbell", "barbells"],
+    "bench": ["weight bench", "bench press"]
+  }
+}

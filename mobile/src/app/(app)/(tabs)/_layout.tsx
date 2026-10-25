@@ -20,13 +20,9 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Coach</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right" md="forum" />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="meals">
-        <NativeTabs.Trigger.Label>Meals</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="fork.knife" md="restaurant" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="activity">
-        <NativeTabs.Trigger.Label>Activity</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="figure.run" md="fitness_center" />
+      <NativeTabs.Trigger name="(calendar)">
+        <NativeTabs.Trigger.Label>Calendar</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>

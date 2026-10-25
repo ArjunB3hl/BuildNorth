@@ -381,9 +381,9 @@ def test_health_text_is_one_deterministic_sentence_without_missing_values() -> N
 def test_health_upload_is_an_idempotent_upsert(client: TestClient, memory_client) -> None:  # type: ignore[no-untyped-def]
     alice = bearer(link(client))
     first = upload(client, alice)
-    assert set(first) == {"date", "sleepMinutes", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts",
+    assert set(first) == {"date", "sleepMinutes", "sleepPattern", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts",
                           "complete", "source", "memoryStatus", "updatedAt"}
-    assert first["workouts"] == SPEC_DAY["workouts"] and first["source"] == "apple_watch"
+    assert first["workouts"] == [{**w, "minHeartRateBpm": None, "maxHeartRateBpm": None} for w in SPEC_DAY["workouts"]] and first["source"] == "apple_watch"
     assert first["memoryStatus"] == "not_mirrored"  # sharing is off by default
     upload(client, alice)
     days = client.get("/watch/health", headers=alice, params={"end": TODAY}).json()["days"]

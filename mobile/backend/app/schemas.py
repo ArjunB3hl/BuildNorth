@@ -12,7 +12,7 @@ from datetime import date as date_type
 from datetime import datetime
 from typing import Any, Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -425,6 +425,8 @@ class Suggestion(ApiModel):
 class CoachMessageIn(InputModel):
     content: Annotated[str, Field(min_length=1, max_length=4000), AfterValidator(_strip_multiline)]
     local_date: LocalDate | None = None
+    timezone: Annotated[str, Field(max_length=80)] = "UTC"
+    client_key: Annotated[str, Field(min_length=1, max_length=80)] | None = None
 
 
 class CoachContextOut(ApiModel):
@@ -441,6 +443,7 @@ class CoachContextOut(ApiModel):
     routines: int = 0
     plan_items: int = 0
     health_days: int = 0
+    calendar_entries: int = 0
 
 
 class CoachMessageOut(ApiModel):
@@ -803,12 +806,40 @@ class HealthWorkoutIn(InputModel):
     energy_kcal: Annotated[float, Field(ge=0, le=20_000)] | None = None
     distance_meters: Annotated[float, Field(ge=0, le=1_000_000)] | None = None
     average_heart_rate_bpm: Annotated[float, Field(ge=0, le=300)] | None = None
+    min_heart_rate_bpm: Annotated[float, Field(ge=0, le=300)] | None = None
+    max_heart_rate_bpm: Annotated[float, Field(ge=0, le=300)] | None = None
+
+    @model_validator(mode="after")
+    def ordered_rate(self):
+        low, high, average = self.min_heart_rate_bpm, self.max_heart_rate_bpm, self.average_heart_rate_bpm
+        if low is not None and high is not None and low > high:
+            raise ValueError("Minimum heart rate must not exceed maximum.")
+        if average is not None and ((low is not None and average < low) or (high is not None and average > high)):
+            raise ValueError("Average heart rate must fall within its recorded range.")
+        return self
+
+
+class SleepPattern(InputModel):
+    started_at: Annotated[datetime, AfterValidator(_aware)] | None = None
+    ended_at: Annotated[datetime, AfterValidator(_aware)] | None = None
+    core_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None
+    deep_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None
+    rem_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None
+    awake_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None
+    unspecified_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None
+
+    @model_validator(mode="after")
+    def ordered_window(self):
+        if self.started_at and self.ended_at and not 0 < (self.ended_at - self.started_at).total_seconds() <= 48 * 3600:
+            raise ValueError("Choose a valid sleep window of at most two days.")
+        return self
 
 
 class HealthDayIn(InputModel):
     """One local day from the watch. Missing metrics are null, never 0. A PUT replaces the whole day."""
 
     sleep_minutes: Annotated[int, Field(ge=0, le=1440)] | None = None  # asleep, for the night that ended on this date
+    sleep_pattern: SleepPattern | None = None
     resting_heart_rate_bpm: Annotated[int, Field(ge=20, le=250)] | None = None
     hrv_sdnn_ms: Annotated[float, Field(ge=0, le=500)] | None = None
     steps: Annotated[int, Field(ge=0, le=200_000)] | None = None
@@ -825,11 +856,14 @@ class HealthWorkoutOut(ApiModel):
     energy_kcal: float | None
     distance_meters: float | None
     average_heart_rate_bpm: float | None
+    min_heart_rate_bpm: float | None = None
+    max_heart_rate_bpm: float | None = None
 
 
 class HealthDayOut(ApiModel):
     date: str
     sleep_minutes: int | None
+    sleep_pattern: SleepPattern | None = None
     resting_heart_rate_bpm: int | None
     hrv_sdnn_ms: float | None
     steps: int | None

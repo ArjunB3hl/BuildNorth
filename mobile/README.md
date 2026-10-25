@@ -3,6 +3,41 @@
 A personal health companion for meals, cooking, exercise routines, daily check-ins and progress.
 Expo (SDK 57, Expo Router, TypeScript) app + FastAPI backend.
 
+## Web app
+
+Detailed change record, source map and verification limits: [Web app implementation](docs/web-app.md).
+
+Run the backend as described below, then `npm run web` in `mobile/` and open
+`http://localhost:8081`. Sign in with the same Clerk account used by the phone and Rhythm.
+The web app uses React Native Web and Expo Router, with a responsive sidebar and a web overview.
+Coach, meals, activity, profile, Rhythm settings and video management use the existing authenticated APIs.
+Browser sign-out clears this browser's account cache without revoking Apple Watch tokens.
+
+The overview refreshes recommendations and browser connections every 15 seconds while mounted.
+It shows permitted pages and recommendations, not verified watch history. To share content:
+
+1. Open **Interests & sharing** and turn on **Learn my interests automatically** and **YouTube with page details**.
+   Switches save as they change. Rhythm learns from your coach chats and the workout and recipe videos you watch;
+   pages can be permitted once it has learned something. The overview's Personalisation card shows whether it's on.
+2. Build/load `extension/` and sign in with the same account. The panel's **Open web interests** and
+   **Open web dashboard** links default to `http://localhost:8081`; configure `WXT_WEB_APP_URL` for another origin.
+3. Open a YouTube watch page, click Rhythm's toolbar icon and select **Use this page**.
+   Transcript reading requires its separate consent and a task. Recommendations need a connected agent
+   or the existing manual workflow; merely selecting a page does not generate one.
+4. Review saved recommendations in the overview or **Content library**. Revoke page grants from the overview;
+   manage agents, memory and deletion in the profile screens.
+
+Clerk manages essential authentication storage. The overview offers an optional, host-only
+`buildnorth_display=compact` cookie for compact display of the cookie panel. It expires after 30 days,
+uses `SameSite=Lax` and `Secure` on HTTPS, and can be removed with **Use essential only**.
+It contains no health information, tokens or browsing activity. This choice never enables content sharing.
+The extension's cookies permission is used by Clerk, with host access limited to Clerk and the backend;
+it does not harvest cookies from fitness sites. Saved app records also use the existing per-account offline cache.
+
+`npm run build:web` writes a static export to `dist/`. This is a local implementation, not a hosted deployment.
+A deployed frontend also needs its HTTPS origin allowed by backend CORS and Clerk's authorized parties,
+plus the correct public API URL; the backend currently allows localhost web origins only.
+
 ```
 Expo app ── Clerk session token ──▶ FastAPI backend ──▶ SQL database (authoritative app records)
   (Clerk sign-in,                    verifies token via    ├─▶ SurrealDB Agent Memory (confirmed preferences and
@@ -24,12 +59,25 @@ Apple Watch app (SwiftUI) ──────────────────
 - **Activity**: routines (sets, reps, duration, weight, rest), run a session, log sets, finish → saved history.
 - **Profile**: edit preferences & goals, progress from real sessions/check-ins/plan items, view/correct/delete remembered
   preferences, erase memory, delete all data (reports exactly what was deleted), sign out.
-- **Apple Watch** (iPhone development build): today's plan with done / skip, a quick check-in, and daily Apple Health
-  summaries that the Coach, AI assistants and long-term memory can use once you turn sharing on — see *Apple Watch*.
+- **Apple Watch** (iPhone development build): sleep patterns and live workout heart rate, with sign-in on the phone.
+  Daily summaries can reach the Coach and connected assistants when you enable sharing — see *Apple Watch*.
 
 The app never sends a user ID. The backend takes the user from the verified Clerk token and scopes every query and
 every Agent Memory read/write to that user. Nothing the coach says is medical advice; generated recipes aren't checked
 for allergens and nutrition values are labelled as estimates.
+
+## Rhythm video companion
+
+The current video-companion phase is **Rhythm**: interests learned from the user's
+own activity (opt-in, off by default), selective YouTube analysis, and the user's
+chosen MCP agent. While learning is on, the backend learns from coach chats, the
+fitness, health and food videos the extension sees the user watch, and saved or
+helpful recommendations. The apps show only the learning and sharing switches;
+learned interests stay in the backend. Its phone screens are
+under **Profile → Interests & sharing / Content library**, its Chrome app is in
+`../extension/`, and its dedicated MCP endpoint is `/rhythm/mcp`.
+See [the implementation, setup and verification guide](docs/rhythm.md).
+The 3D, motion and live-coaching ideas under Later phases are outside this phase.
 
 ## Weekly planner
 
@@ -76,7 +124,7 @@ API: `GET /plan`, `POST /planner/proposals`, `POST /planner/accept`, `POST /plan
 The backend also serves an MCP server at **`/mcp`** (Streamable HTTP, official Python MCP SDK `mcp==2.3.0`).
 Assistants bring their **own** models; no model runs in the app or the MCP server, and Ollama is not needed for
 any MCP tool. The mobile app keeps talking to the backend directly, and both work on the same records. Connecting
-ChatGPT or Claude here does **not** change the Coach tab, which still uses `AI_PROVIDER`.
+External MCP connections do **not** supply inference to the built-in Coach. Text Coach now requires a verified personal Claude key; a verified ElevenLabs agent enables browser voice/text conversations. Unlinked accounts cannot mount Coach or the camera view.
 
 | Tool | What it does |
 |---|---|
@@ -145,28 +193,6 @@ Coach calls it on every message; assistants get the same result from the MCP too
   whichever is earlier. Finished days are also mirrored into Agent Memory under `<user>/health/<revision>` so recall
   finds them. A recalled health sentence marks its day `recalled` instead of becoming a generic memory note. Details in
   *Apple Watch → What agents can use*.
-
-### OpenCode
-
-`opencode.json` in the project root adds one remote server, `buildnorth`; OpenCode merges it with your global config,
-so other servers and your selected model are unchanged. The token comes from an environment variable:
-
-```json
-{ "mcp": { "buildnorth": { "type": "remote", "url": "http://localhost:8000/mcp", "oauth": false,
-  "headers": { "Authorization": "Bearer {env:BUILDNORTH_MCP_TOKEN}" }, "timeout": 15000 } } }
-```
-
-1. In the app: Profile → *Connect AI assistants* → *Create token*, copy it.
-2. Put it in the git-ignored `.env.opencode` (`BUILDNORTH_MCP_TOKEN=bnc_…`, mode 600), or export it in your shell.
-3. Start OpenCode with the variable set (OpenCode 2 runs a background service, so restart it once):
-
-   ```bash
-   set -a; source .env.opencode; set +a; opencode service restart; opencode
-   ```
-
-4. `opencode mcp list` should show `✓ buildnorth connected`.
-
-OpenCode's *model* is configured separately (`opencode models`, `/models`); the MCP entry doesn't select one.
 
 ### ChatGPT and Claude (remote)
 
@@ -274,15 +300,24 @@ can't include a watch app or the WatchConnectivity module (the Profile screen sa
 
 How this and the Mac app were built, what was checked and what is still open: [docs/work-log.md](docs/work-log.md).
 
-- **On the watch**: *Today* (plan items with Done / Skip / Undo, the check-in and last health sync), *Check-in*
-  (energy and mood 1–5 with the Digital Crown or buttons; sleep pre-filled from Apple Health while health sharing is
-  on and no sleep is saved for the day yet), *Health* (Apple Health
-  permission, *Sync now*, upload status, whether sharing is on) and *Not linked* (how to link from the phone).
-- **On the phone**: Profile → *Apple Watch* links the watch, turns health sharing on or off, lists linked watches
-  (revoke one, or *Unlink*) and shows the last 7 days of summaries the watch sent.
-- **Health sync**: on launch, on return to the app (at most every 10 minutes) and with *Sync now*, the watch reads
-  Apple Health for each day it sends: minutes asleep for the night ending that day (18:00 the evening before to
-  12:00), resting heart rate, average HRV (SDNN), steps, active energy and the day's workouts.
+- **On the watch**: exactly two home options, **Sleep** and **Workout**. Plans, check-ins and general health
+  settings are no longer part of the watch UI. Monitoring works locally after sign-in, including without internet.
+  - **Sleep** shows the last night's asleep duration, first/last sleep times, available Core/Deep/REM/Awake
+    durations, and a seven-night chart. Missing nights stay blank. Stage durations merge duplicates independently;
+    different sources can overlap, so these aren't shown as parts of a single stacked total. Sleep is read from
+    Apple Health after it is recorded; enable *Track Sleep with Apple Watch* on the phone and wear the watch to bed.
+  - **Workout** starts a general (*Other*) HealthKit workout, showing live BPM, recent trend, average, peak and
+    elapsed time. Pause/resume and end/save are inside this screen. It uses `workout-processing` background mode
+    and continues when the wrist is lowered or the user returns home. An ended workout is saved to Apple Health;
+    only its summary is uploaded. Stale readings show a dash after 30 seconds. Start a workout in Rhythm to
+    use live monitoring; it doesn't attach to another app's active workout. Force-quitting isn't supported for
+    workout recovery. Signing out discards a workout still in progress.
+- **On the phone**: sign in to Rhythm, then Profile → **Apple Watch** → **Sign in Apple Watch**. The watch
+  signs in when the hand-off arrives. Sharing, linked watches and uploaded summaries remain on the phone.
+- **Health sync**: launch, foreground (at most every 10 minutes), Sleep → *Refresh*, and workout completion upload
+  sleep minutes and workout summaries. The watch no longer requests resting HR, HRV, steps, distance or calories.
+  Existing backend fields stay compatible and missing values are null. Detailed sleep stages and live heart-rate
+  samples stay in Apple Health/on the watch; they aren't uploaded to BuildNorth.
   - Today is sent as `complete: false` (so far). The finished days since the last complete upload are sent as
     complete, capped at the newest 7, so recent days the app wasn't opened are filled in; older missed days are
     not sent. Yesterday is always sent again, so samples that reach Apple Health late still land. The first sync,
@@ -292,7 +327,7 @@ How this and the Mac app were built, what was checked and what is still open: [d
 
 ### Linking and the watch token
 
-1. Profile → *Apple Watch* → *Link Apple Watch*: the phone asks the backend for a **watch link token** (`bnw_…`,
+1. Sign in on iPhone → Profile → *Apple Watch* → *Sign in Apple Watch*: the phone asks the backend for a **watch link token** (`bnw_…`,
    `POST /watch/tokens`, Clerk session required) and hands it, with the API URL, to the watch over WatchConnectivity
    (`updateApplicationContext`, delivered even if the watch app isn't running). The plaintext is never cached or
    stored by the app; iOS keeps the last hand-off until the next link or unlink.
@@ -384,7 +419,10 @@ that is needed (see [docs/work-log.md](docs/work-log.md)).
    `xcrun simctl install <watch-udid> ~/Library/Developer/Xcode/DerivedData/BuildNorth-*/Build/Products/Debug-watchsimulator/watch.app`.
 3. In Debug builds, the watch can be linked without the phone. Launch it with
    `SIMCTL_CHILD_BN_API_URL=http://127.0.0.1:8000 SIMCTL_CHILD_BN_WATCH_TOKEN=<bnw_ token> xcrun simctl launch <watch-udid> com.arjun273773.buildnorth.watch`.
-4. The watch simulator has no sensors and no Health app. In Debug, *Health* can save a few sample values.
+4. The watch simulator has no sensors and no Health app. In Debug, *Sleep → Add sample sleep* can save sample nights. Live heart-rate sensors require a real watch.
+
+Keep simulator signing enabled when building the watch separately. An unsigned build can launch but fail to
+save the phone link in Keychain (`-34018`). See the [signed build command and recovery notes](docs/watch-ui-validation-2026-10-25.md#supplied-simulator-binary-could-not-save-the-link).
 
 **A real watch and iPhone** need:
 - `ios.appleTeamId` in `app.json` (Expo picked team `TJ6V35S7GQ` automatically for the simulator build)
@@ -397,7 +435,20 @@ Real watches block WebSockets, so the watch uses plain HTTPS requests only.
 **Checks**: `cd backend && .venv/bin/python -m pytest -q`, `bash scripts/check-watch-models.sh` (encodes and decodes
 the watch's JSON against the contract and typechecks `targets/watch` for watchOS), `npx tsc --noEmit && npx expo lint`.
 
-### What was tested (2026-10-21)
+### UI validation (2026-10-25)
+
+Computer Use on the paired iPhone 17 / Apple Watch Series 12 simulators verified phone-to-watch sign-in,
+the two-option home, sleep permissions and empty state, fictional sleep duration/stages/seven-night history,
+workout timing and pause/resume, navigation persistence, end/save, and phone summary sync. AI health sharing
+stayed off, and the watch was left home with no active workout. Lint, typecheck and 174 watch model checks
+passed, including watchOS typechecking. The supplied watch binary's signing issue and a simulator service
+stall were resolved before completing the run.
+
+See the [dated validation report and screenshots](docs/watch-ui-validation-2026-10-25.md) for observed values,
+reproduction commands, recovery details and the distinction between simulator readings and physical sensors.
+The UI evidence is for `d843a88`, before the later Rhythm branding integration.
+
+### Earlier automated and API verification (2026-10-21)
 
 - **Automated checks:**
   - Backend: 234 tests pass, 54 of them in `test_watch.py`. They cover the token rules, cross-user isolation, the
@@ -422,10 +473,8 @@ the watch's JSON against the contract and typechecks `targets/watch` for watchOS
     `get_user_context` ("How did I sleep and recover this week?") detected the *health* topic and included them.
   - Rerun after the final fixes and again after the move to `~/Developer`, each time from a clean prebuild and a
     fresh scratch database: same results.
-- **Not yet done:**
-  - Looking at or tapping the watch UI.
-  - Linking from the phone over WatchConnectivity (needs a Clerk sign-in in the simulator).
-  - Real Apple Health data and a physical watch.
+- **Not covered in that run:** the watch UI and phone-to-watch linking (subsequently exercised on 25 October,
+  above). Real Apple Health data and a physical watch remain unverified.
   - Running `scripts/live_check.py` against the real SurrealDB Agent Memory.
 
 ## Setup
@@ -437,8 +486,11 @@ the watch's JSON against the contract and typechecks `targets/watch` for watchOS
    - `EXPO_PUBLIC_API_URL` (optional; default: the machine running Metro, port 8000)
 3. **Backend env**: `backend/.env` (see `backend/.env.example`) — server-only, never commit:
    - `SPECTRON_URL`, `SPECTRON_CONTEXT_ID`, `SPECTRON_API_KEY` — SurrealDB Agent Memory (context *ID*, not its display name)
+   - `SPECTRON_OWNER_USER_ID` — explicitly binds that Context to one Clerk account, including Rhythm;
+     other accounts need their own configured Context bindings (see [Rhythm setup](docs/rhythm.md))
    - `CLERK_PUBLISHABLE_KEY` — same public key; locates Clerk's JWKS for token verification
-   - `AI_PROVIDER` = `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`
+   - `AI_PROVIDER` = `auto` (default) | `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`.
+     `auto` detects `ANTHROPIC_API_KEY` for the shared Claude demo. Explicit `none` disables the fallback.
    - `DATABASE_URL` (default: SQLite in `backend/var/`, git-ignored), `AUTO_MIGRATE` (default `true`)
 4. **AI (local, free)**: install [Ollama](https://ollama.com) and `ollama pull gemma3:4b`; then `AI_PROVIDER=ollama`,
    `AI_MODEL=gemma3:4b`. Expect 40–60 s per reply on an M3/16 GB Mac. For faster replies use `AI_PROVIDER=anthropic`
@@ -592,12 +644,246 @@ cd backend && .venv/bin/python -m scripts.live_check
 
 ## Production notes
 
-- Database: set `DATABASE_URL` to Postgres (install its driver, e.g. `psycopg[binary]`), run
+### Deploy the backend on Render
+
+Use a **Web Service**, branch `main`. The main API has its own CPU-only Dockerfile at
+`mobile/backend/Dockerfile`. For an existing Docker service, set these exact values:
+
+| Docker setting | Value |
+|---|---|
+| Root Directory | `mobile/backend` |
+| Dockerfile Path | `./Dockerfile` |
+| Docker Build Context Directory | `.` |
+| Docker Command | Leave blank; use the image's default command |
+| Health Check Path | `/health` |
+
+Render resolves the Dockerfile and context relative to Root Directory. `.` is a directory, not a
+Dockerfile path. Alternatively, leave Root Directory blank and set Dockerfile Path to
+`./mobile/backend/Dockerfile` and Docker Build Context Directory to `./mobile/backend`.
+Do not use `inference/minicpm-o/docker/Dockerfile` or `inference/speech-worker/Dockerfile` for this service.
+
+The image uses Python 3.13, runs as a non-root user, migrates the configured database before startup,
+and listens on `0.0.0.0:$PORT` with one Uvicorn worker. It requires `DATABASE_URL` and
+`AI_CREDENTIAL_ENCRYPTION_KEY` at runtime. No credentials are used during the image build, and its
+restricted build context excludes local `.env` files and databases. Start with 1 CPU / 2 GB for the
+demo API and measure usage; speech model memory belongs to the separate speech worker.
+
+To build the same image locally from `mobile/backend`:
+
+```bash
+docker build --platform linux/amd64 -t rhythm-api .
+```
+
+If creating a **Python runtime** service instead, use root directory `mobile/backend`.
+The `.python-version` file selects Python 3.13. Set:
+
+| Setting | Value |
+|---|---|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1` |
+| Health check | `/health` |
+
+Create a Render Postgres database in the same region and use its **Internal Database URL**. Standard
+`postgres://` and `postgresql://` URLs select the included psycopg 3 driver automatically. The start command
+applies migrations before serving traffic; keep `AUTO_MIGRATE=false` with this command. One worker also keeps
+the MCP transport's in-process session handling on the same worker.
+
+Save these in **Render → backend service → Environment**. A placeholder import template is at
+[`backend/render.env.example`](backend/render.env.example). Fill it in privately; never commit secret values.
+
+| Variable | Value / purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Shared demo Claude key; stays on the backend and pays for shared requests |
+| `AI_PROVIDER` | `auto` (or explicitly `anthropic`); don't leave an old `none` value |
+| `AI_MODEL` | `claude-opus-5-5`, or another Claude model your key can access |
+| `CLERK_PUBLISHABLE_KEY` | The same Clerk instance used by the website/phone |
+| `DATABASE_URL` | Render Postgres Internal Database URL |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | A persistent Fernet key for users' personal Claude/ElevenLabs credentials |
+| `AUTO_MIGRATE` | `false` with the start command above |
+| `WEB_ALLOWED_ORIGINS` | Comma-separated website origins, e.g. `https://rhythm.example.com`; no path or trailing slash |
+| `CLERK_AUTHORIZED_PARTIES` | The same website origins for Clerk session validation |
+| `MCP_PUBLIC_URL` | Optional for the default Render domain; set `https://api.example.com/mcp` for a custom API domain |
+
+Generate the encryption key once in a private terminal and save it in Render and your password manager:
+
+```bash
+python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+```
+
+Keep that encryption key stable across deploys. The ordinary Render filesystem is ephemeral; don't use the
+default local SQLite path for deployed account data. Postgres preserves records across application redeploys.
+If migrating existing account-owned credentials, retain the encryption key that originally encrypted them.
+
+`ANTHROPIC_API_KEY` alone selects shared Claude when `AI_PROVIDER` is unset/`auto`. Signed-in users can open Coach
+and the camera route without bringing a key. Their own verified Claude key takes priority for Coach and video
+notes; removing it restores the shared demo. An invalid personal credential requires reconnecting/removing it
+instead of silently switching keys. No shared secret or hint is sent to the website or phone.
+
+ChatGPT/Claude account connections still use MCP and the assistant's own model. They don't turn a subscription
+into an API key or override the built-in Coach. OpenCode setup is no longer shipped. ElevenLabs remains an
+optional, separate voice connection in Profile → AI connections.
+
+Optional backend settings:
+
+- Agent Memory: `SPECTRON_URL`, `SPECTRON_CONTEXT_ID`, `SPECTRON_API_KEY`, `SPECTRON_OWNER_USER_ID`.
+  The owner binding is per account. Additional users need their own entries in `RHYTHM_MEMORY_CONTEXTS_JSON`;
+  never share one private context between judge accounts. Coach still works without memory.
+- Video search: `YOUTUBE_API_KEY` and `RHYTHM_RECOMMENDATIONS=on` if enabling recommendations. Saved transcript
+  summaries can use shared Claude without a YouTube key.
+- Clerk opaque OAuth tokens only: `CLERK_SECRET_KEY`. Default JWT OAuth verification uses public JWKS.
+- `RHYTHM_MCP_PUBLIC_URL` defaults to the API origin plus `/rhythm/mcp`; configure Clerk OAuth resource audiences
+  for the public MCP URLs when using ChatGPT/Claude connectors.
+
+For the separately deployed website/phone build, use only public settings:
+`EXPO_PUBLIC_API_URL=https://your-backend.onrender.com`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, and
+`EXPO_PUBLIC_WEB_APP_URL=https://your-website.example`. Rebuild the frontend after changing these bundled values,
+and allow the website domain in Clerk. Backend secrets never belong in `EXPO_PUBLIC_*`.
+
+Deploying this API does not deploy the separate pose coach service or add Mac account syncing. Camera workouts
+still require that service and its configured frame URL; the current frame is restricted to a local coach.
+The Mac app remains a local demo with its own Claude-key setup and website handoffs.
+
+After deployment, `/health` should report `clerkConfigured: true`, `aiAvailable: true`, `aiProvider: "anthropic"`.
+This confirms configuration, not a paid Claude request. Sign in on the website, check that AI settings show
+**Demo Claude is ready**, and send a short Coach message to verify the real key. Reopen after a redeploy to
+confirm account data persists.
+
+References: [Render FastAPI deployment](https://render.com/docs/deploy-fastapi),
+[environment variables](https://render.com/docs/configure-environment-variables),
+[Postgres connections](https://render.com/docs/postgresql-creating-connecting), and
+[filesystem persistence](https://render.com/docs/disks).
+
+### Website on EAS Hosting
+
+The demo website is [rhythm-buildnorth.expo.app](https://rhythm-buildnorth.expo.app), linked to
+[`@arjun273773/BuildNorth`](https://expo.dev/accounts/arjun273773/projects/BuildNorth).
+Its public API origin is `https://buildnorth.onrender.com`. The website can load before the API is ready,
+but account data and Coach require a successful Render deployment.
+
+The EAS project's `production` environment stores only these public settings:
+
+| Variable | Value |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | `https://buildnorth.onrender.com` |
+| `EXPO_PUBLIC_WEB_APP_URL` | `https://rhythm-buildnorth.expo.app` |
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | The demo Clerk instance's publishable key |
+
+From `mobile/`, build with the saved production values and deploy:
+
+```bash
+npx eas-cli@latest env:exec production 'EXPO_NO_DOTENV=1 npm run build:web' --non-interactive
+npx eas-cli@latest deploy --prod --environment production --non-interactive --no-source-maps
+```
+
+`EXPO_NO_DOTENV=1` prevents a developer's local `.env` or `.env.local` from bundling a localhost/tunnel API
+address into the public website. Set **both** `WEB_ALLOWED_ORIGINS` and `CLERK_AUTHORIZED_PARTIES` on the
+Render API to `https://rhythm-buildnorth.expo.app`. Use this stable production origin, not a temporary
+deployment URL. Keep database credentials, model keys, and the credential-encryption key only on the backend.
+
+The website currently uses the same development Clerk instance as the local demo. Publishing the website
+does not deploy camera inference or the optional speech worker; follow their separate setup instructions.
+
+### Other production settings
+
+- Database: set `DATABASE_URL` to Postgres (the psycopg 3 driver is included), run
   `cd backend && .venv/bin/alembic upgrade head` on deploy and set `AUTO_MIGRATE=false`.
 - Use a Clerk production instance (`pk_live_…`) and register the app's bundle identifier/package.
 - Mint a SurrealDB Agent Memory key limited to `memory:read`, `memory:write`, `memory:forget` and `scope:create` on
   `buildnorth/*` instead of an admin key.
 - Serve the API over HTTPS and set `EXPO_PUBLIC_API_URL`.
+
+## Camera workouts on the website
+
+The website's **Camera workout** navigation item embeds the local pose coach. Finish and save records counted
+sets in Activity with the signed-in account. Named movements, holds, technique results and Mistakes stay in the
+pose page. Native applications have no camera-coach entry point. See [the integration guide](docs/pose-coach.md).
+
+## Parakeet and Kokoro voice architecture
+
+The browser Coach has a short-recording voice path. Parakeet transcribes, the existing Claude Coach reads the
+user's authorized context and creates a reply, and Kokoro speaks the stored reply. These speech models do not
+replace Claude's reasoning. The personal/shared Claude priority described above still applies.
+
+```mermaid
+flowchart LR
+  Device["Browser microphone · phone / Mac / PC"] --> API["Rhythm API · Clerk auth"]
+  API --> Route{"Verified ElevenLabs agent?"}
+  Route -->|Yes| Eleven["Signed ElevenLabs session"]
+  Route -->|No| STT["Private speech service · Parakeet 0.6B v3"]
+  STT -->|Transcript| Coach["Existing Claude Coach · context / Calendar / chat"]
+  Coach -->|Stored reply| TTS["Private speech service · Kokoro 82M"]
+  TTS -->|WAV| Device
+```
+
+**Selection is enforced by the backend:** a usable ElevenLabs account connection selects `elevenlabs`;
+otherwise, a configured speech service plus a usable Claude provider selects `parakeet_kokoro`. Merely creating
+a ChatGPT/Claude MCP token cannot switch speech providers. Disconnecting ElevenLabs restores the default.
+An unavailable chosen service surfaces an error instead of silently starting a second provider. Text chat remains
+available separately. Recheck `/connections/access` when the user's connection settings change.
+
+The first implementation is **turn-based, English voice output**, not continuous streaming: record up to 20 seconds,
+send, wait for the reply, then play it. Browser audio is converted to mono 16 kHz PCM16 WAV; Kokoro returns 24 kHz WAV.
+Long replies stay complete in chat, with the first 600 characters spoken. Stop/navigation cancels requests and
+playback and releases the microphone; late responses cannot begin a new playback. Cancelling after a Coach request
+has reached the server may still leave its text reply saved. A browser lock prevents a voice turn and camera
+workout from running together in cooperating tabs. The worker admits one inference at a time and returns 429 when
+busy rather than accumulating an unbounded queue. Production concurrency needs measured capacity and a queue.
+
+The worker never receives Claude/Clerk keys, account IDs, stored history or health records. It receives only the
+current recording or spoken reply and does not persist audio. The main API verifies the caller owns the stored
+assistant reply before synthesis. HTTPS protects public device traffic; the private worker uses its own bearer
+secret. Phone apps use the browser handoff; Mac remains a local demo and can open the same website. Native recording
+and wiring this speech service into the separate pose-coach iframe are not included in this implementation.
+
+### RAM and deployment budget
+
+These are **planning estimates, not measured RAM or latency on this build**, for short utterances with Claude
+hosted externally. Model-file size is not total process memory.
+
+| Component / use | Budget |
+|---|---|
+| Speech worker, one active inference | **16 GB RAM recommended**, 4 CPU cores as a starting point |
+| Smaller experimental worker | 8 GB RAM may fit; benchmark startup peaks and real utterances before choosing it |
+| Main API, separate from speech | Start with 1–2 GB RAM; measure memory/context traffic under demo load |
+| Phone/browser | No model-weight RAM allocation: only recording, UI and playback buffers |
+| Optional GPU deployment | Start testing with 8 GB VRAM plus 16 GB host RAM; requires a CUDA image instead of the supplied CPU image |
+
+NVIDIA lists at least 2 GB just to load Parakeet; its FP32 checkpoint is about 2.51 GB. Kokoro's checkpoint is about
+327 MB. Python/PyTorch, the ASR frontend, phonemizer, activations and startup copies all add overhead. More RAM alone
+does not guarantee low latency; CPU throughput is a separate limit. Scale from measured concurrent-turn latency,
+peak resident memory and cold-start time, not from checkpoint sizes.
+
+### Deploy the speech service
+
+1. Create a **Render Private Service**, Docker runtime, same region/network as the backend. Root directory:
+   `inference/speech-worker`; Dockerfile: `./Dockerfile`; context: `.`. The image is CPU-only, Python 3.11, and
+   downloads the model/voice weights during its build. Allow several GB of build storage and a longer first build.
+   Keep one Uvicorn worker; multiple workers would each load both models.
+2. Set `PORT=8095`, `SPEECH_DEVICE=cpu`, `SPEECH_CPU_THREADS=4`, and a random `SPEECH_WORKER_TOKEN` of at least
+   32 characters. Generate one privately with `python -c 'import secrets; print(secrets.token_urlsafe(32))'`.
+   `/health` answers after both models and the voice finish loading.
+3. On the existing API service, set `SPEECH_WORKER_URL=http://<private-hostname>:8095` and the same
+   `SPEECH_WORKER_TOKEN`, then redeploy. Keep the API's shared `ANTHROPIC_API_KEY` or a user's own Claude key.
+   Never put the worker token or internal URL in public frontend environment variables.
+4. Sign in, open Coach, and choose **Record message**. A connected ElevenLabs agent takes priority automatically.
+   The frontend needs rebuilding to include these controls. Native phone handoff uses `EXPO_PUBLIC_WEB_APP_URL`.
+
+Local Docker build: `docker build -t rhythm-speech inference/speech-worker` from the repository root.
+Run with a private env file containing `SPEECH_WORKER_TOKEN`:
+`docker run --rm -p 127.0.0.1:8095:8095 --env-file /absolute/private/speech.env rhythm-speech`.
+For local development only, the main API can use `SPEECH_WORKER_URL=http://127.0.0.1:8095`.
+
+API/worker contract and routing tests use fake inference, with no paid requests or model downloads. A headless
+Chromium check uses a synthetic microphone and real MediaRecorder/resampling to verify one turn, reply playback,
+and cancellation of late speech: run `node scripts/voice-browser-check.mjs` from `mobile/` with the extension's
+Vite/Playwright dependencies installed. Its app shell and inference are fixtures, not live account/model tests. The Docker
+engine was unavailable during implementation, so the full image/model startup, speech accuracy, device microphone
+playback and memory/latency benchmark remain deployment checks. Do not describe this as a measured realtime system.
+
+Model attribution and technical references: [NVIDIA Parakeet (CC BY 4.0)](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3),
+[Kokoro by hexgrad (Apache 2.0)](https://huggingface.co/hexgrad/Kokoro-82M),
+[NeMo ASR inference](https://docs.nvidia.com/nemo/speech/nightly/asr/inference.html),
+[Render Private Services](https://render.com/docs/private-services).
 
 ## Later phases (not built yet — no placeholder buttons in the app)
 
@@ -607,10 +893,49 @@ backend without changing core screens.
 
 | Capability | Boundary / approach | What's needed |
 |---|---|---|
-| Voice input & spoken replies | New `/coach/voice` endpoint: speech-to-text → existing coach → text-to-speech | `expo-audio` (works in Expo Go) + an STT/TTS provider (none configured) |
+| Native voice recording | Reuse `/voice/transcribe`, existing `/coach/messages`, and `/voice/speech/{messageId}` | Native audio capture/playback; current demo opens browser voice |
 | Recorded exercise analysis | Upload clip → backend job → results saved alongside an activity session | `expo-camera`/`expo-image-picker`; a pose-estimation model for *measured* joint angles/reps, kept separate from any language-model *interpretation*; confidence + "poor camera view" handling |
 | Live coaching (real-time A/V) | Separate streaming service; core screens don't depend on it | A low-latency model endpoint (none available; MiniCPM isn't installed locally) and a WebRTC transport. No live-performance claims until measured |
 | SMPL-X bodies / Blender characters | Export from Blender 5.2.2 (installed) as glTF; render with `expo-gl` + three.js (a development build is likely needed) | SMPL-X requires registering for its research licence (non-commercial terms); no SMPL-X or character assets exist in this repo yet |
 
 Local hardware checked: Apple M3, 16 GB RAM. Local models available through Ollama: gemma3:4b (vision-capable),
 gemma3n, qwen3 (0.6b–4b), mistral. No paid GPU services are provisioned.
+
+
+## Device downloads, ElevenLabs and monthly health reports
+
+The website navigation detects Windows, macOS, Android and iPhone/iPad locally and opens **Download for …**.
+The download screen has a manual platform choice and browser shortcut instructions while builds are unavailable.
+Set `EXPO_PUBLIC_DOWNLOAD_WINDOWS_URL`, `EXPO_PUBLIC_DOWNLOAD_MAC_URL`, `EXPO_PUBLIC_DOWNLOAD_ANDROID_URL` and
+`EXPO_PUBLIC_DOWNLOAD_IPHONE_URL` to real HTTPS release/store links when ready. Blank or invalid URLs offer no
+fake download. `EXPO_PUBLIC_WEB_APP_URL` is the public HTTPS website used by phone voice-Coach handoff.
+
+**Profile → AI connections** accepts an ElevenLabs API key and agent ID. The backend checks agent access and
+signed-session permission without starting a paid conversation, then encrypts the account-owned key with the same
+storage used for Claude. Only `api.elevenlabs.io` receives that key. The client receives a short-lived signed URL
+on an authenticated POST; it is never cached or persisted. Voice sessions start only on an explicit Start action.
+ElevenLabs account limits, enabled client events, allowed domains and agent tool configuration still apply.
+The agent's Rhythm MCP connection is separate: use a private, single-account agent with a scoped connection token;
+never put a user's bearer token into a publicly shared agent. The app does not automatically provision or change
+an ElevenLabs workspace. Disconnect and account erasure remove stored keys.
+
+Coach and embedded camera check `/connections/access` before mounting and periodically thereafter. Text messages
+use the caller's own Claude credential or the server's shared demo Claude. A setup link or
+an unused MCP token does not unlock built-in inference. External ChatGPT/Claude usage remains inside those assistants.
+The website supports ElevenLabs text/voice; phone and Mac offer website handoff, with no native voice SDK in this demo.
+Mac remains a local demo and requires its own verified, memory-only Claude key for local Coach.
+
+Calendar projects Apple Watch workouts and sleep from `health_days` without writing duplicate journal records.
+Watch uploads now include optional sleep timing/stage durations and per-workout minimum/maximum heart rate alongside
+average heart rate. Deploy backend migration **0013** before installing the updated Watch build. Older Watch uploads
+remain accepted; old records cannot acquire stage/range data until a newer Watch sync supplies it. Sleep stays on the
+Watch's night-ending date. Stage totals can overlap across HealthKit sources and are displayed separately.
+
+The month-end calendar marker and **Monthly health report** summarize logged meals, app workouts/sets, Watch workouts
+by type, sleep, available daily health metrics, check-ins and plan completion. `/calendar/report?month=YYYY-MM&timezone=…`
+recomputes owned data on demand, so delayed uploads appear automatically. It is marked in progress until the month
+ends in that timezone; no external scheduler or AI call is involved. Watch averages exclude partial days. Demo journal
+entries are excluded, missing readings stay missing, and app/Watch workout totals stay separate because they may overlap.
+The web report downloads as JSON; web and phone can copy it. Health-rich calendar/report queries are excluded from
+device query persistence. Viewing your own report does not enable sharing health data with AI. Mac shows only its
+local demo report and explicitly marks Watch metrics unavailable.

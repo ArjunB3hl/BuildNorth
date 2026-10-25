@@ -1,47 +1,95 @@
+import { AIConnectionGate } from '@/components/ai-connection-gate';
+import { ElevenLabsChat } from '@/components/coach/elevenlabs-chat';
+import { SpeechChat } from '@/components/coach/speech-chat';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useIsFocused, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
-import { Accent, Button, Notice } from '@/components/form';
-import { ThemedText } from '@/components/themed-text';
-import { Card, ErrorState, errorMessage, Loading, Pill, Row } from '@/components/ui';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Composer } from '@/components/coach/composer';
+import { ChatColumnWidth } from '@/components/coach/layout';
+import { ConversationSkeleton, FailedReply, MessageItem, PendingReply, UserMessage } from '@/components/coach/message';
+import { ScrollToLatest } from '@/components/coach/scroll-to-latest';
+import { useScreenReaderRef } from '@/components/coach/use-screen-reader';
+import { CoachWelcome } from '@/components/coach/welcome';
+import { Button, Notice } from '@/components/form';
+import { ErrorState, errorMessage } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
 import { useBottomBarInset } from '@/hooks/use-bottom-bar-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
+import { confirmAction } from '@/lib/confirm';
+import { newKey } from '@/lib/keys';
 import { localDate } from '@/lib/dates';
-import type { CoachContext, CoachMessage, Suggestion } from '@/lib/types';
+import type { AIAccess, CoachMessage } from '@/lib/types';
 
-const STARTERS = ['What should I cook tonight?', 'Plan a 20-minute workout I can do at home', 'Help me plan meals for tomorrow'];
+const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
+  const focused = useIsFocused();
+  return focused ? <AIConnectionGate>{access => <ConnectedCoach key={access.voiceProvider ?? 'text'} claude={access.textChat} provider={access.voiceProvider} />}</AIConnectionGate> : null;
+}
+
+function ConnectedCoach({ claude, provider }: { claude: boolean; provider: AIAccess['voiceProvider'] }) {
+  const [voice, setVoice] = useState(!!provider);
+  return <View style={{ flex: 1 }}>
+    {claude && provider ? <View style={{ padding: 12 }}><Button title={voice ? 'Switch to text chat' : 'Switch to voice Coach'} variant="secondary" onPress={() => setVoice(!voice)} /></View> : null}
+    {provider && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}>{provider === 'elevenlabs' ? <ElevenLabsChat /> : <SpeechChat />}</ScrollView> : <ClaudeCoach />}
+  </View>;
+}
+
+function ClaudeCoach() {
+  const router = useRouter();
   const api = useApi();
   const theme = useTheme();
   const headerHeight = useHeaderHeight();
   const composerInset = useBottomBarInset();
+  const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const listRef = useRef<FlatList<CoachMessage>>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const turnKey = useRef({ text: '', key: '' });
   const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState<{ text: string; error: unknown } | null>(null);
+  // Replies that arrived in this session are written out block by block; older ones just appear.
+  const [freshReplies, setFreshReplies] = useState<ReadonlySet<string>>(() => new Set());
+  const screenReader = useScreenReaderRef();
+
+  // Wide web pages indent replies under the coach's name and lay out starters in two columns.
+  const wide = web && width >= 720;
+  const gutter = web && width >= 600 ? Spacing.four : Spacing.three;
 
   const status = useQuery({ queryKey: ['status'], queryFn: api.status, staleTime: 60_000 });
+  const claude = useQuery({ queryKey: ['claude-connection'], queryFn: api.connections.claude });
   const history = useQuery({ queryKey: ['coach'], queryFn: api.coach.history });
-  const aiUnavailable = status.data && !status.data.aiAvailable;
+  const aiUnavailable = claude.data?.configured ? !claude.data.usable : !!status.data && !status.data.aiAvailable;
 
   const send = useMutation({
     mutationFn: (text: string) => {
       abortRef.current = new AbortController();
-      return api.coach.send(text, localDate(), abortRef.current.signal);
+      if (turnKey.current.text !== text) turnKey.current = { text, key: newKey() };
+      return api.coach.send(text, localDate(), abortRef.current.signal, turnKey.current.key);
     },
     onMutate: () => setFailed(null),
     onSuccess: (result) => {
+      if (!screenReader.current) setFreshReplies((ids) => new Set(ids).add(result.reply.id));
       queryClient.setQueryData<{ messages: CoachMessage[] }>(['coach'], (old) => ({
         messages: [...(old?.messages ?? []), result.userMessage, result.reply],
       }));
+      turnKey.current = { text: '', key: '' };
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
       setDraft(''); // cleared only once the reply is safely stored
     },
     onError: (error, text) => {
@@ -58,14 +106,59 @@ export default function CoachScreen() {
   });
 
   const messages = history.data?.messages ?? [];
+  // Only the newest reply's orb keeps turning; older ones stay still.
+  const latestReplyId = messages.findLast((m) => m.role === 'assistant')?.id;
+  // When the history first loads, only its last couple of messages fade in (no cascade through the rest).
+  const [entering, setEntering] = useState<string[] | null>(null);
+  if (entering === null && history.data) setEntering(history.data.messages.slice(-2).map((m) => m.id));
+  const [awayFromEnd, setAwayFromEnd] = useState(false);
+  const autoScrollAt = useRef(0);
+  // Follow the end of the conversation (on first load and as replies arrive) unless the user has scrolled up to read.
+  const followEnd = useRef(true);
+  const scrollToEnd = (animated: boolean) => {
+    autoScrollAt.current = Date.now();
+    setAwayFromEnd(false);
+    // The scroll view's own scrollToEnd uses the real content height; the list's version relies on
+    // measured rows and lands short (or at the top) while rows are still being laid out.
+    const scroller = listRef.current?.getNativeScrollRef() as { scrollToEnd?: (options: { animated: boolean }) => void } | null | undefined;
+    if (scroller?.scrollToEnd) scroller.scrollToEnd({ animated });
+    else listRef.current?.scrollToEnd({ animated });
+  };
   useEffect(() => {
-    if (messages.length) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-  }, [messages.length, send.isPending]);
+    if (!messages.length && !send.isPending && !failed) return;
+    followEnd.current = true;
+    setTimeout(() => scrollToEnd(true), 50);
+  }, [messages.length, send.isPending, failed]);
+  const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+    const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    followEnd.current = distance <= 80;
+    // Scrolls this screen makes itself (to follow a new reply) don't summon the "latest" button.
+    if (Date.now() - autoScrollAt.current > 700) setAwayFromEnd(distance > 240);
+  };
+  const jumpToLatest = () => {
+    followEnd.current = true;
+    scrollToEnd(true);
+  };
 
   const submit = (text = draft) => {
     const content = text.trim();
     if (content && !send.isPending) send.mutate(content);
   };
+
+  const confirmClear = async () => {
+    const confirmed = await confirmAction({
+      title: 'Clear conversation?',
+      message: 'This deletes your chat history with the coach. Saved recipes, routines and preferences stay.',
+      confirmLabel: 'Clear',
+      destructive: true,
+    });
+    if (confirmed) clear.mutate();
+  };
+
+  const showHeader = true;
+  const showWelcome = !!history.data && messages.length === 0 && !send.isPending && !failed;
+  const column = { paddingHorizontal: gutter, maxWidth: ChatColumnWidth + gutter * 2 };
 
   return (
     <KeyboardAvoidingView
@@ -75,230 +168,107 @@ export default function CoachScreen() {
       <Stack.Screen
         options={{
           headerRight: () =>
-            messages.length ? (
-              <Button
-                title="Clear"
-                size="small"
-                variant="quiet"
-                onPress={() =>
-                  Alert.alert('Clear conversation?', 'This deletes your chat history with the coach. Saved recipes, routines and preferences stay.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Clear', style: 'destructive', onPress: () => clear.mutate() },
-                  ])
-                }
-              />
-            ) : null,
+            messages.length ? <Button title="Clear" size="small" variant="quiet" loading={clear.isPending} onPress={confirmClear} /> : null,
         }}
       />
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.list}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            {aiUnavailable ? (
-              <Notice tone="error">
-                The coach is unavailable right now. Meals, activity and your plan still work.
-                {__DEV__ && status.data?.aiUnavailableReason ? `\n(dev: ${status.data.aiUnavailableReason})` : ''}
-              </Notice>
-            ) : null}
-            {history.isPending ? <Loading label="Loading conversation…" /> : null}
-            {history.isError && !history.data ? <ErrorState error={history.error} onRetry={() => history.refetch()} /> : null}
-            {history.data && messages.length === 0 ? (
-              <Card>
-                <ThemedText type="smallBold">Your personal coach</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Ask about meals, cooking or routines. The coach uses your profile, saved preferences, long-term memory and
-                  the recipes, routines and plan you ask about. It can suggest recipes and workouts, but nothing is saved
-                  unless you choose to. It isn&apos;t medical advice.
-                </ThemedText>
-                {STARTERS.map((s) => (
-                  <Button key={s} title={s} size="small" variant="secondary" onPress={() => submit(s)} disabled={!!aiUnavailable || send.isPending} />
-                ))}
-              </Card>
-            ) : null}
-          </View>
-        }
-        renderItem={({ item }) => <MessageBubble message={item} />}
-        ListFooterComponent={
-          <View style={styles.footerBlock}>
-            {send.isPending ? (
-              <>
-                <Bubble role="user" text={send.variables ?? ''} />
-                <Row style={styles.thinking}>
-                  <ActivityIndicator />
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.fill}>
-                    Coach is thinking… this can take up to a minute.
-                  </ThemedText>
-                  <Button title="Cancel" size="small" variant="quiet" onPress={() => abortRef.current?.abort()} />
-                </Row>
-              </>
-            ) : null}
-            {failed ? (
-              <View style={styles.failed}>
-                <Notice tone="error">{errorMessage(failed.error)}</Notice>
-                <Button title="Retry" size="small" variant="secondary" onPress={() => submit(failed.text)} />
+      <View style={styles.fill}>
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={[styles.list, column, showWelcome && styles.grow]}
+          keyboardShouldPersistTaps="handled"
+          onScroll={onScroll}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            // The welcome reads from the top; only a conversation follows its end.
+            if (followEnd.current && !showWelcome) scrollToEnd(false);
+          }}
+          ListHeaderComponent={
+            showHeader ? (
+              <View style={styles.headerBlock}>
+                <Button title={claude.data?.usable ? 'Your Claude key · AI settings' : claude.data?.sharedAvailable ? 'Demo Claude included · AI settings' : 'Connect Claude or ChatGPT'} size="small" variant="quiet" onPress={() => router.push('/profile/connections')} />
+                {aiUnavailable ? (
+                  <Notice tone="error">
+                    Connect a Claude API key in AI settings to use Coach. Your Calendar and saved content still work.
+                  </Notice>
+                ) : null}
+                {clear.isError ? <Notice tone="error">{errorMessage(clear.error)}</Notice> : null}
+                {history.isPending ? <ConversationSkeleton wide={wide} /> : null}
+                {history.isError && !history.data ? <ErrorState error={history.error} onRetry={() => history.refetch()} /> : null}
               </View>
-            ) : null}
-          </View>
-        }
-      />
+            ) : null
+          }
+          ListEmptyComponent={
+            showWelcome ? (
+              <View style={styles.welcome}>
+                <CoachWelcome onSelect={submit} disabled={aiUnavailable} wide={wide} />
+              </View>
+            ) : null
+          }
+          extraData={[freshReplies, latestReplyId]}
+          renderItem={({ item }) => {
+            const enter = entering?.indexOf(item.id) ?? -1;
+            return (
+              <MessageItem message={item} wide={wide} reveal={freshReplies.has(item.id)} enter={enter >= 0 ? enter : null}
+                latest={item.id === latestReplyId} />
+            );
+          }}
+          ListFooterComponent={
+            send.isPending || failed ? (
+              <View style={styles.turn}>
+                {send.isPending ? (
+                  <>
+                    <UserMessage text={send.variables ?? ''} enter={0} />
+                    <PendingReply wide={wide} onCancel={() => abortRef.current?.abort()} />
+                  </>
+                ) : failed ? (
+                  <>
+                    <UserMessage text={failed.text} faded enter={0} />
+                    <FailedReply error={failed.error} wide={wide} onRetry={() => submit(failed.text)} />
+                  </>
+                ) : null}
+              </View>
+            ) : null
+          }
+        />
+        {awayFromEnd && messages.length ? <ScrollToLatest onPress={jumpToLatest} /> : null}
+      </View>
       <View
         style={[
-          styles.composer,
-          { borderTopColor: theme.backgroundSelected, backgroundColor: theme.background, paddingBottom: composerInset },
+          styles.composerBar,
+          { backgroundColor: theme.background, paddingHorizontal: gutter, paddingBottom: web ? Spacing.three : composerInset },
+          !web && { borderTopColor: theme.backgroundSelected, borderTopWidth: StyleSheet.hairlineWidth },
         ]}>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={aiUnavailable ? 'Coach unavailable' : 'Message your coach'}
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          maxLength={4000}
-          editable={!aiUnavailable}
-          accessibilityLabel="Message to coach"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        />
-        <Button title="Send" onPress={() => submit()} disabled={!draft.trim() || !!aiUnavailable} loading={send.isPending} />
+        <View style={[styles.composerColumn, { maxWidth: ChatColumnWidth }]}>
+          <Composer
+            value={draft}
+            onChangeText={setDraft}
+            onSend={() => submit()}
+            unavailable={aiUnavailable}
+            sending={send.isPending}
+            showHint={wide}
+          />
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-function Bubble({ role, text }: { role: 'user' | 'assistant'; text: string }) {
-  const theme = useTheme();
-  const mine = role === 'user';
-  return (
-    <View
-      style={[styles.bubble, mine ? styles.mine : styles.theirs, { backgroundColor: mine ? Accent : theme.backgroundElement }]}
-      accessibilityLabel={`${mine ? 'You' : 'Coach'}: ${text}`}>
-      <ThemedText style={mine ? styles.mineText : undefined}>{text}</ThemedText>
-    </View>
-  );
-}
-
-function MessageBubble({ message }: { message: CoachMessage }) {
-  return (
-    <View style={styles.messageBlock}>
-      <Bubble role={message.role} text={message.content} />
-      {message.role === 'assistant' && message.context ? <ContextLine context={message.context} /> : null}
-      {message.suggestions.map((s, i) => (
-        <SuggestionCard key={`${message.id}-${i}`} suggestion={s} />
-      ))}
-    </View>
-  );
-}
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
-/** What a reply was built from. A reply made without long-term memory says so instead of passing as fully personalized. */
-function ContextLine({ context }: { context: CoachContext }) {
-  if (context.memory !== 'ok') {
-    return (
-      <View style={styles.contextLine}>
-        <Notice tone="warning">
-          {context.memory === 'unavailable'
-            ? 'Long-term memory couldn’t be checked for this reply. It used only your profile and the preferences saved in the app.'
-            : 'Long-term memory isn’t set up, so this reply used only your profile and the preferences saved in the app.'}
-        </Notice>
-      </View>
-    );
-  }
-  const parts = [
-    context.preferences ? plural(context.preferences, 'saved preference') + (context.recalled ? ` (${context.recalled} recalled)` : '') : null,
-    context.recipes ? plural(context.recipes, 'recipe') : null,
-    context.routines ? plural(context.routines, 'routine') : null,
-    context.planItems ? 'this week’s plan' : null,
-  ].filter(Boolean);
-  return (
-    <ThemedText type="small" themeColor="textSecondary" style={styles.contextLine}>
-      {`Memory checked${parts.length ? ` · used ${parts.join(' · ')}` : ' · nothing saved was relevant'}`}
-    </ThemedText>
-  );
-}
-
-/** Suggestions only turn into saved data after the user reviews or confirms them. */
-function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
-  const api = useApi();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const remember = useMutation({
-    mutationFn: () => api.preferences.add(suggestion.content, 'coach'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
-  });
-
-  const label = { recipe: 'Recipe idea', routine: 'Routine idea', preference: 'Preference' }[suggestion.type];
-  return (
-    <Card style={styles.suggestion}>
-      <Pill label={label} tone="accent" />
-      <ThemedText type="smallBold">{suggestion.title}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" numberOfLines={6}>
-        {suggestion.content}
-      </ThemedText>
-      {suggestion.type === 'recipe' ? (
-        <Button
-          title="Review and save recipe"
-          size="small"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/meals/import', params: { text: `${suggestion.title}\n${suggestion.content}`, source: 'coach' } })}
-        />
-      ) : null}
-      {suggestion.type === 'routine' ? (
-        <Button
-          title="Review and save routine"
-          size="small"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/activity/import', params: { text: `${suggestion.title}\n${suggestion.content}` } })}
-        />
-      ) : null}
-      {suggestion.type === 'preference' ? (
-        remember.isSuccess ? (
-          <Notice tone="success">Saved to your preferences.</Notice>
-        ) : (
-          <>
-            {remember.isError ? <Notice tone="error">{errorMessage(remember.error)}</Notice> : null}
-            <Button
-              title="Remember this"
-              size="small"
-              variant="secondary"
-              loading={remember.isPending}
-              onPress={() =>
-                Alert.alert('Remember this preference?', suggestion.content, [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Remember', onPress: () => remember.mutate() },
-                ])
-              }
-            />
-          </>
-        )
-      ) : null}
-    </Card>
-  );
-}
-
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  list: { padding: Spacing.three, gap: Spacing.two, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' },
-  headerBlock: { gap: Spacing.three, marginBottom: Spacing.two },
-  footerBlock: { gap: Spacing.two, marginTop: Spacing.two },
-  messageBlock: { gap: Spacing.two },
-  bubble: { maxWidth: '85%', borderRadius: 16, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  mine: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  theirs: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
-  mineText: { color: '#ffffff' },
-  suggestion: { marginLeft: Spacing.three },
-  contextLine: { marginLeft: Spacing.one, maxWidth: '85%' },
-  thinking: { paddingHorizontal: Spacing.one },
-  failed: { gap: Spacing.two },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.two,
-    padding: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  list: {
+    width: '100%',
+    alignSelf: 'center',
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.four,
+    gap: Spacing.four,
   },
-  input: { flex: 1, minHeight: 48, maxHeight: 140, borderRadius: 12, paddingHorizontal: Spacing.three, paddingTop: 12, paddingBottom: 12, fontSize: 16 },
+  grow: { flexGrow: 1 },
+  headerBlock: { gap: Spacing.three },
+  welcome: { flexGrow: 1, justifyContent: 'center' },
+  turn: { gap: Spacing.four },
+  composerBar: { paddingTop: Spacing.two },
+  composerColumn: { width: '100%', alignSelf: 'center' },
 });

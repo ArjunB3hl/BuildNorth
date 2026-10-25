@@ -1,3 +1,4 @@
+import { CalendarScreen } from './screens/calendar';
 import { StyleSheet, View } from 'react-native';
 
 import { Sidebar } from './components/sidebar';
@@ -9,6 +10,8 @@ import {
   SessionScreen,
 } from './screens/activity';
 import { CoachScreen } from './screens/coach';
+import { ConnectionsScreen } from './screens/connections';
+import { ClaudeDemoProvider } from './lib/claude-demo';
 import { MealsScreen, RecipeScreen, ShoppingScreen } from './screens/meals';
 import { MemoryScreen, ProfileScreen } from './screens/profile';
 import { TodayScreen } from './screens/today';
@@ -17,9 +20,11 @@ import { useTheme } from './theme';
 export default function App() {
   return (
     <StoreProvider>
+      <ClaudeDemoProvider>
       <NavigationProvider>
         <Shell />
       </NavigationProvider>
+      </ClaudeDemoProvider>
     </StoreProvider>
   );
 }
@@ -49,12 +54,16 @@ function CurrentPage() {
       return <SessionScreen key={route.id} id={route.id} />;
     case 'memory':
       return <MemoryScreen />;
+    case 'connections':
+      return <ConnectionsScreen />;
     case 'root':
       switch (section) {
         case 'today':
           return <TodayScreen />;
         case 'coach':
           return <CoachScreen />;
+        case 'calendar':
+          return <CalendarScreen />;
         case 'meals':
           return <MealsScreen />;
         case 'activity':

@@ -1,0 +1,18 @@
+{
+  "name": "rhythm-minicpm-o-__IMAGE_VERSION__-__IMAGE_DIGEST12__",
+  "imageName": "__IMAGE_REF__",
+  "containerRegistryAuthId": "__RUNPOD_REGISTRY_AUTH_ID__",
+  "category": "NVIDIA",
+  "isServerless": false,
+  "isPublic": false,
+  "containerDiskInGb": 40,
+  "volumeInGb": 0,
+  "volumeMountPath": "/workspace",
+  "ports": ["8000/http", "22/tcp"],
+  "dockerEntrypoint": [],
+  "dockerStartCmd": [],
+  "env": {
+    "RHYTHM_API_TOKEN": "{{ RUNPOD_SECRET_rhythm_api_token }}"
+  },
+  "readme": "MiniCPM-o 4.5 (PyTorch streaming backend) for Rhythm. One worker, one session. Needs a 48 GB NVIDIA GPU (driver R570+, CUDA 12.8+) and the network volume with the staged model at /workspace. Public: https://<POD_ID>-8000.proxy.runpod.net (bearer token). SSH: TCP 22. See inference/minicpm-o/README.md."
+}

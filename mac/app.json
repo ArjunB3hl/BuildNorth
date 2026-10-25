@@ -1,7 +1,8 @@
 {
   "name": "NorthAssistant",
-  "displayName": "NorthAssistant",
+  "displayName": "Rhythm",
   "extra": {
+    "buildNorthWebUrl": "http://localhost:8081",
     "eas": {
       "projectId": "c025aaa2-0126-4184-a7c7-06859b2e3283"
     }

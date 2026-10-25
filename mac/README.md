@@ -1,16 +1,16 @@
-# BuildNorth for Mac
+# Rhythm for Mac — Demo version
 
-A native macOS version of the BuildNorth iPhone app, built with React Native for macOS plus parts of Expo SDK 55.
-The UI mirrors the iPhone app: the same five sections, design tokens, components and API data types, with a Mac
+A native macOS version of the Rhythm iPhone app, built with React Native for macOS plus parts of Expo SDK 55.
+The UI uses Today, Coach, Calendar and Profile, shared design tokens, components and API data types, with a Mac
 sidebar instead of a tab bar.
 
-**Status:** runs on sample data saved on this Mac. It is **not connected to the BuildNorth backend** yet (no Clerk
-sign-in), so the Coach can't reply and its message box is disabled, as on iPhone when the AI service is unavailable.
+**Status:** demo version using data saved on this Mac. Live account syncing is not connected. Coach can use a
+judge-provided Claude API key from Profile → AI connections; the key stays in memory until disconnect or quit.
 
 | | |
 |---|---|
 | Project | `mac/` in the BuildNorth repository (`~/Developer/BuildNorth/mac`); the Expo iPhone app and backend are in `mobile/` |
-| App | `NorthAssistant.app`, bundle ID `org.reactjs.native.NorthAssistant`, window title "BuildNorth", macOS 14+ |
+| App | `Rhythm.app`, bundle ID `org.reactjs.native.NorthAssistant`, window title "Rhythm · Demo version", macOS 14+ |
 | React Native | `react-native` 0.83.10 + `react-native-macos` 0.83.0 (Microsoft), Hermes, New Architecture (Fabric) |
 | Expo | SDK 55 (`expo` 55.0.31): Expo CLI dev server and bundler, `expo-sqlite`, `expo-crypto`, `expo-constants`, `expo-asset`, and a local Expo module (`modules/north-mac`) |
 | Native toolchain | Xcode 27.1, CocoaPods 1.15.2 through Bundler on Homebrew Ruby 3.4 |
@@ -114,7 +114,7 @@ xcodebuild -workspace NorthAssistant.xcworkspace -scheme NorthAssistant-macOS -c
   CODE_SIGN_IDENTITY=- build
 ```
 
-The app is written to `macos/build/DerivedData/Build/Products/Release/NorthAssistant.app`. A Release build embeds
+The app is written to `macos/build/DerivedData/Build/Products/Release/Rhythm.app`. A Release build embeds
 the JavaScript as Hermes bytecode (`Contents/Resources/main.jsbundle`), bundled by Expo CLI's `export:embed`, so it
 runs without the dev server.
 
@@ -134,7 +134,7 @@ macOS machine:
 3. `bundle install`, then `bundle exec pod install` in `macos/`.
 4. The Release `xcodebuild` above, for arm64, signed ad hoc.
 5. The app is zipped with `ditto`. Two artifacts are uploaded: the `.app` as the build's application archive,
-   and `NorthAssistant-macOS.zip` as a build artifact.
+   and `Rhythm-macOS.zip` as a build artifact.
 
 The `macos` profile in `eas.json` pins the image `macos-tahoe-26.6-xcode-27.1` (the same Xcode build as this Mac,
 27A9275), Node 22.23.3, Bundler 2.6.9 and the `medium` resource class.
@@ -190,12 +190,12 @@ EAS_NO_VCS=1 npx eas-cli@latest build:download --build-id <id> --all-artifacts
 
 It prints both paths in eas-cli's temporary cache:
 - the extracted app, named `<project id>_<build id>.app`
-- the zip, named `artifacts-<build id>.zip`, which is the uploaded `NorthAssistant-macOS.zip`
+- the zip, named `artifacts-<build id>.zip`, which is the uploaded `Rhythm-macOS.zip`
 
 Copy the app somewhere permanent with `ditto`, giving it its real name, for example:
 
 ```bash
-ditto "<printed .app path>" ~/Downloads/NorthAssistant-EAS/NorthAssistant.app
+ditto "<printed .app path>" ~/Downloads/NorthAssistant-EAS/Rhythm.app
 ```
 
 On expo.dev these builds appear as iOS builds (store distribution) under the template's iOS bundle ID; that is
@@ -210,7 +210,7 @@ Builds are signed ad hoc and not notarized. Gatekeeper only blocks a copy that c
   normally.
 - **Flagged:** copies downloaded in a browser, or sent by AirDrop, Mail or Messages. These are blocked until you
   allow them in System Settings › Privacy & Security › *Open Anyway*, or run
-  `xattr -dr com.apple.quarantine NorthAssistant.app`.
+  `xattr -dr com.apple.quarantine Rhythm.app`.
 
 Moving a copy to another Mac hasn't been tested. Distributing it properly needs an Apple Developer ID
 certificate and notarization, which aren't set up.
@@ -398,6 +398,23 @@ npx jest
 | eas-cli asks about git or uploads the whole repository | Set `EAS_NO_VCS=1` |
 
 ## What was tested
+
+### Calendar and connections, 2026-10-25
+
+- Inspected the native Mac UI: Today, recipe details, Calendar month grid, Movement filter, monthly report,
+  AI connections and the disconnected Coach screen.
+- Fixed Calendar's editor opening below the month grid and report. Opening an entry now shows a dedicated
+  editor; cancel and save return to the calendar at the top. Verified empty-title validation and saving an
+  existing demo entry unchanged in the native UI.
+- The ElevenLabs website button opened the configured local website's AI connections page in Chrome,
+  with Claude and ElevenLabs setup forms visible.
+- TypeScript and ESLint passed. All three Jest suites passed, including mocked Claude verification, chat,
+  disconnect and fresh-session gating, plus Calendar editing and library navigation.
+- No real provider key or paid AI conversation was used. Mac remains a local demo: live Watch workout,
+  heart-rate and sleep syncing is available through the signed-in website and phone, not this Mac calendar.
+  Native ElevenLabs voice is a website handoff.
+
+### Earlier native and release validation
 
 Tested on 2026-10-19 and 20 on an Apple M3 MacBook Air (macOS 27, Xcode 27.1):
 - **Debug builds:** built and launched after each change. JavaScript came from `expo start` on port 8090 ("macos

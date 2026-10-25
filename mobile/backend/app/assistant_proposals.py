@@ -1,10 +1,10 @@
 """Changes proposed by external assistants over MCP, and how they get approved and applied.
 
-Assistants (OpenCode, ChatGPT, Claude) bring their own models and send *structured* proposals:
+Assistants (ChatGPT, Claude, ElevenLabs) bring their own models and send *structured* proposals:
 plan changes, a recipe to save, or a preference to remember. Nothing here calls the app's own AI.
 Each proposal is validated with the same rules the app uses, stored for the user who is
 authenticated, and shown back as the exact changes. It is applied only after the user approves
-it, in the BuildNorth app or in the assistant's own approval prompt (MCP elicitation), never
+it, in the Rhythm app or in the assistant's own approval prompt (MCP elicitation), never
 because the assistant says so. Applying is transactional and happens at most once; a proposal
 whose targets changed in the meantime is marked stale and nothing is applied.
 """
@@ -104,7 +104,7 @@ class ProposalView(BaseModel):
 
 
 APPROVAL_HINT = (
-    "Nothing has been saved. The user must approve this: in the BuildNorth app (Today -> Waiting for your "
+    "Nothing has been saved. The user must approve this: in the Rhythm app (Today -> Waiting for your "
     "approval), or by calling apply_proposal, which asks the user directly if this assistant supports approval prompts."
 )
 NEXT_STEP = {

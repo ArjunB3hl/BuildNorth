@@ -1,0 +1,93 @@
+# The container's only public listener: plain HTTP on RHYTHM_PUBLIC_PORT (8000), exposed as an HTTP port in the
+# Runpod template, so clients reach it as https://<POD_ID>-8000.proxy.runpod.net (wss:// for the realtime socket);
+# Runpod's proxy terminates TLS. The gateway (8006/8007), worker (22400) and backend (22500) listen on 127.0.0.1.
+#
+# Every request except /healthz and /readyz needs RHYTHM_API_TOKEN, as one of:
+#   Authorization: Bearer <token>      native app / scripts (preferred)
+#   ?access_token=<token>              a browser's first page load; answered with the cookie below so the demo page's
+#                                      own WebSocket is authorized. URLs can end up in proxy logs: use the header form
+#                                      wherever the client can set headers.
+#   Cookie: __Host-rhythm_token=<token>  browsers, accepted only from this Pod's own origin: every
+#                                      <pod>-<port>.proxy.runpod.net host (other people's Pods too) is the same *site*,
+#                                      so SameSite alone would let a page on another Pod use the cookie. A request
+#                                      with a foreign Origin or Sec-Fetch-Site: same-site/cross-site is refused.
+# Only GET/HEAD reach the gateway (the realtime WebSocket upgrade is a GET): the demo's write endpoints (recording
+# uploads to the volume, reference voices, queue/ETA edits, debug traces) are refused here. The demo's /api/admin
+# routes answer 404 on their own (ENABLE_PUBLIC_ADMIN is not set).
+# The entrypoint refuses to start without a token of 32+ URL-safe characters, so the comparisons below never match an
+# empty value.
+{
+	admin off
+	auto_https off
+	persist_config off
+	servers {
+		trusted_proxies static private_ranges
+	}
+	log {
+		level WARN
+	}
+}
+
+:{$RHYTHM_PUBLIC_PORT:8000} {
+	# liveness: the container and Caddy are up (no auth, no details)
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# readiness: 200 only after the model answered the warm-up (the entrypoint writes /run/rhythm/ready)
+	handle /readyz {
+		@ready file {
+			root {$RHYTHM_RUN_DIR:/run/rhythm}
+			try_files /ready
+		}
+		handle @ready {
+			header Content-Type application/json
+			respond `{"status":"ready"}` 200
+		}
+		handle {
+			header Content-Type application/json
+			respond `{"status":"starting"}` 503
+		}
+	}
+
+	@authorized expression `{http.request.header.Authorization} == "Bearer {$RHYTHM_API_TOKEN}" || {http.request.uri.query.access_token} == "{$RHYTHM_API_TOKEN}" || ({http.request.cookie.__Host-rhythm_token} == "{$RHYTHM_API_TOKEN}" && {http.request.header.Origin} in ["", "https://{$RUNPOD_POD_ID}-{$RHYTHM_PUBLIC_PORT:8000}.proxy.runpod.net"] && !({http.request.header.Sec-Fetch-Site} in ["same-site", "cross-site"]))`
+
+	handle @authorized {
+		@token_in_query query access_token=*
+		header @token_in_query Set-Cookie "__Host-rhythm_token={$RHYTHM_API_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Strict"
+		# the login page's URL holds the token: it must not leak into Referer headers of the page's own requests
+		header @token_in_query Referrer-Policy no-referrer
+		# the token never reaches the gateway (or its logs): drop it from the query string here and from the cookie
+		# header below
+		uri query -access_token
+
+		@write not method GET HEAD
+		handle @write {
+			header Content-Type application/json
+			respond `{"error":"method not allowed"}` 405
+		}
+
+		@not_ready not file {
+			root {$RHYTHM_RUN_DIR:/run/rhythm}
+			try_files /ready
+		}
+		handle @not_ready {
+			header Content-Type application/json
+			respond `{"error":"starting","detail":"the model is loading; poll /readyz"}` 503
+		}
+
+		handle {
+			reverse_proxy 127.0.0.1:{$GATEWAY_PORT:8006} {
+				header_up -Authorization
+				header_up -Referer
+				header_up Cookie `__Host-rhythm_token=[^;]*;?\s*` ""
+				flush_interval -1
+			}
+		}
+	}
+
+	handle {
+		header Content-Type application/json
+		respond `{"error":"unauthorized"}` 401
+	}
+}

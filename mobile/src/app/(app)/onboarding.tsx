@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { FormScreen } from '@/components/form';
 import { EMPTY_PROFILE, ProfileForm, type ProfileDraft } from '@/components/profile-form';
 import { ThemedText } from '@/components/themed-text';
+import { Wordmark } from '@/components/wordmark';
 import { useApi } from '@/hooks/use-api';
 
 export default function Onboarding() {
@@ -19,7 +20,8 @@ export default function Onboarding() {
 
   return (
     <FormScreen>
-      <ThemedText type="subtitle">Welcome to BuildNorth</ThemedText>
+      <Wordmark />
+      <ThemedText type="subtitle">Welcome to Rhythm</ThemedText>
       <ThemedText themeColor="textSecondary">
         A few optional details help tailor meals, routines and coaching. Skip anything you like and change it later in Profile.
       </ThemedText>

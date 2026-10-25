@@ -13,17 +13,17 @@ enum APIError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .unauthorized: return "This watch was unlinked. Link it again from BuildNorth on your iPhone."
+    case .unauthorized: return "This watch was unlinked. Link it again from Rhythm on your iPhone."
     case .offline: return "Can't connect. Check your connection and try again."
-    case .unreachable: return "Can't reach the BuildNorth server right now."
-    case .timeout: return "BuildNorth took too long to answer. Try again."
+    case .unreachable: return "Can't reach the Rhythm server right now."
+    case .timeout: return "Rhythm took too long to answer. Try again."
     case .notFound: return "That item couldn't be found. It may have been deleted."
     case .http(422, let detail?) where !detail.hasPrefix("["): return detail
     case .http(422, _): return "Some details need fixing. Try again."
     case .http(409, let detail?): return detail
     case .http(429, _): return "Too many requests. Try again shortly."
     case .http: return "Something went wrong on our side. Try again."
-    case .invalidResponse: return "BuildNorth sent something unexpected. Try again."
+    case .invalidResponse: return "Rhythm sent something unexpected. Try again."
     }
   }
 
@@ -55,8 +55,22 @@ struct APIClient: Sendable {
     return URLSession(configuration: config)
   }()
 
+  func calendar(date: String) async throws -> [CalendarEntry] {
+    try await send("GET", ["watch", "calendar"], query: [
+      URLQueryItem(name: "start", value: date),
+      URLQueryItem(name: "days", value: "1"),
+      URLQueryItem(name: "timezone", value: TimeZone.current.identifier),
+    ])
+  }
+
   func today(date: String) async throws -> WatchToday {
     try await send("GET", ["watch", "today"], query: [URLQueryItem(name: "date", value: date)])
+  }
+
+  /// Validate the phone's token even when no HealthKit data is available to upload.
+  func validateLink() async throws {
+    struct History: Decodable { let days: [HealthDay] }
+    let _: History = try await send("GET", ["watch", "health"], query: [URLQueryItem(name: "days", value: "1")])
   }
 
   func setStatus(itemID: String, status: PlanStatus) async throws -> PlanItem {

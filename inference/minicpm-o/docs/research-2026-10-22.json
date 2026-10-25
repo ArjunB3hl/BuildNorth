@@ -1,0 +1,1111 @@
+[
+ {
+  "key": "model",
+  "summary": "openbmb/MiniCPM-o-4_5 (HF), checked 2026-10-22. The main branch is at sha d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4 (2026-10-16, \"Update README.md\"). The last code change was 1f761131fa83f5ed3cd6f2f22b225c4501d154fa (2026-07-06, modeling_minicpmo.py #18). License is apache-2.0 and the repo is not gated. It has 54 files totalling 20,048,635,793 bytes (20.05 GB / 18.67 GiB). That breaks down as: 4 bf16 safetensors shards, 18.744 GB (9,371,787,666 params; modules llm/vpm/apm/tts/resampler/audio_projection_layer); assets/token2wav vocoder, 1.231 GB, which streaming/TTS needs; about 57 MB of demo media that inference does not need; and custom trust_remote_code files (configuration_minicpmo.py, modeling_minicpmo.py, modeling_navit_siglip.py, processing_minicpmo.py, tokenization_minicpmo_fast.py, utils.py). There are no separate TTS sub-repos: the vocoder (CosyVoice2-style flow + HiFT + s3 speech tokenizer + campplus) is in assets/token2wav. Its Python code comes from the pip package minicpmo-utils[all], which provides the stepaudio2, s3tokenizer and minicpmo modules. Card pins: transformers==4.51.0, torch>=2.3.0,<=2.8.0, torchaudio<=2.8.0, minicpmo-utils[all]>=1.0.5,<=1.0.6, plus accelerate; tested on Python 3.10; ffmpeg for video. flash-attn is optional (attn_implementation 'sdpa' or 'flash_attention_2'). Streaming: full-duplex via model.as_duplex() -> MiniCPMODuplex, then .prepare(...) and a loop of .streaming_prefill(audio_waveform=1s 16kHz chunk, frame_list=[PIL frame]) + .streaming_generate(...) that returns is_listen/text/audio_waveform (24 kHz). Half-duplex streaming via MiniCPMO.streaming_prefill(session_id, msgs, omni_mode, is_last_chunk) + streaming_generate(session_id, generate_audio...). Offline: model.chat(msgs, omni_mode=True, generate_audio=True...). Memory: the card's efficiency table gives 19.0 GB (bf16) and 11.0 GB (int4) GPU memory, with no GPU named. The PyTorch realtime web demo needs an NVIDIA GPU with at least 28 GB; its repo states ~21.5 GB VRAM per worker. llama.cpp-omni needs at least 12 GB on an NVIDIA GPU. Official quantized repos: openbmb/MiniCPM-o-4_5-awq (13.07 GB, older custom code), openbmb/MiniCPM-o-4_5-GPTQ (9.77 GB, W4A16, ~11 GB documented), and openbmb/MiniCPM-o-4_5-gguf (79.97 GB for all files; Q4_K_M LLM 5.03 GB plus audio/vision/tts/token2wav GGUFs). Deployment gotchas: (1) init_tts() downloads assets/token2wav from repo_id \"openbmb/MiniCPM-o-4_5\" with snapshot_download and no revision pin, unless model_dir or a local model path is used. (2) MiniCPMODuplex.from_existing_model loads AutoTokenizer/Processor by name_or_path without a revision. (3) Token2wav hard-codes .cuda() and runs campplus on onnxruntime CPUExecutionProvider. (4) minicpmo-utils 1.0.5–1.0.7 pins librosa==0.9.0, while the demo repo's requirements say librosa>=0.10.2 because 0.9.x breaks under newer setuptools.",
+  "facts": [
+   {
+    "topic": "model id",
+    "fact": "Exact model id: openbmb/MiniCPM-o-4_5 (author openbmb, _id 698201dfab7b5b58466f133c, createdAt 2026-02-03T14:10:39Z, private=false, disabled=false, pipeline_tag any-to-any, library_name transformers, tags include custom_code, onnx, safetensors, minicpmo, full-duplex, arxiv:2408.01800, license:apache-2.0). The card describes it as 9B params built on SigLip2 + Whisper-medium + CosyVoice2 + Qwen3-8B.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "revision",
+    "fact": "Current main-branch commit SHA: d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4 (lastModified 2026-10-16T10:30:03Z, title 'Update README.md'). Previous: 503e754207c94da6bb26850b4469f367c9ea3582 (2026-08-18, README). The history has 65 commits in total; the initial commit is a0b28789837801b80ca674a178cc5cb27843fba8 (2026-02-03).",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5/commits/main",
+    "confirmed": true
+   },
+   {
+    "topic": "revision / code history",
+    "fact": "Last commit touching each code file at d59117d: modeling_minicpmo.py -> 1f761131fa83f5ed3cd6f2f22b225c4501d154fa (2026-07-06, 'Update modeling_minicpmo.py (#18)'); utils.py -> e5bee1cfa357e948f8cad992e5a4a7e5fd158b36 (2026-02-11, 'fix: pass use_audio to get_video_frame_audio_segments'). processing_minicpmo.py, configuration_minicpmo.py, modeling_navit_siglip.py, tokenization_minicpmo_fast.py, config.json, tokenizer_config.json, the weights and assets/token2wav/flow.pt are unchanged since the initial commit a0b28789837801b80ca674a178cc5cb27843fba8. Other notable code commits: b1d22a3ddf11ddb032ec95e2f253503c248f5782 (2026-03-04, 'fix: stream in chat not return early (#16)'); 56772659a354e8424e759e5a8e944db7e6a025d7 (2026-02-11, 'Delete assets/CosyVoice2-0.5B'); 3a6d6af8cad3b2a41ae5bebd8c9637bd987780c8 (2026-02-09, 'feat: use token2wav in non-streaming tts (#7)').",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5/paths-info/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4",
+    "confirmed": true
+   },
+   {
+    "topic": "files (full list, bytes)",
+    "fact": ".gitattributes (3091); .gitignore (9); README.md (85869); added_tokens.json (2706); assets/HT_ref_audio.wav (192590); assets/Skiing.mp4 (8534409); assets/Trump_WEF_2018_10s.mp3 (161053); assets/audio_cases/assistant_ref.mp4 (65478); assets/audio_cases/assistant_response.mp4 (269504); assets/audio_cases/elon_musk__000_assistant_audio.wav (1762604); assets/audio_cases/elon_musk__system_ref_audio.wav (539032); assets/audio_cases/elon_musk_ref.mp4 (165179); assets/audio_cases/elon_musk_response.mp4 (388534); assets/audio_cases/hermione__000_assistant_audio.wav (1534124); assets/audio_cases/hermione__system_ref_audio.wav (197322); assets/audio_cases/minicpm_assistant__000_assistant_audio.wav (1246124); assets/audio_cases/minicpm_assistant__system_ref_audio.wav (192556); assets/audio_cases/paimon__000_assistant_audio.wav (697004); assets/audio_cases/paimon__system_ref_audio.wav (479304); assets/audio_cases/readme.txt (57); assets/bajie.wav (636512); assets/fossil.png (465898); assets/haimianbaobao.wav (343120); assets/highway.png (840874); assets/nezha.wav (457802); assets/omni_duplex1.mp4 (7295040); assets/omni_duplex2.mp4 (29285216); assets/sunwukong.wav (644650); assets/system_ref_audio.wav (539032); assets/system_ref_audio_2.wav (341192); assets/token2wav/campplus.onnx (28303423); assets/token2wav/flow.pt (623466603); assets/token2wav/flow.yaml (1099); assets/token2wav/hift.pt (83390254); assets/token2wav/speech_tokenizer_v2_25hz.onnx (496082973); config.json (6439); configuration_minicpmo.py (10135); generation_config.json (178); merges.txt (1402109); model-00001-of-00004.safetensors (5273477136); model-00002-of-00004.safetensors (5301855080); model-00003-of-00004.safetensors (5301855048); model-00004-of-00004.safetensors (2866549964); model.safetensors.index.json (117202); modeling_minicpmo.py (214356); modeling_navit_siglip.py (42559); preprocessor_config.json (842); processing_minicpmo.py (67284); special_tokens_map.json (12002); tokenization_minicpmo_fast.py (3249); tokenizer.json (11437712); tokenizer_config.json (101726); utils.py (95702); vocab.json (2776833).",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "total size",
+    "fact": "54 files, total 20,048,635,793 bytes (20.049 GB / 18.672 GiB). By category: safetensors weights 18,743,737,228 B (18.744 GB; index metadata total_size 18,743,575,332); assets/token2wav 1,231,244,352 B (1.231 GB); demo media under assets/ (not token2wav) 57,274,210 B; tokenizer files 15,733,088 B; code 433,285 B; configs+index 124,661 B. The repo's usedStorage (including history) is 22,735,738,044 B. The safetensors param count is BF16 9,371,787,666.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "weights layout",
+    "fact": "model.safetensors.index.json weight_map top-level prefixes: vpm (437 tensors, SigLIP vision), llm (399, Qwen3-8B), apm (367, Whisper-medium encoder), tts (194, MiniCPMTTS), resampler (13), audio_projection_layer (4). config.json torch_dtype bfloat16, transformers_version 4.51.0, version '4.5', max_position_embeddings 40960, vocab_size 151748, 36 layers, hidden 4096. audio_config _name_or_path openai/whisper-medium. tts_config: audio_tokenizer_type 's3tokenizer', num_audio_tokens 6562, hidden_size 768, 20 layers. vision_config siglip_vision_model with 27 layers.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/config.json",
+    "confirmed": true
+   },
+   {
+    "topic": "custom code (trust_remote_code)",
+    "fact": "config auto_map: AutoConfig=configuration_minicpmo.MiniCPMOConfig, AutoModel=modeling_minicpmo.MiniCPMO, AutoModelForCausalLM=modeling_minicpmo.MiniCPMO. preprocessor_config auto_map: AutoProcessor=processing_minicpmo.MiniCPMOProcessor, AutoImageProcessor=processing_minicpmo.MiniCPMVImageProcessor, AutoFeatureExtractor=processing_minicpmo.MiniCPMAAudioProcessor. tokenizer_config auto_map AutoTokenizer=tokenization_minicpmo_fast.MiniCPMOTokenizerFast (based on Qwen2TokenizerFast). Custom code files: configuration_minicpmo.py, modeling_minicpmo.py, modeling_navit_siglip.py, processing_minicpmo.py, tokenization_minicpmo_fast.py, utils.py.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/preprocessor_config.json",
+    "confirmed": true
+   },
+   {
+    "topic": "tokenizer / config files",
+    "fact": "Tokenizer files: tokenizer.json, tokenizer_config.json (bos <|im_start|>, eos <|im_end|>, pad <|endoftext|>, model_max_length 131072, chat_template embedded), vocab.json, merges.txt, added_tokens.json (105 entries including <unit>, </unit>, <|listen|>, <|speak|>, <|tts_bos|>, <|tts_eos|>, <|chunk_eos|>, <|chunk_tts_eos|>, <|turn_eos|>, <|audio_start|>, <|audio_end|>, <|tts_pad|>), special_tokens_map.json. Config files: config.json, generation_config.json (do_sample true, temperature 0.6, top_k 20, top_p 0.95, eos [151645,151643]), preprocessor_config.json (scale_resolution 448, max_slice_nums 9, audio_pool_step 5, version 4.5).",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/tokenizer_config.json",
+    "confirmed": true
+   },
+   {
+    "topic": "streaming/TTS assets",
+    "fact": "Speech output (TTS, streaming and duplex) needs assets/token2wav/: speech_tokenizer_v2_25hz.onnx (496,082,973 B), flow.pt (623,466,603 B), flow.yaml (1,099 B; hyperpyyaml referencing cosyvoice2.flow.flow.CausalMaskedDiffWithXvec, UpsampleConformerEncoderV2, CausalConditionalCFM with DiT estimator), hift.pt (83,390,254 B), campplus.onnx (28,303,423 B). There are no separate TTS/vocoder HF sub-repos. The old assets/CosyVoice2-0.5B folder was deleted from main in commit 56772659a354e8424e759e5a8e944db7e6a025d7. Demo-only files (not needed for inference): assets/*.wav/mp4/png and assets/audio_cases/*. Reference voices usable as ref_audio include assets/HT_ref_audio.wav, assets/system_ref_audio.wav and assets/system_ref_audio_2.wav.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/assets/token2wav/flow.yaml",
+    "confirmed": true
+   },
+   {
+    "topic": "token2wav loading (code)",
+    "fact": "MiniCPMO.init_tts(model_dir=None, enable_float16=False, n_timesteps=10) does `from stepaudio2 import Token2wav`, raising 'Please install Token2wav via: pip install minicpmo-utils[all]' if it is missing. It then calls _ensure_asset_dir('assets/token2wav'). If os.path.join(config._name_or_path, 'assets/token2wav') does not exist locally, that function runs huggingface_hub.snapshot_download(repo_id=\"openbmb/MiniCPM-o-4_5\", allow_patterns=[\"assets/token2wav/**\"]) WITHOUT a revision pin. For a reproducible deploy, load from a local snapshot directory or pass model_dir.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/modeling_minicpmo.py",
+    "confirmed": true
+   },
+   {
+    "topic": "token2wav runtime (minicpmo-utils)",
+    "fact": "In minicpmo-utils 1.0.6, stepaudio2/token2wav.py Token2wav(model_path, float16=False, n_timesteps=10) loads speech_tokenizer_v2_25hz.onnx via s3tokenizer.load_model(...).cuda(). It runs campplus.onnx with onnxruntime providers=['CPUExecutionProvider'], loads flow.yaml via load_hyperpyyaml (registering cosyvoice2.* aliases to stepaudio2.cosyvoice2), and moves flow.pt/hift.pt to .cuda(). It hard-codes CUDA. The sdist minicpmo_utils-1.0.6.tar.gz (292,148 B, sha256 3b35de45a46db449079d96fc96723df4151ab8db319888016edfd9475f9406c3) contains the packages minicpmo, stepaudio2 (with cosyvoice2, flashcosyvoice) and s3tokenizer.",
+    "url": "https://files.pythonhosted.org/packages/30/51/45c5a9a6e1aa67748bd87392dce7335eb48de048e10530cd94ea3761f680/minicpmo_utils-1.0.6.tar.gz",
+    "confirmed": true
+   },
+   {
+    "topic": "license / gating",
+    "fact": "license: apache-2.0 (card YAML and tags). The card says 'The MiniCPM-o/V model weights and code are open-sourced under the Apache-2.0 license' (link https://github.com/OpenBMB/MiniCPM-V/blob/main/LICENSE). gated=false: no access request needed.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "requirements (card pins)",
+    "fact": "Card: 'Please ensure transformers==4.51.0 is installed, as other versions may have compatibility issues (under investigation). Requirements tested on Python 3.10'. Without TTS/streaming: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils>=1.0.5,<=1.0.6\". With TTS or streaming: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5,<=1.0.6\". FFmpeg is required for get_video_frame_audio_segments(use_ffmpeg=True) and generate_duplex_video (apt install ffmpeg). CJK fonts (fonts-noto-cjk / fonts-wqy-microhei) are needed only for subtitle rendering in generate_duplex_video.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "flash-attn",
+    "fact": "The card shows attn_implementation=\"sdpa\" with comment '# sdpa or flash_attention_2' and gives no flash-attn package/version pin. The code imports flash_attn only if available (modeling_navit_siglip.py). The Whisper audio encoder is forced to sdpa because 'using flash_attention_2 will cause: RuntimeError: cu_seqlens_q must have shape (batch_size + 1)'. The TTS uses flash_attention_2 if selected, otherwise eager.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/modeling_minicpmo.py",
+    "confirmed": true
+   },
+   {
+    "topic": "minicpmo-utils versions/deps",
+    "fact": "PyPI minicpmo-utils: latest 1.0.7 (uploaded 2026-10-16), 1.0.6 (2026-02-11), 1.0.5 (2026-02-09). All are sdist only and require Python >=3.10. Base deps: numpy>=1.24.0, pillow==10.4.0, librosa==0.9.0, decord==0.6.0 (non-darwin), eva-decord (darwin), moviepy==2.1.2. The [tts] extra (pulled in by [all]) adds torch>=2.3.0, torchaudio>=2.3.0, transformers>=4.51.0,<4.53.0, onnxruntime>=1.18.0,<=1.21.0 (CPU onnxruntime; onnxruntime-gpu is commented out), onnx, hyperpyyaml, tqdm>=4.66.0, einops==0.8.1, scipy>=1.10.0, soundfile==0.12.1. The card caps at <=1.0.6, so 1.0.7 is outside the card's pin.",
+    "url": "https://pypi.org/pypi/minicpmo-utils/json",
+    "confirmed": true
+   },
+   {
+    "topic": "inference modes",
+    "fact": "Card-documented modes: (1) Duplex Omni Mode, full-duplex streaming for real-time video+audio. (2) Half-Duplex Omni Mode, via chat (model.chat(msgs, omni_mode=True, generate_audio=True, output_audio_path=..., use_tts_template=True, max_slice_nums=1)) or streaming (streaming_prefill/streaming_generate). (3) Half-Duplex Realtime Speech Conversation (audio-only, 1 s chunks). (4) Speech/Audio Mode: zero-shot TTS, mimick, ASR/audio understanding. (5) Visual understanding: single image, multi-image, few-shot, video via get_video_frame_audio_segments. Also enable_thinking True/False (instruct and thinking in one model) and OpenAI-style structured content (image_url / audio_url / video_url with use_audio and stack_frames).",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "model init",
+    "fact": "AutoModel.from_pretrained(\"openbmb/MiniCPM-o-4_5\", trust_remote_code=True, attn_implementation=\"sdpa\", torch_dtype=torch.bfloat16, init_vision=True, init_audio=True, init_tts=True); model.eval().cuda(); model.init_tts(); duplex_model = model.as_duplex(); model = duplex_model.as_simplex(reset_session=True). Vision-only: init_audio=False, init_tts=False. Audio-only: init_vision=False.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "full-duplex streaming API",
+    "fact": "model.as_duplex(device=None, **kwargs) returns MiniCPMODuplex (class in modeling_minicpmo.py), which calls model.init_tts internally. Default duplex params include generate_audio True, ls_mode 'explicit', max_new_speak_tokens_per_chunk 20, temperature 0.7, top_k 100, top_p 0.8, chunk_ms 1000, first_chunk_ms 1035, sample_rate 16000, sliding_window_mode 'off' (options off/basic/context; basic watermarks 8000/6000 tokens; context_max_units 24). Usage: duplex.prepare(prefix_system_prompt=\"Streaming Omni Conversation.\", ref_audio=<16 kHz np array>, prompt_wav_path=<wav>). Then per 1 s chunk: duplex.streaming_prefill(audio_waveform=chunk, frame_list=[frame(, stacked_frame)], max_slice_nums=1, batch_vision_feed=False), followed by result = duplex.streaming_generate(prompt_wav_path=..., max_new_speak_tokens_per_chunk=20, decode_mode=\"sampling\"). The result dict has is_listen, text, end_of_turn, current_time, audio_waveform (24 kHz output; output_sample_rate=24000) and cost_* timings. Control methods: set_break_event, set_session_stop, get_generated_text, as_simplex(reset_session=True, reset_token2wav_cache=False).",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/modeling_minicpmo.py",
+    "confirmed": true
+   },
+   {
+    "topic": "half-duplex streaming API",
+    "fact": "MiniCPMO.streaming_prefill(session_id, msgs, omni_mode=True, max_slice_nums=None, use_tts_template=True, enable_thinking=False, is_last_chunk=False, ...) and MiniCPMO.streaming_generate(session_id, generate_audio=True, audio_token_chunk_size=25, max_new_tokens=256, enable_thinking=False, use_tts_template=True, do_sample=True, ...). The generator yields (wav_chunk, text_chunk) when generate_audio is set, otherwise (text_chunk, is_finished). Also reset_session(reset_token2wav_cache=True), init_token2wav_cache(prompt_speech_16k=ref_audio), and get_sys_prompt(ref_audio=..., mode=\"omni\", language=\"en\"). Input audio is 16 kHz in 1 s chunks (last chunk padded to 16000 samples); output is 24 kHz. For realtime speech the card suggests length_penalty=1.1.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "video input helper",
+    "fact": "from minicpmo.utils import get_video_frame_audio_segments, generate_duplex_video (in the minicpmo-utils package). Signature: get_video_frame_audio_segments(video_path, audio_path=None, last_vad_timestamp=None, stack_frames=1, use_ffmpeg=False, adjust_audio_length=False, use_audio=True), returning (video_frames: List[PIL.Image], audio_segments: List[np.ndarray] or None, stacked_frames or None). It extracts at 1 fps (10 fps then uniform sampling for long videos). The card says 'Use stack_frames=5 for high refresh rate mode' and claims video support 'up to 10fps'.",
+    "url": "https://files.pythonhosted.org/packages/30/51/45c5a9a6e1aa67748bd87392dce7335eb48de048e10530cd94ea3761f680/minicpmo_utils-1.0.6.tar.gz",
+    "confirmed": true
+   },
+   {
+    "topic": "GPU memory (card)",
+    "fact": "Card 'Inference Efficiency' table for MiniCPM-o 4.5: bf16 gives 154.3 tokens/s decoding, 0.6 s TTFT, 19.0 GB GPU memory; int4 gives 212.3 tokens/s, 0.6 s TTFT, 11.0 GB GPU memory. For comparison, Qwen3-Omni-30B-A3B is OOM in bf16 and uses 20.3 GB in int4. The table does not name the GPU used.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "GPU memory (realtime demo)",
+    "fact": "Card 'Deploy a Realtime Web Demo' Option A (recommended, PyTorch + NVIDIA, full-duplex omni/speech live streaming) requires 'Nvidia GPU with at least 28GB GPU memory'. Option B (llama.cpp-omni): half-duplex speech needs Apple M3/M4/M5 with >=16GB RAM or an NVIDIA GPU with >=12GB; full-duplex omnimodal live streaming needs Apple M4 Max with >=24GB RAM or an NVIDIA GPU with >=12GB.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "demo repo referenced by card",
+    "fact": "The card links https://github.com/OpenBMB/minicpm-o-4_5-pytorch-simple-demo, which now redirects to OpenBMB/MiniCPM-o-Demo (main SHA 47709a9210dfd71afa76c058e017fc8c4db5c8d2, 2026-09-15). Its README: NVIDIA GPU with more than 28GB VRAM; VRAM per Worker after init ~21.5 GB; model loading ~16s; Omni Full-Duplex per-unit latency (A100) ~0.9s (~0.5s with torch.compile, which adds ~5 min warm / ~15 min cold compile). Gateway port 8006 (HTTPS/WSS), worker_base_port 22400 (config.example.json). requirements.txt: transformers==4.51.0, accelerate==1.12.0, minicpmo-utils[all]>=1.0.5, fastapi>=0.128.0, uvicorn>=0.40.0, websockets>=16.0, librosa>=0.10.2, among others.",
+    "url": "https://raw.githubusercontent.com/OpenBMB/MiniCPM-o-Demo/47709a9210dfd71afa76c058e017fc8c4db5c8d2/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "quantized: GPTQ",
+    "fact": "openbmb/MiniCPM-o-4_5-GPTQ, sha 02b54c54c36f8b48e97501bb0fde5d178c62df38 (2026-08-03), apache-2.0, not gated, base_model openbmb/MiniCPM-o-4_5. Total 9,771,071,794 B: model-00001-of-00002.safetensors 4,273,353,840 + model-00002-of-00002.safetensors 4,192,786,348, plus the same assets/token2wav files (1.23 GB) and its own code copy. quantization_config: gptq, bits 4, group_size 128, sym true, desc_act false. README: 'pre-quantized to W4A16, reducing GPU memory usage from ~19GB (BF16) to ~11GB (INT4)'. Install: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5\" auto-gptq. Load with torch_dtype=torch.bfloat16, device_map=\"auto\", trust_remote_code=True. Its modeling_minicpmo.py (213,435 B) is close to main but lacks the audio-embedding bound-matching change.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-GPTQ?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "quantized: AWQ",
+    "fact": "openbmb/MiniCPM-o-4_5-awq, sha 02b87bcf31b1e3bc66094a8f8eba2034605e5073 (2026-08-18), apache-2.0, not gated. Total 13,074,573,450 B: model-00001-of-00002.safetensors 4,852,385,280 + model-00002-of-00002.safetensors 3,608,418,916, plus assets/token2wav (1.23 GB) and a legacy assets/CosyVoice2-0.5B folder (~3.3 GB). quantization_config: awq, bits 4, group_size 128, version gemm, zero_point true; modules_to_not_convert [vpm, apm, resampler, audio_projection_layer, audio_avg_pooler, tts, lm_head]; config transformers_version 4.57.1. Its README is a copy of the base card with no AWQ-specific instructions. Its custom code is an OLDER version (modeling 208,297 B, utils 87,049 B): init_tts(streaming=False, ...) uses cosyvoice.cli.cosyvoice.CosyVoice2 when not streaming. It has as_duplex/MiniCPMODuplex.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-awq?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "quantized: GGUF",
+    "fact": "openbmb/MiniCPM-o-4_5-gguf, sha db25077c33951fe163b42986fba0132e279872a2 (2026-08-18), apache-2.0, not gated; total of all files 79,973,019,242 B. LLM GGUFs (bytes): MiniCPM-o-4_5-F16.gguf 16,384,959,136; Q4_0 4,773,679,904; Q4_1 5,246,637,856; Q4_K_M 5,026,714,400; Q4_K_S 4,800,942,880; Q5_0 5,719,595,808; Q5_1 6,192,553,760; Q5_K_M 5,849,946,912; Q5_K_S 5,719,595,808; Q6_K 6,724,631,456; Q8_0 8,707,877,536. Component GGUFs: audio/MiniCPM-o-4_5-audio-F16.gguf 660,167,904; vision/MiniCPM-o-4_5-vision-F16.gguf 1,095,113,184; tts/MiniCPM-o-4_5-tts-F16.gguf 1,157,244,416; tts/MiniCPM-o-4_5-projector-F16.gguf 14,948,640; token2wav-gguf/{encoder 151,339,008, flow_matching 458,250,240, flow_extra 13,663,328, hifigan2 83,242,816, prompt_cache 211,613,152}. There is also a CoreML ViT under vision/coreml_minicpmo45_vit_all_f16.mlmodelc (weight.bin 979,859,008). Runtime is llama.cpp-omni (per card Option B); the README is otherwise the base card.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-gguf?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "other variants",
+    "fact": "No official openbmb/MiniCPM-o-4_5-int4 or -bnb repo exists: the HF API returns an error for both, which means the repo is missing or private. The official MiniCPM-o-4_5 quantized repos under openbmb are -awq, -GPTQ and -gguf only. The card also links FlagRelease multi-chip builds, e.g. FlagRelease/MiniCPM-o-4.5-nvidia-FlagOS, and community repos exist (e.g. mlx-community/MiniCPM-o-4_5-4bit, ericleigh007/MiniCPM-o-4_5-BNB-Int4).",
+    "url": "https://huggingface.co/api/models?author=openbmb&search=MiniCPM-o-4&limit=100&full=true",
+    "confirmed": true
+   },
+   {
+    "topic": "vLLM / SGLang",
+    "fact": "The card states support for vLLM, SGLang, llama.cpp and Ollama and points to the Cookbook (deployment/vllm/minicpm-o4_5_vllm.md, deployment/sglang/MiniCPM-o4_5_sglang.md). The only vLLM command shown on the card is the FlagOS one: vllm serve ${model_path} --dtype auto --gpu_memory_utilization 0.9 --trust-remote-code --max-num-batched-tokens 2048 --served-model-name cpmo --port ${Port}. The card does not say whether vLLM/SGLang support full-duplex or speech output.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/resolve/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   }
+  ],
+  "unconfirmed": [
+   "Which GPU was used for the card's efficiency table (19.0 GB bf16 / 11.0 GB int4): the card does not say.",
+   "The card's claim of 'int4 and GGUF format quantized models in 16 sizes': the gguf repo has 11 LLM GGUF sizes plus component files. I could not confirm how the 16 is counted.",
+   "Exact pip package and version needed to load openbmb/MiniCPM-o-4_5-awq: the AWQ README gives no install instructions (autoawq is likely but not documented).",
+   "Whether full-duplex streaming or token2wav speech output works with the AWQ/GPTQ repos: their READMEs only refer back to the base card, and AWQ ships older custom code. Not tested.",
+   "Whether vLLM/SGLang (Cookbook) support full-duplex streaming or speech output: I did not read the Cookbook pages.",
+   "Whether minicpmo-utils 1.0.7 (released 2026-10-16) works with main d59117d: the card pins <=1.0.6.",
+   "Whether pip can resolve the demo repo's requirements.txt, since minicpmo-utils pins librosa==0.9.0 and the demo requires librosa>=0.10.2. The demo's own comment says librosa 0.9.x crashes under newer setuptools because pkg_resources is missing.",
+   "Whether flash_attention_2 lowers memory or latency for the duplex path: the card gives no figures and no flash-attn version pin.",
+   "Runpod GPU types and prices: outside this source and not researched here."
+  ]
+ },
+ {
+  "key": "demo",
+  "summary": "I read OpenBMB/MiniCPM-o-Demo on its default branch `main`. HEAD is 47709a9210dfd71afa76c058e017fc8c4db5c8d2, committed 2026-09-15T07:16:25Z (\"Merge pull request #67 ... fix/speaker-sink-at-session-start\"). I fetched the tree, READMEs, all 3 Dockerfiles, both entrypoints, all 6 compose files, requirements.txt, install.sh, config.example.json, config.py, gateway.py, worker.py, py_backend/server.py, the backend factory and processors, the deployment/compile/attention/realtime-API docs and the omni frontend JS. I also checked llama.cpp-omni at master a64932ec615e1463158129feaf2f0752d0c07a2e, the Hugging Face model APIs and PyPI minicpmo-utils.\n\nARCHITECTURE. The request path is Browser -> Gateway -> Python Worker -> Backend.\n- **Gateway** (gateway.py, no torch, does not load the model) is the only public process. It serves HTTPS/WSS on :8006 with a self-signed TLS cert by default, or plain HTTP with `--http`. In the same process it runs a second plain-HTTP server on :8007 for worker registration. It handles queueing, session recording and worker health polling every 10 s.\n- **Worker** (worker.py, :22400) only forwards traffic. It exposes WS /v1/worker/chat, WS /v1/worker/duplex and GET /health, and forwards to the backend given by `--backend-server-url`.\n- **Backend** (:22500, bound to localhost inside the container) loads the model. It exposes WS /backend, POST /sessions/{id}/close and GET /health. It is either `python -m py_backend.server` (PyTorch/transformers) or `llama-omni-server` (C++, from tc-mb/llama.cpp-omni, GGUF).\n- **Transport** is WebSocket only, with JSON text frames; there is no WebRTC. Clients connect to `wss://host/v1/realtime?mode={chat|video|audio}`.\n  - Input audio is base64 float32 PCM, 16 kHz mono, about 1 s per chunk. Video is base64 JPEG in `input.video_frames`. The browser sends 1 frame per second at JPEG quality 0.7.\n  - Output audio is 24 kHz float32 PCM.\n  - Video sessions are capped at 300 s and audio sessions at 600 s by the gateway.\n- **Concurrency**: each backend allows one active session (\"backend already has an active session\"), so it is one concurrent duplex session per GPU worker. Other users queue at the gateway (max_queue_size 1000).\n\nBACKENDS. There are two: PyTorch and C++ llama.cpp-omni. Both implement full_duplex video+audio. The PyTorch one is described as the lossless reference (\"100% precision\"). The C++ server uses only the first frame of each input.append. vLLM and SGLang are mentioned only as \"future\" adapters and are not implemented.\n\nPINS AND IMAGES.\n- requirements.txt: transformers==4.51.0, accelerate==1.12.0, minicpmo-utils[all]>=1.0.5. PyPI latest is 1.0.7, uploaded 2026-10-16, and it pins librosa==0.9.0, which conflicts with requirements' librosa>=0.10.2. Also fastapi>=0.128.0, uvicorn>=0.40.0, websockets>=16.0, pydantic>=2.11.0, numpy>=2.2.0, among others.\n- Worker image: python:3.12-slim-bookworm plus torch==2.8.0 and torchaudio==2.8.0 from the cu128 index (CUDA 12.8 is bundled in the wheel).\n- Gateway image: oven/bun:1-slim builders, then python:3.12-slim-bookworm.\n- C++ image: nvidia/cuda:12.8.1-devel-ubuntu22.04 to build, nvidia/cuda:12.8.1-runtime-ubuntu22.04 to run. It builds llama.cpp-omni at unpinned origin/master with `CMAKE_CUDA_ARCHITECTURES=80;120`.\n- The docs and install.sh say Python 3.10; the Docker images use 3.12.\n\nCUDA EXTENSIONS AND COMPILE. No CUDA extension is built in the PyTorch image. flash-attn is not installed (its install.sh step is commented out), and attn \"auto\" falls back to sdpa. torch.compile is off by default and can only be turned on through config.json `service.compile: true`. Turned on, it adds about 15 min the first time and about 5 min on later starts that reuse the cache; the cache is TORCHINDUCTOR_CACHE_DIR=/app/torch_compile_cache. The C++ image compiles with nvcc.\n\nMODEL LOADING. The model path comes from `--model-path` or config `model.model_path`; the example config default is the HF id openbmb/MiniCPM-o-4_5, which the docs say auto-downloads. Docker mounts weights read-only at /models/MiniCPM-o-4_5 and exits if that directory is missing, so the main weights are never downloaded there. However, if `<model_path>/assets/token2wav` is missing, startup calls `snapshot_download(repo_id=\"openbmb/MiniCPM-o-4_5\", allow_patterns=[\"assets/token2wav/**\"])`. The HF repo (sha d59117d1..., 20.05 GB) contains that folder.\n\nHEALTH. backend GET :22500/health returns status \"ready\". worker GET :22400/health always reports model_loaded true when forwarding, so the entrypoint waits on the backend's /health instead, for up to 600 s. gateway has GET :8006/health, /status and /workers, plus internal GET :8007/health. The Docker healthcheck curls the worker's /health (interval 15s, retries 40, start_period 120s).\n\nSHUTDOWN. The entrypoint traps SIGTERM/SIGINT, kills the worker and then the backend, and the container exits if either child dies. The backend lifespan closes active sessions with reason \"server_shutdown\". Commands are `docker compose down` or, per the docs, `pkill -f \"gateway.py|worker.py\"` (that pattern does not match the `py_backend.server` process).\n\nTLS AND AUTH. There is no authentication on /v1/realtime or on the internal :8007 registration API. Only admin routes are hidden, unless ENABLE_PUBLIC_ADMIN is set. The repo commits a self-signed cert and key under certs/ (CN=minicpmo45-dev, valid until 2027-02-11).\n\nGPU MEMORY AND 24 GB GPUs.\n- The README requires an NVIDIA GPU with more than 28 GB of VRAM; usage is about 21.5 GB per worker after initialization (21.8 GB in the multi-worker compose file).\n- compile.md says an RTX 4090 (like an A100) takes about 0.9 s per 1-second unit in Omni Full-Duplex, which \"approach[es] the 1-second real-time threshold and caus[es] noticeable stuttering\". torch.compile brings this to about 0.5 s (A100 figure).\n- RTX 3090 is not mentioned anywhere in the demo repo.\n- llama.cpp-omni lists Full Omni VRAM at about 20 GB (F16), 13 GB (Q8_0) and 9 GB (Q4_K_M), and an RTX 4090 F16 time to first token under 550 ms.\n\nDOC DRIFT. docs/en/deployment.md and compile.md refer to `start_all.sh` and `worker.py --compile`, but neither exists at main HEAD. The documented manual worker command lacks `--backend-server-url`, so that worker would not serve sessions.\n\nPRICES. The repo has no prices.",
+  "facts": [
+   {
+    "topic": "repo/commit",
+    "fact": "Default branch is `main`. HEAD SHA is 47709a9210dfd71afa76c058e017fc8c4db5c8d2, committed 2026-09-15T07:16:25Z with message 'Merge pull request #67 from AlessandroBonomo28/fix/speaker-sink-at-session-start'. Repo description: 'Official PyTorch+CUDA Full-functional Web Demo for MiniCPM-o 4.5'. The license field is null. Homepage is https://minicpmo45.modelbest.cn/.",
+    "url": "https://api.github.com/repos/OpenBMB/MiniCPM-o-Demo/commits/main",
+    "confirmed": true
+   },
+   {
+    "topic": "repo/branches",
+    "fact": "Other branches: Comni at 9af4308a93ca889ddf5c7c7bde1bcfbb6ff9b147 (2026-05-11, a C++/llama.cpp-omni oriented demo that the llama.cpp-omni README recommends), awq at b11502ef09c952a527847cb3db235d6d37ef0685 (0 commits ahead and 304 behind main, i.e. already merged), and realtime-protocol, feat/omni-ws-client, o45-fc and others.",
+    "url": "https://api.github.com/repos/OpenBMB/MiniCPM-o-Demo/branches",
+    "confirmed": true
+   },
+   {
+    "topic": "architecture",
+    "fact": "The README diagram is Frontend -(HTTPS/WSS)-> Gateway (:8006, HTTPS) -(HTTP/WS internal)-> Worker Pool (:22400+). Three runtime roles are named: 'Browser -> Gateway -> Python Worker -> Backend'. The Gateway 'does not load the model'. The Backend is either py_backend/server.py (PyTorch) or llama-omni-server (llama.cpp-omni).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "architecture/ports",
+    "fact": "Ports are: gateway public :8006 (HTTPS by default); gateway internal registry :8007 (plain HTTP, `expose` only in compose, not published); worker :22400 (bound 0.0.0.0 in the container, reached by the gateway over the compose network); backend :22500 (`EXPOSE`d in the worker-backend Dockerfile but not published by compose; the worker reaches it via 127.0.0.1). Compose publishes only \"${GATEWAY_HOST_PORT:-8006}:8006\".",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker-compose.yml",
+    "confirmed": true
+   },
+   {
+    "topic": "architecture/gateway",
+    "fact": "gateway.py main() runs two uvicorn servers in one process with asyncio.gather. The public FastAPI app listens on --port (default config gateway_port 8006) with ssl_certfile/ssl_keyfile when HTTPS and ws_max_size=128 MiB. internal_app listens on --internal-port (default 8007) over plain HTTP. CLI args: --port, --internal-port 8007, --host 0.0.0.0, --max-queue-size, --timeout, --https (default True) / --http, --ssl-certfile certs/cert.pem, --ssl-keyfile certs/key.pem, --lang zh|en.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/gateway.py",
+    "confirmed": true
+   },
+   {
+    "topic": "protocol/public",
+    "fact": "The only public WebSocket is `/v1/realtime?mode=` with mode = chat, video or audio (default video). mode=video maps to request_type omni_duplex with max_duration_s=300. mode=audio maps to audio_duplex with 600 s. mode=chat maps to the worker path /v1/worker/chat. The gateway proxies to the worker at ws://{worker.host}:{worker.port}/v1/worker/duplex (plain ws, max_size 128 MiB). On timeout it sends {\"type\":\"session.closed\",\"reason\":\"timeout\"}.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/gateway.py",
+    "confirmed": true
+   },
+   {
+    "topic": "protocol/messages",
+    "fact": "Messages are JSON text frames. Lifecycle: session.queued/session.queue_update (optional), then session.queue_done, then client session.init {payload:{system_prompt|instructions, config, voice.ref_audio_base64, voice.tts_ref_audio_base64}}, then session.created, then input.append {input:{audio, video_frames[], force_listen, max_slice_nums}}, then response.output.delta with kind listen, text or audio, then session.close, then session.closed. Input audio is 16 kHz mono float32 PCM in base64. Video frames are base64 JPEG. Output audio is 24 kHz mono float32 PCM in base64. Video full-duplex has a 300 second total session limit. There is no WebRTC.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs-app/content/docs/en/realtime-api/video.md",
+    "confirmed": true
+   },
+   {
+    "topic": "frontend",
+    "fact": "static/omni/omni-app.js uses SAMPLE_RATE_IN = 16000, SAMPLE_RATE_OUT = 24000 and CHUNK_MS = 1000. It captures one frame per chunk with canvas.toDataURL('image/jpeg', 0.7) at the camera's native resolution; a code comment says the backend scales with scale_resolution=448. It connects to `${proto}://${location.host}/v1/realtime?mode=video` and errors without HTTPS ('浏览器不支持 getUserMedia，请使用 HTTPS 访问', i.e. the browser does not support getUserMedia, please use HTTPS).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/static/omni/omni-app.js",
+    "confirmed": true
+   },
+   {
+    "topic": "concurrency",
+    "fact": "The backend allows one active session: BackendServerState.register raises 'backend already has an active session'. The worker closes a new WS with 1013 'Worker busy' if it is not idle. That makes one concurrent session per worker/GPU; extra clients queue at the gateway (config max_queue_size 1000, request_timeout 300.0).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/py_backend/server.py",
+    "confirmed": true
+   },
+   {
+    "topic": "worker registration",
+    "fact": "Workers register dynamically: `PUT http://gateway:8007/internal/workers/{worker_id}` with JSON {\"endpoint\":\"host:port\",\"gpu_group\":\"...\"}. The endpoint must be host:port with no scheme. There is no authentication. The gateway polls each worker's GET /health every HEALTH_CHECK_INTERVAL = 10.0 s with a 5.0 s timeout.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/gateway_modules/worker_pool.py",
+    "confirmed": true
+   },
+   {
+    "topic": "startup/compose (PyTorch)",
+    "fact": "Quick start: `mkdir -p certs data; openssl req -x509 -newkey rsa:2048 -nodes -days 365 -keyout certs/key.pem -out certs/cert.pem -subj \"/CN=minicpm-o\"; MODEL_HOST_PATH=/path/to/MiniCPM-o-4_5 docker compose up -d --build`. docker-compose.yml defines worker-backend-0 (device_ids [\"0\"]) and worker-backend-1 (device_ids [\"1\"]), both image minicpm-wb:dev, so 2 GPUs are assumed and the file must be edited for 1 GPU. Mounts: ${MODEL_HOST_PATH}:/models/MiniCPM-o-4_5:ro, gateway ${DATA_HOST_PATH:-./data}:/app/data and ${CERTS_HOST_PATH:-./certs}:/app/certs:ro. Gateway command: --host 0.0.0.0 --port 8006 --internal-port 8007 --https --ssl-certfile /app/certs/cert.pem --ssl-keyfile /app/certs/key.pem. restart: unless-stopped.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker-compose.yml",
+    "confirmed": true
+   },
+   {
+    "topic": "startup/entrypoint (PyTorch)",
+    "fact": "docker/entrypoint-worker-backend.sh env vars: MODEL_PATH (default /models/MiniCPM-o-4_5), BACKEND_PORT 22500, WORKER_PORT 22400, GPU_ID 0, GATEWAY_REGISTRY_URL, WORKER_ID (default hostname), WORKER_ENDPOINT, WORKER_GPU_GROUP. Steps: (1) copy config.example.json to config.json if missing; (2) exit 1 if the MODEL_PATH dir is missing; (3) run `python -m py_backend.server --host 0.0.0.0 --port $BACKEND_PORT --gpu-id $GPU_ID --model-path $MODEL_PATH &`; (4) poll http://127.0.0.1:22500/health every 2 s for up to 300 tries (600 s); (5) run `python worker.py --host 0.0.0.0 --port $WORKER_PORT --gpu-id $GPU_ID --backend-server-url http://127.0.0.1:$BACKEND_PORT &`; (6) curl PUT registration, up to 60 tries x 2 s; (7) check every 5 s and exit the container if either child dies.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/entrypoint-worker-backend.sh",
+    "confirmed": true
+   },
+   {
+    "topic": "shutdown",
+    "fact": "The entrypoint runs `trap cleanup SIGTERM SIGINT`; cleanup kills the worker pid and then the backend pid, runs `wait` and exits 0. The py_backend lifespan closes every session with reason 'server_shutdown' and calls backend.shutdown(), which is a no-op for PyTorch. The gateway lifespan cancels the cleanup task and calls worker_pool.stop(). README stop commands: `docker compose down` and `docker compose -f docker-compose.cpp.yml down`. The docs give a bare-metal stop of `pkill -f \"gateway.py|worker.py\"`; that pattern does not match `python -m py_backend.server` (my reading).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/entrypoint-worker-backend.sh",
+    "confirmed": true
+   },
+   {
+    "topic": "startup/bare-metal",
+    "fact": "Reference bare-metal order is backend, then worker, then gateway, each with PYTHONPATH=.: `python -m py_backend.server --host 127.0.0.1 --port 22500 --gpu-id 0 --model-path <dir>`; `python worker.py --host 127.0.0.1 --port 22400 --gpu-id 0 --backend-server-url http://127.0.0.1:22500`; `python gateway.py --host 0.0.0.0 --port 8006 --internal-port 8007 --http`; then `curl -X PUT http://127.0.0.1:8007/internal/workers/local-worker -H 'content-type: application/json' --data '{\"endpoint\":\"127.0.0.1:22400\",\"gpu_group\":\"gpu-0\"}'`. End-to-end test: tests/e2e_realtime.py.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/backend-protocol/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "doc drift",
+    "fact": "docs/en/deployment.md and docs/en/compile.md refer to `start_all.sh` and `worker.py ... --compile`. start_all.sh is not in the main tree at 47709a9 (install.sh also prints 'bash start_all.sh'), and worker.py argparse has no --compile option. A worker started without --backend-server-url loads the model in-process, but its /v1/worker/* WS endpoints close with 1013 'Backend server URL is not configured', so the documented 'Manual Start' worker command would not serve sessions.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/worker.py",
+    "confirmed": true
+   },
+   {
+    "topic": "config",
+    "fact": "config.example.json contains: model.model_path \"openbmb/MiniCPM-o-4_5\", pt_path null, attn_implementation \"auto\"; audio.ref_audio_path \"assets/ref_audio/ref_minicpm_signature.wav\", playback_delay_ms 200, chat_vocoder \"token2wav\"; service.gateway_port 8006, worker_base_port 22400, max_queue_size 1000, request_timeout 300.0, compile false, data_dir \"data\"; duplex.pause_timeout 60.0. Priority is CLI > config.json > Pydantic defaults. Recording defaults to enabled=True with session_retention_days -1 (never delete) and max_storage_gb -1.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/config.py",
+    "confirmed": true
+   },
+   {
+    "topic": "backends",
+    "fact": "Supported backends are (1) PyTorch/transformers (py_backend/server.py with core/processors/pytorch_backend.py; backend_factory.create_backend only builds PyTorchBackend) and (2) the C++ `llama-omni-server` from llama.cpp-omni (GGUF). vLLM and SGLang are not implemented in the demo; runtime/README.md mentions only 'future C++/SGLang/vLLM adapters'. The README says the PyTorch path demonstrates the model 'in a transparent, concise, and lossless manner' and the model card calls PyTorch 'recommended for 100% precision'.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/core/processors/backend_factory.py",
+    "confirmed": true
+   },
+   {
+    "topic": "backends/omni duplex",
+    "fact": "Both backends implement full_duplex (omni video+audio). The PyTorch backend decodes every JPEG in input.video_frames to PIL images (py_backend/media.py) and runs duplex_prefill then duplex_generate per 1 s chunk. llama-omni-server's /backend WS handler writes only `video_frames_b64[0]` per input.append (tools/server/ws_handler.cpp at llama.cpp-omni a64932ec).",
+    "url": "https://github.com/tc-mb/llama.cpp-omni/blob/a64932ec615e1463158129feaf2f0752d0c07a2e/tools/server/ws_handler.cpp",
+    "confirmed": true
+   },
+   {
+    "topic": "C++ backend/compose",
+    "fact": "Command: `GGUF_MODEL_HOST_PATH=/path/to/MiniCPM-o-4_5-gguf GATEWAY_HOST_PORT=8006 CPP_GPU_ID=0 docker compose -f docker-compose.cpp.yml up -d --build`. Env: GGUF_MODEL=/models/MiniCPM-o-4_5-gguf/${GGUF_MODEL_FILE:-MiniCPM-o-4_5-Q4_K_M.gguf}, LLAMA_SERVER_EXTRA_ARGS default \"-c 8192\". The entrypoint runs `$LLAMA_SERVER_BIN -m $GGUF_MODEL -ngl ${N_GPU_LAYERS:-99} --host 127.0.0.1 --port 22500 $LLAMA_SERVER_EXTRA_ARGS` with READY_TIMEOUT_S default 1200. With CHECK_MODEL_LAYOUT=1 it requires vision/MiniCPM-o-4_5-vision-F16.gguf, audio/MiniCPM-o-4_5-audio-F16.gguf, tts/MiniCPM-o-4_5-tts-F16.gguf, tts/MiniCPM-o-4_5-projector-F16.gguf and token2wav-gguf/.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/entrypoint-cpp-worker-backend.sh",
+    "confirmed": true
+   },
+   {
+    "topic": "C++ backend/image",
+    "fact": "Dockerfile.cpp-worker-backend: ARG CUDA_VERSION=12.8.1 and UBUNTU_VERSION=22.04. Build stage nvidia/cuda:12.8.1-devel-ubuntu22.04, runtime nvidia/cuda:12.8.1-runtime-ubuntu22.04. LLAMA_OMNI_REPO=https://github.com/tc-mb/llama.cpp-omni.git, LLAMA_OMNI_REFSPEC=master, LLAMA_OMNI_REF=origin/master (unpinned). cmake flags: -DGGML_CUDA=ON -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_SERVER=ON -DCMAKE_CUDA_ARCHITECTURES=80;120, target llama-omni-server. Python venv /opt/venv with fastapi>=0.128.0, httpx>=0.28.0, numpy>=2.2.0, pydantic>=2.11.0, python-multipart, uvicorn>=0.40.0, websockets>=16.0. HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=40 curls worker :22400/health.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/Dockerfile.cpp-worker-backend",
+    "confirmed": true
+   },
+   {
+    "topic": "llama.cpp-omni",
+    "fact": "tc-mb/llama.cpp-omni master HEAD is a64932ec615e1463158129feaf2f0752d0c07a2e (2026-10-19T06:48:18Z, 'update iphone data (#142)'). tools/server/server-omni.cpp exposes GET /health, GET /v1/health, POST /v1/stream/omni_init|prefill|decode|update_session_config, WS /backend and POST /sessions/:session_id/close.",
+    "url": "https://github.com/tc-mb/llama.cpp-omni/blob/a64932ec615e1463158129feaf2f0752d0c07a2e/tools/server/server-omni.cpp",
+    "confirmed": true
+   },
+   {
+    "topic": "deps/requirements",
+    "fact": "requirements.txt pins: transformers==4.51.0, accelerate==1.12.0, safetensors>=0.7.0, minicpmo-utils[all]>=1.0.5, fastapi>=0.128.0, uvicorn>=0.40.0, httpx>=0.28.0, websockets>=16.0, python-multipart, markdown>=3.6, Pygments>=2.18.0, PyYAML>=6.0, librosa>=0.10.2, soundfile>=0.12.1, pydantic>=2.11.0, numpy>=2.2.0, tqdm>=4.67.0, pytest>=9.0.0, pytest-asyncio>=1.3.0.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/requirements.txt",
+    "confirmed": true
+   },
+   {
+    "topic": "deps/worker image",
+    "fact": "Dockerfile.worker-backend is FROM python:3.12-slim-bookworm, not an nvidia/cuda base; its comment says the torch +cu128 wheel bundles CUDA user-space libs and the host nvidia runtime supplies the driver. ENV PYTHONPATH=/app and TORCHINDUCTOR_CACHE_DIR=/app/torch_compile_cache. apt installs ffmpeg, libsndfile1, curl. It runs `pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.8.0 torchaudio==2.8.0`, then `pip install \"minicpmo-utils[all]>=1.0.5\"`, then the rest of requirements.txt. Weights are not baked in (comment: '19G'). EXPOSE 22500 and 22400. ENTRYPOINT docker/entrypoint-worker-backend.sh.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/Dockerfile.worker-backend",
+    "confirmed": true
+   },
+   {
+    "topic": "deps/gateway image",
+    "fact": "Dockerfile.gateway uses multi-stage oven/bun:1-slim builders: frontend/mobile via `bun run build:static` to static/mobile, and docs-app (Next.js export) to static/docs. The final stage is python:3.12-slim-bookworm with pip installs of fastapi>=0.128.0, uvicorn>=0.40.0, httpx>=0.28.0, websockets>=16.0, pydantic>=2.11.0, numpy>=2.2.0, markdown>=3.6, Pygments>=2.18.0, python-multipart, PyYAML>=6.0, librosa>=0.10.2, soundfile>=0.12.1. No torch. EXPOSE 8006 8007. ENTRYPOINT [\"python\", \"gateway.py\"].",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/Dockerfile.gateway",
+    "confirmed": true
+   },
+   {
+    "topic": "deps/python+torch bare-metal",
+    "fact": "install.sh defaults to PYTHON=python3.10 with venv .venv/base and installs \"torch==2.8.0\" \"torchaudio==2.8.0\" from the default index, then requirements.txt. FLASH_ATTN_VERSION=\">=2.7.1,<=2.8.2\" is defined, but the flash-attn step is commented out ('Not Recommended'). deployment.md requires Python 3.10, CUDA 'Compatible with PyTorch 2.8.0', FFmpeg and Linux. The Docker images use Python 3.12.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/install.sh",
+    "confirmed": true
+   },
+   {
+    "topic": "deps/minicpmo-utils",
+    "fact": "PyPI minicpmo-utils latest is 1.0.7 (sdist uploaded 2026-10-16T10:33:19, requires_python >=3.10). Base pins: pillow==10.4.0, librosa==0.9.0, decord==0.6.0 (non-darwin), moviepy==2.1.2. The [tts] extra (pulled in by [all]) adds torch>=2.3.0, torchaudio>=2.3.0, transformers<4.53.0,>=4.51.0, onnxruntime<=1.21.0,>=1.18.0, onnx, hyperpyyaml, einops==0.8.1, scipy>=1.10.0, soundfile==0.12.1. The sdist bundles the stepaudio2 and s3tokenizer packages that Token2wav uses. librosa==0.9.0 conflicts with the demo's librosa>=0.10.2; requirements.txt comments that 0.9.x crashes without pkg_resources.",
+    "url": "https://pypi.org/pypi/minicpmo-utils/json",
+    "confirmed": true
+   },
+   {
+    "topic": "CUDA extensions/attention",
+    "fact": "No CUDA extension is compiled for the PyTorch path; flash-attn is not installed in any Dockerfile. attn_implementation is auto, flash_attention_2, sdpa or eager. 'auto' uses flash_attention_2 if transformers.utils.is_flash_attn_2_available(), otherwise sdpa. Forcing flash_attention_2 without the package raises at startup. The Whisper audio submodule always uses SDPA. flash_attention_2 is about 5-15% faster than sdpa on A100.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/en/attention_backend.md",
+    "confirmed": true
+   },
+   {
+    "topic": "torch.compile",
+    "fact": "Off by default (service.compile false). The only switch is config.json {\"service\":{\"compile\":true}}; py_backend.server reads cfg.compile and has no CLI flag. When on, apply_torch_compile(mode=\"default\", dynamic=True) targets vpm, llm.model, resampler and tts.model, followed by warmup_compile on assets/samples/compile.mp4. Compiled modules are active only in DUPLEX mode (set_compile_enabled). Cold start takes about 15 min and a cached start about 5 min; precompile.py can pre-build the cache (`CUDA_VISIBLE_DEVICES=0 TORCHINDUCTOR_CACHE_DIR=./torch_compile_cache python precompile.py`). Per-unit time on A100 drops from about 0.9 s to about 0.5 s. VRAM stays about 21.5 GB either way.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/en/compile.md",
+    "confirmed": true
+   },
+   {
+    "topic": "model location/PyTorch",
+    "fact": "The model path comes from --model-path, or else config model.model_path; the backend errors if it is empty. Loading is MiniCPMO.from_pretrained(model_path, trust_remote_code=True, _attn_implementation=resolved), using the repo's own MiniCPMO45/modeling_minicpmo_unified.py, followed by .bfloat16().eval().cuda(). The bf16 cast is skipped if config.json has quantization_config.quant_method. Docs: 'When model_path is set to openbmb/MiniCPM-o-4_5, the model is automatically downloaded from HuggingFace on first startup.' In Docker, --model-path /models/MiniCPM-o-4_5 is required to exist, so the main weights are not downloaded.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/core/processors/unified.py",
+    "confirmed": true
+   },
+   {
+    "topic": "model location/token2wav download",
+    "fact": "init_unified() always calls init_token2wav(streaming=True). _ensure_asset_dir('assets/token2wav') checks os.path.join(config._name_or_path, 'assets/token2wav'). If that is missing, it calls huggingface_hub.snapshot_download(repo_id=\"openbmb/MiniCPM-o-4_5\", allow_patterns=[\"assets/token2wav/**\"]) at startup. A full HF snapshot includes this folder.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/MiniCPMO45/modeling_minicpmo_unified.py",
+    "confirmed": true
+   },
+   {
+    "topic": "HF model repo",
+    "fact": "openbmb/MiniCPM-o-4_5 is at sha d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4 (lastModified 2026-10-16T10:30:03Z), 20.05 GB total. Safetensors shards: model-00001-of-00004 5273477136 B, 00002 5301855080 B, 00003 5301855048 B, 00004 2866549964 B. assets/token2wav holds campplus.onnx 28303423 B, flow.pt 623466603 B, flow.yaml 1099 B, hift.pt 83390254 B and speech_tokenizer_v2_25hz.onnx 496082973 B.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "HF GGUF repo",
+    "fact": "openbmb/MiniCPM-o-4_5-gguf is at sha db25077c33951fe163b42986fba0132e279872a2. Sizes: MiniCPM-o-4_5-Q4_K_M.gguf 5026714400 B, Q8_0 8707877536 B, F16 16384959136 B, audio/MiniCPM-o-4_5-audio-F16.gguf 660167904 B, vision/MiniCPM-o-4_5-vision-F16.gguf 1095113184 B, tts/MiniCPM-o-4_5-tts-F16.gguf 1157244416 B, tts/MiniCPM-o-4_5-projector-F16.gguf 14948640 B, plus token2wav-gguf/ with encoder, flow_matching, flow_extra, hifigan2 and prompt_cache.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-gguf?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "HF AWQ repo",
+    "fact": "openbmb/MiniCPM-o-4_5-awq is at sha 02b87bcf31b1e3bc66094a8f8eba2034605e5073, 13.07 GB total (2 shards of 4852385280 B and 3608418916 B, plus assets/token2wav and CosyVoice2-0.5B). quantization_config: quant_method awq, bits 4, group_size 128, version gemm, zero_point true, modules_to_not_convert [vpm, apm, resampler, audio_projection_layer, audio_avg_pooler, tts, lm_head]. The demo code detects quantization (skips the bf16 cast and skips compiling llm.model). The awq branch is fully merged into main.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-awq?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "health endpoints",
+    "fact": "Backend: GET :22500/health returns {status:'ready' or 'loading', backend:'pytorch', worker_status, active_session_id}. It is served only after the lifespan model load completes. Worker: GET :22400/health returns WorkerHealthResponse {status, worker_status, gpu_id, model_loaded, current_ticket_id, total_requests, avg_inference_time_ms, kv_cache_length, capabilities[chat, streaming, half_duplex_audio, audio_duplex, omni_duplex]}. In forwarding mode model_loaded is always true, so the entrypoint gates on the backend's /health instead. Gateway: GET :8006/health returns {status:'healthy', timestamp}; also GET /status and GET /workers, and internal GET :8007/health. Compose healthcheck: curl worker :22400/health, interval 15s, timeout 5s, retries 40, start_period 120s.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/worker.py",
+    "confirmed": true
+   },
+   {
+    "topic": "TLS",
+    "fact": "The gateway defaults to HTTPS (--https default True) with --ssl-certfile certs/cert.pem and --ssl-keyfile certs/key.pem. If either file is missing it logs an error and returns, i.e. it does not start. `--http` disables TLS with the warning 'Browser microphone/camera APIs may not work.' The repo commits a self-signed certs/cert.pem (CN=minicpmo45-dev, valid Feb 11 2026 to Feb 11 2027) and certs/key.pem; .dockerignore excludes certs/, so compose mounts ./certs read-only. Worker and backend traffic is plain ws/http.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/gateway.py",
+    "confirmed": true
+   },
+   {
+    "topic": "auth",
+    "fact": "There is no authentication or API key on /v1/realtime or the other public gateway routes, and no CORS middleware. Admin surfaces (/admin, /api/admin/*, /static/admin.html) return 404 unless the ENABLE_PUBLIC_ADMIN env var is 1, true, yes or on. The internal registry PUT /internal/workers/{id} on :8007 is unauthenticated.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/gateway.py",
+    "confirmed": true
+   },
+   {
+    "topic": "GPU memory",
+    "fact": "README: 'Make sure you have an NVIDIA GPU with more than 28GB of VRAM.' Resource table: VRAM per Worker after initialization ~21.5 GB (Token2Wav default, and the same with torch.compile); model loading ~16s; mode switching <0.1ms; Omni Full-Duplex per-unit latency on A100 ~0.9s, or ~0.5s with compile. docker-compose.multi.yml comment: about 21.8GB per instance. docs/en/architecture/duplex.md: duplex_cleanup releases ~1.5GB ('~1,591 MB leaked after stop -> ~48 MB remaining after cleanup').",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "24GB GPUs",
+    "fact": "compile.md: 'On older-generation GPUs such as A100 and RTX 4090, the per-unit computation time in Omni Full-Duplex mode is approximately 0.9s, approaching the 1-second real-time threshold and causing noticeable stuttering.' It recommends torch.compile (about 0.5s). RTX 3090 is not mentioned anywhere in the demo repo. The README minimum of more than 28 GB VRAM rules out 24 GB cards for the PyTorch path on paper.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/en/compile.md",
+    "confirmed": true
+   },
+   {
+    "topic": "24GB GPUs/C++",
+    "fact": "llama.cpp-omni README VRAM estimates on NVIDIA: Full Omni F16 ~20 GB, Q8_0 ~13 GB, Q4_K_M ~9 GB. RTX 4090 F16 latency: TTFT <550ms, prefill (vision+audio) ~65ms, Decode-LLM ~38ms/token, TTS ~8.5ms/token, Token2Wav RTF ~0.15x. CLI default ctx 4096 and -ngl 99.",
+    "url": "https://github.com/tc-mb/llama.cpp-omni/blob/a64932ec615e1463158129feaf2f0752d0c07a2e/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "24GB GPUs/model card",
+    "fact": "The HF model card (read on the -awq repo README) says the PyTorch web demo needs an 'Nvidia GPU with at least 28GB GPU memory'. For full-duplex omnimodal live streaming with the CookBook WebRTC demo (not this repo) it says: 'Apple M4 Max chip with at least 24GB RAM or low-resource Nvidia GPU with at least 12GB GPU memory'.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5-awq/raw/main/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "duplex config",
+    "fact": "DuplexConfig defaults, settable through session.init payload.config: generate_audio True, ls_mode 'explicit', force_listen_count 3, max_new_speak_tokens_per_chunk 20, decode_mode 'sampling', temperature 0.7, top_k 20, top_p 0.8, text_repetition_penalty 1.05, text_repetition_window_size 512, length_penalty 1.1, listen_prob_scale 1.0 (higher means more listening), listen_top_k None, tts_temperature 0.8, chunk_ms 1000, sample_rate 16000 (must be 16000).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/core/schemas/duplex.py",
+    "confirmed": true
+   },
+   {
+    "topic": "misc limits",
+    "fact": "ws_max_size / max_size is set to 128 MiB on the gateway, worker, backend and the runtime client. The default ref audio assets/ref_audio/ref_minicpm_signature.wav (192590 B) ships in the repo. The worker image's TORCHINDUCTOR_CACHE_DIR /app/torch_compile_cache is not mounted as a volume in any compose file, so a compile cache would not survive container recreation (my reading).",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker-compose.yml",
+    "confirmed": true
+   }
+  ],
+  "unconfirmed": [
+   "Minimum host NVIDIA driver version for the cu128 torch wheels and the CUDA 12.8.1 images: the repo never states it.",
+   "Whether the C++ image, built with CMAKE_CUDA_ARCHITECTURES=80;120, runs on RTX 3090 (sm_86) and RTX 4090 (sm_89). It should work through sm_80 cubin compatibility, but the repo does not list or test those GPUs.",
+   "Whether the PyTorch backend (about 21.5 GB after initialization) fits on a 24 GB GPU during an active omni duplex session. Peak in-session VRAM is not documented, and the README says more than 28 GB is required.",
+   "RTX 3090 latency and throughput for PyTorch omni full-duplex: no data in the repo. The only 24 GB data point is RTX 4090 at about 0.9 s per unit without compile.",
+   "Whether the openbmb/MiniCPM-o-4_5-awq model runs in the demo image. The code detects AWQ, but no AWQ kernel package (for example autoawq) is declared in requirements.txt or the Dockerfiles, and there are no AWQ run instructions in main.",
+   "Whether the old repo name OpenBMB/minicpm-o-4_5-pytorch-simple-demo (linked from the HF model card) redirects to MiniCPM-o-Demo. The GitHub API rate limit was hit before I could check.",
+   "Python version in the C++ runtime image: it is apt python3 on Ubuntu 22.04, probably 3.10, but the Dockerfile does not state it.",
+   "Runpod specifics are not covered by this source: prices, whether Docker Compose can run inside a Runpod pod, and whether the gateway should run with --http behind Runpod's TLS-terminating proxy. The demo docs only say browsers need HTTPS for mic/camera.",
+   "The pause/resume and 60 s pause_timeout described in docs/en/architecture/duplex.md: the current py_backend/server.py WS loop accepts only session.init and input.append (close goes over HTTP), so I could not confirm pause/resume in the current code path.",
+   "I did not read the Comni branch contents (9af4308a, 2026-05-11) beyond its commit metadata, so how its C++ setup differs from main's docker-compose.cpp.yml is not confirmed."
+  ]
+ },
+ {
+  "key": "minicpm",
+  "summary": "MiniCPM-o 4.5 docs research, read 2026-10-22. Everything below was read from the pages themselves, pinned to the SHAs given.\n\nREPO AND SHA. github.com/OpenBMB/MiniCPM-o now redirects (301) to OpenBMB/MiniCPM-V (same repo id, 749647889). The current main commit is dfe5db0cabf054c4615c796306a51f9b0ee399ca (2026-10-16T15:13:55Z, \"docs: add homepage model weights and explicit DSpark format links\"). The README now leads with MiniCPM-V 4.7. All MiniCPM-o 4.5 material lives in docs/minicpm_o4dot5_en.md. On HF, openbmb/MiniCPM-o-4_5 is at d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4 (2026-10-16). Its weights are 4 safetensors shards totalling about 18.7 GB, and the whole repo is 20.05 GB including token2wav assets.\n\nOFFICIAL WAYS TO RUN STREAMING OMNI (video + audio in, speech out). Only two paths are documented.\n(A) PyTorch + HF Transformers. This is the \"recommended, 100% precision\" path. It uses model.as_duplex(), then prepare, streaming_prefill and streaming_generate. The officially recommended server is OpenBMB/MiniCPM-o-Demo (the old URL minicpm-o-4_5-pytorch-simple-demo redirects there), main 47709a9210dfd71afa76c058e017fc8c4db5c8d2. It supports omni full-duplex, audio full-duplex and turn-based chat. Its stated requirement is an NVIDIA GPU with more than 28 GB and Linux. Measured VRAM is about 21.5 GB per worker. Omni duplex takes about 0.9 s per 1 s unit on A100 or RTX 4090, close to real time; torch.compile brings that to about 0.5 s on A100.\n(B) llama.cpp-omni, a C++ engine running the GGUF files. It supports half-duplex speech and full-duplex omni streaming. Requirements: an NVIDIA GPU with at least 12 GB, or for full-duplex on a Mac, an M4 Max with at least 24 GB. It serves llama-omni-server on WebSocket /backend with full_duplex mode, 1 s audio plus video frames per input.append and speak/listen decided at 1 Hz. VRAM for the full omni set: Q4_K_M about 9 GB, Q8_0 about 13 GB, F16 about 20 GB. Speed on RTX 4090 F16: first token under 550 ms, Token2Wav RTF about 0.15x. The cookbook's commands were verified on an RTX 4090. The MiniCPM-o-Demo repo can also use this C++ engine as its backend (docker-compose.cpp.yml, defaulting to MiniCPM-o-4_5-Q4_K_M.gguf with -c 8192).\n\nTEXT OUTPUT ONLY (no speech, no duplex) in the official guides:\n- vLLM: support was upstreamed in PR #33431 (merged 2026-02-06) and ships in vllm>=0.16.0. The guide shows image, video and audio input with text output.\n- SGLang: the cookbook guide shows image input with text output only. Upstream SGLang PR #18420 (\"Support MiniCPM-o 4.5\") was closed without merging. Upstream minicpmo.py imports only Qwen2ForCausalLM (no Qwen3), so upstream support for 4.5 is UNCONFIRMED.\n- Mainline llama.cpp: llama-mtmd-cli with image input only.\n- Ollama: openbmb/minicpm-o4.5, image input only, via the tc-mb/ollama fork on branch MiniCPM-V.\n- AWQ guide: vLLM or AutoAWQ (tc-mb fork), image examples only.\n\n24 GB GPU. The officially documented configuration that fits 24 GB and supports full-duplex video + audio with speech out is llama.cpp-omni plus openbmb/MiniCPM-o-4_5-gguf. The WebRTC_Demo README marks RTX 4090 24GB and RTX 3090 24GB as duplex ✅, and says the full Q4_K_M set is about 8.3 GB on disk and about 10 GB at runtime. One build gotcha: the Demo's Dockerfile.cpp-worker-backend defaults to CMAKE_CUDA_ARCHITECTURES=80;120, which leaves out sm_89 (RTX 40 series). The cookbook says to add 89 and rebuild. The PyTorch BF16 path officially requires more than 28 GB, so 24 GB is officially unsupported there, even though about 21.5 GB was measured.\nOfficial int4 repos: openbmb/MiniCPM-o-4_5-awq (AWQ gemm, 4-bit, group 128, about 11 GB) and openbmb/MiniCPM-o-4_5-GPTQ (W4A16, about 11 GB per its card, loaded with auto-gptq and device_map=\"auto\"). There is no openbmb MiniCPM-o-4_5-int4 (bitsandbytes) repo. No official doc shows AWQ or GPTQ running full-duplex streaming, so that is UNCONFIRMED.\n\nPIP PINS FOR 4.5. The GitHub guide gives:\npip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5\"\nThe [all] extra is needed for TTS and streaming. Tested on Python 3.10.\n- The HF card, changed 2026-10-16, caps it at \"minicpmo-utils[all]>=1.0.5,<=1.0.6\". minicpmo-utils 1.0.7 appeared on PyPI 3 minutes later. The reason for the cap is not stated.\n- What minicpmo-utils pulls in: pillow==10.4.0, librosa==0.9.0, decord==0.6.0 and moviepy==2.1.2. The tts extra adds transformers>=4.51.0,<4.53.0, onnxruntime>=1.18.0,<=1.21.0, einops==0.8.1 and soundfile==0.12.1.\n- The Demo requirements.txt pins transformers==4.51.0 and accelerate==1.12.0. It also requires librosa>=0.10.2: a comment says 0.9.x crashes on import with new setuptools. That conflicts with minicpmo-utils' librosa==0.9.0 pin. The Dockerfile works around this by installing minicpmo-utils first. The Dockerfile itself uses python:3.12-slim-bookworm and torch==2.8.0 / torchaudio==2.8.0 from the cu128 index.\n- flash-attn is optional. sdpa is the default in the examples, and the Whisper audio module always uses sdpa. The Demo's install.sh lists flash-attn \">=2.7.1,<=2.8.2\" as \"officially recommended\", but that step is commented out and labelled \"Not Recommended\".\n- vector-quantize-pytorch and vocos are NOT used by 4.5. They appear only in requirements_o2.6.txt (1.18.5 and 0.1.0). The 4.5 TTS uses stepaudio2.Token2wav, which comes from minicpmo-utils[all].\n\nPORTS (from the Demo). Gateway 8006 over HTTPS; the browser mic and camera need HTTPS. Internal registry on 8007, worker on 22400, backend on 22500. The cookbook's standalone llama-omni-server example uses 28099. That server defaults to HTTPS (LLAMA_OPENSSL=ON) and exits right away if it has no certificate. The WebRTC_Demo needs LiveKit 7880, 7891→7881/tcp, 7882/udp and 50000-50100/udp, plus 3000, 8025 and 9060.\n\nRunpod pricing was not part of these sources.",
+  "facts": [
+   {
+    "topic": "repo/commit",
+    "fact": "github.com/OpenBMB/MiniCPM-o returns HTTP 301 to github.com/OpenBMB/MiniCPM-V (API: repo id 749647889, full_name OpenBMB/MiniCPM-V, default_branch main).",
+    "url": "https://api.github.com/repos/OpenBMB/MiniCPM-o",
+    "confirmed": true
+   },
+   {
+    "topic": "repo/commit",
+    "fact": "Current main commit SHA: dfe5db0cabf054c4615c796306a51f9b0ee399ca, committed 2026-10-16T15:13:55Z by yiranyyu, message 'docs: add homepage model weights and explicit DSpark format links'.",
+    "url": "https://api.github.com/repos/OpenBMB/MiniCPM-V/commits/main",
+    "confirmed": true
+   },
+   {
+    "topic": "repo/commit",
+    "fact": "The README now leads with MiniCPM-V 4.7. MiniCPM-o 4.5 is described as a '9B end-to-end omnimodal model' that can 'continuously receive video and audio while generating speech and text', and links to docs/minicpm_o4dot5_en.md as the model guide.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "HF model",
+    "fact": "openbmb/MiniCPM-o-4_5 is at HF sha d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4 (lastModified 2026-10-16T10:30:03Z), not gated, library transformers, pipeline any-to-any. Weights are model-00001..00004-of-00004.safetensors at 5273477136 + 5301855080 + 5301855048 + 2866549964 bytes (~18.7 GB). assets/token2wav holds flow.pt 623466603, hift.pt 83390254, speech_tokenizer_v2_25hz.onnx 496082973 and campplus.onnx 28303423 bytes. The whole repo is 20.05 GB.",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "HF model",
+    "fact": "config.json: architectures ['MiniCPMO'], transformers_version 4.51.0, torch_dtype bfloat16, model_type minicpmo, version 4.5, hidden_size 4096, num_hidden_layers 36, max_position_embeddings 40960. auto_map points AutoModel to modeling_minicpmo.MiniCPMO, so trust_remote_code=True is required.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/blob/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/config.json",
+    "confirmed": true
+   },
+   {
+    "topic": "architecture",
+    "fact": "Built on SigLip2, Whisper-medium, CosyVoice2 and Qwen3-8B, 9B parameters in total. Full-duplex: the LLM decides at 1 Hz whether to speak. Inputs are high-resolution images up to 1.8M pixels and video up to 10 fps.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "pip pins (GitHub guide)",
+    "fact": "Exact text: 'Please ensure transformers==4.51.0 is installed... Requirements tested on Python 3.10'. With TTS or streaming: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5\". Without TTS or streaming the same line uses \"minicpmo-utils>=1.0.5\". FFmpeg is needed for get_video_frame_audio_segments(use_ffmpeg=True) and for generate_duplex_video.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "pip pins (HF card)",
+    "fact": "The HF card at d59117d1 (2026-10-16) caps minicpmo-utils: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5,<=1.0.6\". A diff against the previous revision 503e754 shows that adding '<=1.0.6' was the only change.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/blob/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "minicpmo-utils",
+    "fact": "PyPI minicpmo-utils: latest is 1.0.7 (sdist uploaded 2026-10-16T10:33:19), 1.0.5 was uploaded 2026-02-09 and 1.0.6 on 2026-02-11. requires_python >=3.10. Base deps: numpy>=1.24.0, pillow==10.4.0, librosa==0.9.0, decord==0.6.0 (non-darwin), eva-decord (darwin), moviepy==2.1.2. Extra 'tts': torch>=2.3.0, torchaudio>=2.3.0, transformers>=4.51.0,<4.53.0, onnxruntime>=1.18.0,<=1.21.0, onnx, hyperpyyaml, tqdm>=4.66.0, einops==0.8.1, scipy>=1.10.0, soundfile==0.12.1. Extra 'all' is minicpmo-utils[tts]. The dependency lists are identical in 1.0.5, 1.0.6 and 1.0.7.",
+    "url": "https://pypi.org/pypi/minicpmo-utils/json",
+    "confirmed": true
+   },
+   {
+    "topic": "deps: vocos / vector-quantize / flash-attn",
+    "fact": "The 4.5 HF remote code (modeling_minicpmo.py, utils.py, processing_minicpmo.py, configuration_minicpmo.py) never imports vector_quantize_pytorch or vocos. init_tts() does 'from stepaudio2 import Token2wav' and raises 'Please install Token2wav via: pip install minicpmo-utils[all]' if it is missing. vector-quantize-pytorch==1.18.5 and vocos==0.1.0 appear only in the repo's requirements_o2.6.txt (MiniCPM-o 2.6).",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5/blob/d59117d19ddb8a28a62f1b5f4e3b34ac48d510a4/modeling_minicpmo.py",
+    "confirmed": true
+   },
+   {
+    "topic": "deps: flash-attn",
+    "fact": "flash-attn is optional: the examples use attn_implementation='sdpa' ('sdpa or flash_attention_2'). The audio (Whisper) module always falls back to sdpa; a code comment says flash_attention_2 causes 'cu_seqlens_q must have shape (batch_size + 1)'. Vision and TTS use flash_attention_2 if it is selected and otherwise 'eager'. The Demo doc says flash_attention_2 is about 5-15% faster than sdpa on A100.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/en/attention_backend.md",
+    "confirmed": true
+   },
+   {
+    "topic": "deps: flash-attn",
+    "fact": "The Demo's install.sh sets FLASH_ATTN_VERSION=\">=2.7.1,<=2.8.2\" with the comment 'Officially recommended version range'. The flash-attn install step itself is commented out under the heading 'Step 4/4: Install Flash Attention 2 (Not Recommended)'.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/install.sh",
+    "confirmed": true
+   },
+   {
+    "topic": "official streaming path A (PyTorch)",
+    "fact": "Duplex omni API: model = AutoModel.from_pretrained('openbmb/MiniCPM-o-4_5', trust_remote_code=True, attn_implementation='sdpa', torch_dtype=torch.bfloat16); model.eval().cuda(); model = model.as_duplex(). Then model.prepare(prefix_system_prompt='Streaming Omni Conversation.', ref_audio=..., prompt_wav_path=...), and for each 1 s chunk model.streaming_prefill(audio_waveform=..., frame_list=..., max_slice_nums=1) followed by model.streaming_generate(prompt_wav_path=..., max_new_speak_tokens_per_chunk=20, decode_mode='sampling'). The result holds is_listen, text, audio_waveform, end_of_turn and current_time. Input audio is 16 kHz; output is 24 kHz.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "official streaming path A (PyTorch web demo)",
+    "fact": "Web Demo Deployment, recommended option 'PyTorch + Nvidia GPU, lossless performance'. It supports full-duplex omnimodal live streaming, full-duplex speech, turn-based chat and an API backend. Exact requirement: 'Nvidia GPU with at least 28GB GPU memory. We are working on optimizing the model for lower GPU memory usage.'",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "official streaming path A (PyTorch web demo)",
+    "fact": "github.com/OpenBMB/minicpm-o-4_5-pytorch-simple-demo redirects (301) to OpenBMB/MiniCPM-o-Demo. Main is at 47709a9210dfd71afa76c058e017fc8c4db5c8d2 (2026-09-15). The README says to 'Make sure you have an NVIDIA GPU with more than 28GB of VRAM' and to run Linux. Modes: Turn-based Chat, Omnimodal Full-Duplex (vision + audio in, text + voice out) and Audio Full-Duplex. The resource table gives VRAM per worker after initialization of ~21.5 GB, model load time ~16 s, and Omni Full-Duplex per-unit latency on A100 of ~0.9 s, or ~0.5 s with torch.compile.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "official streaming path A (PyTorch web demo)",
+    "fact": "The compile doc says that on A100 and RTX 4090, omni full-duplex takes about 0.9 s per unit, 'approaching the 1-second real-time threshold and causing noticeable stuttering'. torch.compile ('service': {'compile': true}) reduces that to about 0.5 s. Cold compile takes about 15 min and a cached start about 5 min (precompile.py, TORCHINDUCTOR_CACHE_DIR). VRAM is unchanged at about 21.5 GB.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docs/en/compile.md",
+    "confirmed": true
+   },
+   {
+    "topic": "PyTorch demo pins",
+    "fact": "Demo requirements.txt pins transformers==4.51.0, accelerate==1.12.0, safetensors>=0.7.0, minicpmo-utils[all]>=1.0.5, fastapi>=0.128.0, uvicorn>=0.40.0, httpx>=0.28.0, websockets>=16.0, PyYAML>=6.0, librosa>=0.10.2, soundfile>=0.12.1, pydantic>=2.11.0 and numpy>=2.2.0. A comment says librosa must be >=0.10.2 because 0.9.x crashes on import under new setuptools (missing pkg_resources). That conflicts with minicpmo-utils' pin of librosa==0.9.0.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/requirements.txt",
+    "confirmed": true
+   },
+   {
+    "topic": "PyTorch demo Docker",
+    "fact": "docker/Dockerfile.worker-backend: FROM python:3.12-slim-bookworm, apt installs ffmpeg, libsndfile1 and curl, then pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.8.0 torchaudio==2.8.0. It installs \"minicpmo-utils[all]>=1.0.5\" first and then the rest of requirements.txt with the minicpmo-utils line removed. Weights (19G) are mounted, not baked in. It exposes 22500 (backend) and 22400 (worker). The docs separately say Python 3.10 / install.sh with torch==2.8.0.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/Dockerfile.worker-backend",
+    "confirmed": true
+   },
+   {
+    "topic": "PyTorch demo ports/commands",
+    "fact": "Compose run: 'MODEL_HOST_PATH=/path/to/MiniCPM-o-4_5 docker compose up -d --build'. The gateway listens on 8006 over HTTPS with --internal-port 8007 and certs/cert.pem + certs/key.pem made with openssl. Workers register via PUT http://gateway:8007/internal/workers/<id>. Each worker-backend uses one GPU, with worker on 22400 and backend on 22500. The compose comments say HTTPS is needed because browsers only expose navigator.mediaDevices (mic) over HTTPS or localhost.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker-compose.yml",
+    "confirmed": true
+   },
+   {
+    "topic": "official streaming path B (llama.cpp-omni)",
+    "fact": "Model guide: llama.cpp-omni is a fully C++ implementation using quantized weights. It supports 'half-duplex speech realtime conversation' and 'full-duplex omnimodal live streaming'. Requirements for full-duplex omnimodal live streaming: 'Apple M4 Max chip with at least 24GB RAM or low-resource Nvidia GPU with at least 12GB GPU memory'. The half-duplex requirement is M3/M4/M5 with 16GB or an Nvidia GPU with at least 12GB.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "llama.cpp-omni",
+    "fact": "llama.cpp-omni: OpenBMB/llama.cpp-omni (main) and tc-mb/llama.cpp-omni (master) both point at commit a64932ec615e1463158129feaf2f0752d0c07a2e (2026-10-19, 'update iphone data (#142)'). README VRAM table (NVIDIA): Full Omni F16 ~18 GB model / ~20 GB VRAM; Q8_0 ~11 GB / ~13 GB; Q4_K_M ~8 GB / ~9 GB. Latency on RTX 4090 F16: first token under 550 ms, Decode-LLM ~38 ms/token, TTS ~8.5 ms/token, Token2Wav RTF ~0.15x.",
+    "url": "https://github.com/tc-mb/llama.cpp-omni/blob/a64932ec615e1463158129feaf2f0752d0c07a2e/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "llama.cpp-omni usage",
+    "fact": "Cookbook guide: build with cmake --target llama-omni-cli llama-omni-single-test-audio llama-omni-single-test-omni llama-omni-test-duplex llama-omni-server. The model needs a fixed directory layout: MiniCPM-o-4_5-Q4_K_M.gguf plus audio/MiniCPM-o-4_5-audio-F16.gguf, vision/MiniCPM-o-4_5-vision-F16.gguf, tts/MiniCPM-o-4_5-tts-F16.gguf, tts/MiniCPM-o-4_5-projector-F16.gguf and token2wav-gguf/. Start the server with: llama-omni-server -m $MODEL --host 0.0.0.0 --port 28099 -c 4096 -ngl 99 --ssl-cert-file ... --ssl-key-file ...; or build with -DLLAMA_OPENSSL=OFF for plain HTTP. Without a certificate in the default OpenSSL=ON build, the server exits right away. WebSocket /backend: session.init with mode turn_based|full_duplex and use_tts; full_duplex input.append carries 1 s of audio plus optional video_frames, and the server decides speak/listen at 1 Hz. Health check: GET /health returns {\"engine\":\"comni\",\"status\":\"ok\"}. 'verified on Linux + NVIDIA CUDA (RTX 4090)'.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/deployment/llama.cpp-omni/minicpmo_4_5_llamacpp_omni.md",
+    "confirmed": true
+   },
+   {
+    "topic": "llama.cpp-omni Docker gotcha",
+    "fact": "The Demo's docker/Dockerfile.cpp-worker-backend uses nvidia/cuda:12.8.1-devel/runtime-ubuntu22.04 and clones https://github.com/tc-mb/llama.cpp-omni.git at origin/master, with default ARG CMAKE_CUDA_ARCHITECTURES=80;120. The cookbook says this excludes Ada sm_89 (RTX 40 series) and that you should add 89 if you see 'no kernel image is available'. The entrypoint defaults are GGUF_MODEL=/models/MiniCPM-o-4_5-gguf/MiniCPM-o-4_5-Q4_K_M.gguf and N_GPU_LAYERS=99; compose sets LLAMA_SERVER_EXTRA_ARGS to '-c 8192'.",
+    "url": "https://github.com/OpenBMB/MiniCPM-o-Demo/blob/47709a9210dfd71afa76c058e017fc8c4db5c8d2/docker/Dockerfile.cpp-worker-backend",
+    "confirmed": true
+   },
+   {
+    "topic": "24GB low-memory config",
+    "fact": "WebRTC_Demo README: 'The full model set (LLM Q4_K_M + Vision/Audio/TTS F16 + Token2Wav) totals ~8.3 GB, with a runtime GPU memory footprint of approximately 10 GB'. NVIDIA duplex needs at least 12 GB and 16 GB+ is recommended. The tier table marks RTX 3090 24GB and RTX 4090 24GB as duplex ✅ ('Comfortable' and 'Best performance'), RTX 3060 12GB as marginal, and RTX 4060 8GB as ❌.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/demo/web_demo/WebRTC_Demo/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "WebRTC demo ports",
+    "fact": "WebRTC_Demo uses livekit/livekit-server:v1.5.3 with ports 7880 (HTTP API), 7891->7881 (TCP WebRTC), 7882/udp (TURN) and 50000-50100/udp, plus ghcr.io/openbmb/minicpmo-backend:latest (8025->8021) and ghcr.io/openbmb/minicpmo-frontend:latest (3000->80). The C++ inference HTTP API is on 9060. oneclick.sh serves https://localhost:8088.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/demo/web_demo/WebRTC_Demo/docker-compose.yml",
+    "confirmed": true
+   },
+   {
+    "topic": "official model ids & memory",
+    "fact": "Model Weights table: MiniCPM-o 4.5, GPU, 19 GB (openbmb/MiniCPM-o-4_5); MiniCPM-o 4.5 gguf, GPU, 10 GB (openbmb/MiniCPM-o-4_5-gguf); MiniCPM-o 4.5 AWQ, GPU, 11 GB (link huggingface.co/openbmb/MiniCPM-o-4_5-AWQ, whose canonical id is openbmb/MiniCPM-o-4_5-awq). The Inference Efficiency table gives bf16 at 154.3 tok/s, first token 0.6 s, 19.0 GB, and int4 at 212.3 tok/s, 0.6 s, 11.0 GB.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "GGUF files",
+    "fact": "openbmb/MiniCPM-o-4_5-gguf (sha db25077c33951fe163b42986fba0132e279872a2). LLM quants with sizes in bytes: F16 16384959136, Q4_0 4773679904, Q4_1 5246637856, Q4_K_M 5026714400, Q4_K_S 4800942880, Q5_0 5719595808, Q5_1 6192553760, Q5_K_M 5849946912, Q5_K_S 5719595808, Q6_K 6724631456, Q8_0 8707877536. Other files: audio/MiniCPM-o-4_5-audio-F16.gguf 660167904, vision/MiniCPM-o-4_5-vision-F16.gguf 1095113184, tts/MiniCPM-o-4_5-tts-F16.gguf 1157244416, tts/MiniCPM-o-4_5-projector-F16.gguf 14948640, and token2wav-gguf/ (encoder, flow_matching, flow_extra, hifigan2, prompt_cache).",
+    "url": "https://huggingface.co/api/models/openbmb/MiniCPM-o-4_5-gguf?blobs=true",
+    "confirmed": true
+   },
+   {
+    "topic": "int4 model ids",
+    "fact": "Official openbmb int4 repos for o-4.5: openbmb/MiniCPM-o-4_5-awq (sha 02b87bcf31b1e3bc66094a8f8eba2034605e5073; quant_method awq, version gemm, bits 4, group_size 128; vpm, apm, resampler, audio_projection_layer, audio_avg_pooler, tts and lm_head left unquantized; config transformers_version 4.57.1; 2 shards 4852385280 + 3608418916 bytes). openbmb/MiniCPM-o-4_5-GPTQ (sha 02b54c54c36f8b48e97501bb0fde5d178c62df38; gptq bits 4, group_size 128, sym true, desc_act false; 2 shards 4273353840 + 4192786348 bytes). openbmb/MiniCPM-o-4_5-int4 does not exist publicly: the API returned an error, and the openbmb model search lists no such repo.",
+    "url": "https://huggingface.co/api/models?author=openbmb&search=MiniCPM-o-4",
+    "confirmed": true
+   },
+   {
+    "topic": "GPTQ usage",
+    "fact": "GPTQ card: 'pre-quantized to W4A16, reducing GPU memory usage from ~19GB (BF16) to ~11GB (INT4)'. Install: pip install \"transformers==4.51.0\" accelerate \"torch>=2.3.0,<=2.8.0\" \"torchaudio<=2.8.0\" \"minicpmo-utils[all]>=1.0.5\" auto-gptq. Load with AutoModel.from_pretrained('openbmb/MiniCPM-o-4_5-gptq', trust_remote_code=True, attn_implementation='sdpa', torch_dtype=torch.bfloat16, device_map='auto', init_vision=True, init_audio=True, init_tts=True). For full-duplex it says to 'see the base model README'.",
+    "url": "https://huggingface.co/openbmb/MiniCPM-o-4_5-GPTQ/blob/main/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "text/image-only backends: vLLM",
+    "fact": "Cookbook vLLM guide: MiniCPM-o 4.5 support was merged in vLLM PR #33431 and ships from v0.16.0 ('pip install \"vllm>=0.16.0\"', plus vllm[video] and vllm[audio]). Serve with: vllm serve <model_path> --dtype auto --max-model-len 2048 --api-key token-abc123 --gpu_memory_utilization 0.9 --trust-remote-code --max-num-batched-tokens 2048 (port 8000). Examples cover image, video and audio input with text output only, using stop_token_ids [151643, 151645]. Speech output and duplex are not covered. The PR was merged 2026-02-06T15:29:11Z and v0.16.0 was published 2026-02-25.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/deployment/vllm/minicpm-o4_5_vllm.md",
+    "confirmed": true
+   },
+   {
+    "topic": "text/image-only backends: SGLang",
+    "fact": "Cookbook SGLang guide: install from source, then 'python -m sglang.launch_server --model-path openbmb/MiniCPM-o-4_5 --port 30000'. Only an image-in / text-out example is given. Upstream SGLang PR #18420 '[model] Support MiniCPM-o 4.5' was closed unmerged on 2026-09-02, and upstream python/sglang/srt/models/minicpmo.py imports only Qwen2ForCausalLM with zero Qwen3 references. The deployment_en.md link uses 'MiniCPM-o4_5_sglang.md' (capital M), which returns 404; the real file is minicpm-o4_5_sglang.md.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/deployment/sglang/minicpm-o4_5_sglang.md",
+    "confirmed": true
+   },
+   {
+    "topic": "text/image-only backends: llama.cpp & Ollama",
+    "fact": "The mainline llama.cpp guide uses llama-mtmd-cli with -m MiniCPM-o-4_5-Q4_K_M.gguf --mmproj MiniCPM-o-4_5-vision-F16.gguf --image, image input only. The Ollama guide runs './ollama run openbmb/minicpm-o4.5' with image input only, building from the fork https://github.com/tc-mb/ollama.git on branch MiniCPM-V. The ollama.com/openbmb/minicpm-o4.5 tags include q4_K_M, q8_0, f16 and others.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/deployment/ollama/minicpm-o4_5_ollama.md",
+    "confirmed": true
+   },
+   {
+    "topic": "cookbook hardware table",
+    "fact": "Cookbook deployment README lists MiniCPM-o 4.5: BF16/FP16 on vLLM needs at least 20 GB GPU VRAM; GGUF Q4_K_M on llama.cpp needs at least 7 GB VRAM and at least 8 GB CPU RAM.",
+    "url": "https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/05f8bc216b7f3858827ad9518133c761bb0fabe3/deployment/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "FlagOS",
+    "fact": "FlagOS supports MiniCPM-o 4.5 on Nvidia and five other chip families (FlagRelease/MiniCPM-o-4.5-nvidia-FlagOS). Image versions: driver 570.158.01, CUDA 13.0, FlagGems 4.2.1rc0, FlagTree 0.4.0+3.5, vllm 0.13.0 + vllm_fl. Example: USE_FLAGOS=1 vllm serve ${model_path} --dtype auto --gpu_memory_utilization 0.9 --trust-remote-code --max-num-batched-tokens 2048 --served-model-name cpmo --port ${Port}.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/deployment_en.md",
+    "confirmed": true
+   },
+   {
+    "topic": "hosted API",
+    "fact": "An OpenAI-compatible API exists at base URL https://api.modelbest.cn/v1 with model id MiniCPM-O-4.5-9B (keys from platform.modelbest.cn). It supports text, image and video via Chat Completions; full-duplex realtime is documented at https://minicpmo45.modelbest.cn/docs/en/realtime-api/overview/.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/api.md",
+    "confirmed": true
+   },
+   {
+    "topic": "limitations",
+    "fact": "Documented limitations: speech output in omni mode can mispronounce characters, the model sometimes mixes English and Chinese in speech/omni mode, and foundation capability in full-duplex omni mode 'still needs improvement'.",
+    "url": "https://github.com/OpenBMB/MiniCPM-V/blob/dfe5db0cabf054c4615c796306a51f9b0ee399ca/docs/minicpm_o4dot5_en.md",
+    "confirmed": true
+   }
+  ],
+  "unconfirmed": [
+   "Whether the AWQ (openbmb/MiniCPM-o-4_5-awq) or GPTQ (openbmb/MiniCPM-o-4_5-GPTQ) int4 checkpoints work with full-duplex streaming omni (as_duplex / streaming_generate with TTS). No official doc shows or tests it; the GPTQ card only points to the base README and shows init_tts=True loading.",
+   "Whether the PyTorch BF16 duplex demo runs on a 24 GB GPU. About 21.5 GB per worker was measured, but the official requirement is at least 28 GB (model guide) or more than 28 GB (Demo README). No official 24 GB PyTorch configuration is documented.",
+   "Why the HF card capped minicpmo-utils at <=1.0.6 on 2026-10-16. Version 1.0.7 was published 3 minutes later and its declared dependencies are identical; the reason is not stated.",
+   "Whether 'pip install -r requirements.txt' from MiniCPM-o-Demo actually fails to resolve, given minicpmo-utils pins librosa==0.9.0 and the Demo requires librosa>=0.10.2. This is inferred from the metadata, not tested. The Dockerfile works around it by installing in two steps.",
+   "Upstream SGLang support for MiniCPM-o 4.5. The cookbook guide exists, but upstream PR #18420 was closed unmerged and upstream minicpmo.py has no Qwen3 backbone.",
+   "The 'int4 and GGUF format quantized models in 16 sizes' claim. Only 11 GGUF LLM quants plus AWQ and GPTQ are found under openbmb.",
+   "Which GPU produced the Inference Efficiency table (bf16 154.3 tok/s / 19.0 GB; int4 212.3 tok/s / 11.0 GB). The docs do not name it.",
+   "Whether the Demo's default CMAKE_CUDA_ARCHITECTURES=80;120 also needs 86 added for Ampere consumer/workstation cards (RTX 3090, A5000, A40, sm_86). The cookbook only mentions adding 89 for Ada; the sm_86 point is my inference.",
+   "Whether Runpod can expose the UDP ports 7882 and 50000-50100 that the LiveKit-based WebRTC_Demo needs. This is not in the MiniCPM docs. The MiniCPM-o-Demo gateway path (HTTPS/WSS on TCP 8006) does not need UDP.",
+   "Runpod GPU prices and pod templates were not part of these sources and were not checked.",
+   "The flash-attn version actually tested with 4.5. install.sh names >=2.7.1,<=2.8.2 as 'officially recommended', but the step is disabled; the attention doc's sample log shows flash-attn 2.6.3."
+  ]
+ },
+ {
+  "key": "runpod",
+  "facts": [
+   {
+    "topic": "(1) Template fields",
+    "fact": "Template configuration options (console): Name; Container image (public registry e.g. `ubuntu:latest`, or private registry 'requires registry credentials'); Template visibility (public/private); Compute type (NVIDIA GPU / AMD GPU / CPU); Container start command ('overrides the default CMD'; either plain bash e.g. `bash -c 'mkdir /workspace && /start.sh'` or JSON `{\"cmd\": [\"python\", \"app.py\"], \"entrypoint\": [\"bash\", \"-c\"]}`); Registry credentials; Container disk size; Volume disk size; Volume mount path ('commonly `/workspace`'); HTTP ports (via Runpod HTTP proxy, 'automatically secured with HTTPS'); TCP ports (raw TCP e.g. SSH); Environment variables.",
+    "url": "https://docs.runpod.io/pods/templates/manage-templates",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Template REST API",
+    "fact": "POST https://rest.runpod.io/v1/templates (Authorization: Bearer KEY). TemplateCreateInput required: name, imageName. Fields/defaults: category NVIDIA|AMD|CPU (default NVIDIA); containerDiskInGb (default 50); containerRegistryAuthId ('container auth object needed for a private image'); dockerEntrypoint (array, default [] = image ENTRYPOINT); dockerStartCmd (array, default [] = image CMD); env (object, default {}); isPublic (false); isServerless (false); ports (array like \"8888/http\",\"22/tcp\"; default 8888/http,22/tcp; protocol http or tcp); readme; volumeInGb (default 20); volumeMountPath (default /workspace).",
+    "url": "https://docs.runpod.io/api-reference/templates/POST/templates",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Private registry auth",
+    "fact": "Credentials page > 'Container Registry Auth' tab > Add Credential: name, registry URL, username, password or access token; supports Docker Hub, GHCR, Amazon ECR and others. CLI: `runpodctl registry create --name \"docker-hub\" --username \"myuser\" --password-stdin`; list with `runpodctl registry list`; pass ID via `runpodctl pod create --registry-auth-id <id>` (REST field containerRegistryAuthId). For GAR/gcr.io username is literal `_json_key` with service-account JSON via --password-stdin.",
+    "url": "https://docs.runpod.io/get-started/credentials ; https://docs.runpod.io/runpodctl/reference/runpodctl-registry ; https://docs.runpod.io/runpodctl/reference/runpodctl-pod",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Docker command override (pod-level)",
+    "fact": "runpodctl pod create flags: --image, --docker-args (e.g. \"sleep infinity\"), --container-disk-in-gb (default 20), --volume-in-gb (cannot combine with --network-volume-id), --volume-mount-path (default /workspace), --ports (e.g. `8888/http,22/tcp`), --env (JSON object), --cloud-type SECURE|COMMUNITY (default SECURE), --data-center-ids, --network-volume-id, --min-cuda-version, --ssh (default true), --registry-auth-id. GraphQL podFindAndDeployOnDemand uses `dockerArgs`, `ports: \"8888/http\"`, `volumeMountPath`, `env: [{key,value}]`.",
+    "url": "https://docs.runpod.io/runpodctl/reference/runpodctl-pod ; https://docs.runpod.io/sdks/graphql/manage-pods",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Custom template tutorial",
+    "fact": "Tutorial base image `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` (PyTorch 2.8.0, CUDA 12.8.1, Ubuntu 24.04); build with `docker build --platform linux/amd64 ...` (required on Mac/ARM); recommends versioned tags not `:latest` (conflicts with Runpod image caching). Console example: Container Disk at least 15 GB, HTTP port label JupyterLab 8888, TCP port SSH 22. Base image `/start.sh` starts Jupyter/SSH; to run your app alongside, CMD a run.sh that does `/start.sh &` then your app; app-only mode: `ENTRYPOINT []` + `CMD [\"python\", \"/app/main.py\"]`. Example repo: github.com/runpod-workers/pod-template.",
+    "url": "https://docs.runpod.io/pods/templates/create-custom-template",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Env vars and secrets",
+    "fact": "Up to 50 environment variables per Pod. Secrets referenced as `{{ RUNPOD_SECRET_secret_name }}`, e.g. `API_KEY={{ RUNPOD_SECRET_my_api_key }}`; secret value can't be viewed after creation; key-icon secret selector in template UI. Updating env vars on a Pod restarts it and clears all data outside the volume mount path (/workspace by default). NOTE inconsistency: the Credentials page says 'Secret keys must start with `RUNPOD_SECRET_` — for example, `RUNPOD_SECRET_HF_TOKEN`' and are injected as an env var with that key name.",
+    "url": "https://docs.runpod.io/pods/templates/environment-variables ; https://docs.runpod.io/pods/templates/secrets ; https://docs.runpod.io/get-started/credentials",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Runpod-injected env vars",
+    "fact": "Runpod sets: RUNPOD_POD_ID, RUNPOD_DC_ID, RUNPOD_POD_HOSTNAME, RUNPOD_GPU_COUNT, RUNPOD_CPU_COUNT, RUNPOD_PUBLIC_IP (if available), RUNPOD_TCP_PORT_22 (public port mapped to SSH), RUNPOD_VOLUME_ID, RUNPOD_API_KEY (Pod-scoped API key), PUBLIC_KEY (authorized SSH public keys), CUDA_VERSION, PYTORCH_VERSION. Symmetric ports: request TCP port numbers >70000, read actual via e.g. $RUNPOD_TCP_PORT_70000. Per-pod SSH key override env var: SSH_PUBLIC_KEY.",
+    "url": "https://docs.runpod.io/pods/templates/environment-variables ; https://docs.runpod.io/pods/configuration/expose-ports ; https://docs.runpod.io/pods/configuration/use-ssh",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) HTTP proxy URL and limits",
+    "fact": "Proxy URL: `https://[POD_ID]-[INTERNAL_PORT].proxy.runpod.net` (e.g. https://abc123xyz-4000.proxy.runpod.net); also `https://<pod-id>-<port>.proxy.runpod.net` in runpodctl docs. Field is 'Expose HTTP Ports (Max 10)'. Path: User -> Cloudflare -> Runpod Load Balancer -> Pod. '100-second timeout: Cloudflare enforces a maximum connection time of 100 seconds' -> 524 error; HTTPS only; publicly accessible (implement auth). Service must bind 0.0.0.0. Runpod blog adds: 'If the request starts streaming within 100 seconds that is fine'; you cannot expose the same port on both HTTP and TCP.",
+    "url": "https://docs.runpod.io/pods/configuration/expose-ports ; https://www.runpod.io/blog/runpod-proxy-guide",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) WebSockets via proxy",
+    "fact": "Pod docs do NOT state that proxy.runpod.net supports WebSockets. The only statement: 'WebSocket applications: TCP exposure often works better for persistent connections that might exceed timeout limits.' (WebSocket support is documented only for Serverless load-balancing endpoints at wss://ENDPOINT_ID.api.runpod.ai/ws.)",
+    "url": "https://docs.runpod.io/pods/configuration/expose-ports",
+    "confirmed": false
+   },
+   {
+    "topic": "(1) TCP ports",
+    "fact": "Expose TCP Ports gives public IP + mapped external port shown under Connect > Direct TCP Ports (e.g. `213.173.109.39:13007 -> :22`). Public IPs may change for Community Cloud Pods on migrate/restart; stable for Secure Cloud. 'External port mappings change whenever your Pod resets.' UDP not supported. runpodctl: Community Cloud Pods aren't guaranteed a public IP; use Secure Cloud if you need SSH.",
+    "url": "https://docs.runpod.io/pods/configuration/expose-ports ; https://docs.runpod.io/runpodctl/reference/runpodctl-pod",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) SSH requirements",
+    "fact": "Add SSH public key on Credentials page (or `runpodctl ssh add-key --key-file ~/.ssh/id_ed25519.pub`); keys injected into all Pods, dynamically without restart. Basic proxied SSH (`ssh <podid>-<hex>@ssh.runpod.io -i ~/.ssh/id_ed25519`) works on all Pods but no SCP/SFTP. Full SSH (`ssh root@IP -p PORT -i key`) needs public IP, TCP port 22 exposed and an sshd running; for custom templates docs give start command: `bash -c 'apt update; DEBIAN_FRONTEND=noninteractive apt-get install openssh-server -y; mkdir -p ~/.ssh; cd ~/.ssh; chmod 700 ~/.ssh; echo \"$PUBLIC_KEY\" >> authorized_keys; chmod 600 authorized_keys; service ssh start; sleep infinity'`. Troubleshoot with `runpodctl ssh info <pod-id>`.",
+    "url": "https://docs.runpod.io/pods/configuration/use-ssh ; https://docs.runpod.io/get-started/credentials",
+    "confirmed": true
+   },
+   {
+    "topic": "(1) Container environment limits",
+    "fact": "'Docker Compose is not supported: Runpod runs Docker for you, so you cannot spin up your own Docker instance or use Docker Compose on Pods.' 'UDP connections are not supported.' 'Windows is not supported.' Bazel tutorial: 'you can't directly build Docker containers or use Docker Compose on a GPU Pod' (Bazel used to emulate Docker-in-Docker). Pod stuck initializing with SSH: ensure idle job like `sleep infinity`. Running != ready: check Telemetry tab.",
+    "url": "https://docs.runpod.io/pods/overview ; https://docs.runpod.io/tutorials/pods/build-docker-images ; https://docs.runpod.io/pods/manage-pods",
+    "confirmed": true
+   },
+   {
+    "topic": "(2) Storage types: persistence and mount",
+    "fact": "Container disk: 'Lost on stop/restart', system-managed. Volume disk: 'Retained until Pod deleted', `/workspace` default, survives stop/restart, deleted on terminate; increase only; optional encryption (volume disk only). Network volume: 'Retained independently', mounts at `/workspace` replacing volume disk; must be attached at Pod creation and cannot be detached later; Secure Cloud only; Serverless mount `/runpod-volume`. Global volume (beta): `/workspace` or `/workspace-global` if a network volume also attached. Editing a running Pod resets it, erasing everything outside /workspace.",
+    "url": "https://docs.runpod.io/pods/storage/types ; https://docs.runpod.io/storage/network-volumes",
+    "confirmed": true
+   },
+   {
+    "topic": "(2) Storage billing",
+    "fact": "Container disk $0.10/GB/month running, 'Not charged' stopped (per-second). Volume disk $0.10/GB/month running, $0.20/GB/month stopped (per-second). Network volume (standard) $0.07/GB/month under 1TB, $0.05/GB/month over 1TB, same whether Pod running or stopped, billed hourly. Global volume $0.09/GB/month + IOPS. High-performance network storage: pricing page lists $0.14/GB/mo; docs say 'Exact pricing varies by data center'. Not charged when host machine is unavailable. Billing runs every 5 minutes.",
+    "url": "https://docs.runpod.io/pods/pricing ; https://docs.runpod.io/pods/storage/types ; https://docs.runpod.io/accounts-billing/billing ; https://www.runpod.io/pricing",
+    "confirmed": true
+   },
+   {
+    "topic": "(2) Network volume details",
+    "fact": "Backed by NVMe SSDs, 200-400 MB/s (up to 10 GB/s peak). Size can increase not decrease; >4 TB contact support. Create via console Storage page or `POST https://rest.runpod.io/v1/networkvolumes` with {name,size,dataCenterId}. At $0 balance: Pods with a network volume are stopped (data preserved), Pods without are terminated; volume storage keeps accruing and the volume may eventually be terminated.",
+    "url": "https://docs.runpod.io/storage/network-volumes ; https://docs.runpod.io/pods/pricing",
+    "confirmed": true
+   },
+   {
+    "topic": "(3) S3 API datacenters and endpoints",
+    "fact": "EU-CZ-1 https://s3api-eu-cz-1.runpod.io/ ; EU-RO-1 https://s3api-eu-ro-1.runpod.io/ ; EUR-IS-1 https://s3api-eur-is-1.runpod.io/ ; EUR-NO-1 https://s3api-eur-no-1.runpod.io/ ; US-CA-2 https://s3api-us-ca-2.runpod.io/ ; US-GA-2 https://s3api-us-ga-2.runpod.io/ ; US-IL-1 https://s3api-us-il-1.runpod.io/ ; US-KS-2 https://s3api-us-ks-2.runpod.io/ ; US-MD-1 https://s3api-us-md-1.runpod.io/ ; US-MO-1 https://s3api-us-mo-1.runpod.io/ ; US-MO-2 https://s3api-us-mo-2.runpod.io/ ; US-NC-1 https://s3api-us-nc-1.runpod.io/ ; US-NC-2 https://s3api-us-nc-2.runpod.io/ ; US-NE-1 https://s3api-us-ne-1.runpod.io/ ; US-WA-1 https://s3api-us-wa-1.runpod.io/ (15 total).",
+    "url": "https://docs.runpod.io/storage/s3-api",
+    "confirmed": true
+   },
+   {
+    "topic": "(3) S3 credentials",
+    "fact": "Credentials page > 'S3 API Keys' tab > 'Create an S3 API key' (separate from the Runpod API key). Access key looks like `user_***` and secret `rps_***`; secret shown only once. For `aws configure`, AWS Access Key ID = your Runpod user ID, found in the S3 key's description, e.g. 'Shared Secret for user_EXAMPLE 1749176107073'. Region = datacenter ID (e.g. EUR-IS-1). Bucket = NETWORK_VOLUME_ID; path mapping /workspace/x <-> s3://NETWORK_VOLUME_ID/x.",
+    "url": "https://docs.runpod.io/storage/s3-api ; https://docs.runpod.io/get-started/credentials",
+    "confirmed": true
+   },
+   {
+    "topic": "(3) S3 supported operations and limits",
+    "fact": "Supported: CopyObject, DeleteObject, GetObject, HeadBucket, HeadObject, ListBuckets, ListObjects, ListObjectsV2, PutObject (<500MB), CreateMultipartUpload, UploadPart, CompleteMultipartUpload, AbortMultipartUpload, ListMultipartUploads, ListParts. Not supported: DeleteObjects (planned), RestoreObject, CreateBucket/DeleteBucket, GetBucketLocation, versioning, presigned URLs (`aws s3 presign`), ACLs, bucket policies, tagging, encryption, object lock. Files >500MB must use multipart; max part 500MB; 5MB minimum part not enforced; parts stored in hidden `.s3compat_uploads/`. Max file size 4TB. Clock skew tolerance 1 hour. ls/ListObjects lists empty directories; slow / 'same next token' error on >10,000 files or >10GB (MD5/ETag computed for files not written via S3). `aws s3 sync` limited for >10,000 files. 502s: `export AWS_RETRY_MODE=standard; export AWS_MAX_ATTEMPTS=10`. Large-file timeouts: `--cli-read-timeout 7200` or boto3 Config(read_timeout=7200); helper script github.com/runpod/runpod-s3-examples/blob/main/upload_large_file.py.",
+    "url": "https://docs.runpod.io/storage/s3-api",
+    "confirmed": true
+   },
+   {
+    "topic": "(3) S3 example commands",
+    "fact": "`aws s3 ls --region DATACENTER --endpoint-url https://s3api-DATACENTER.runpod.io/ s3://NETWORK_VOLUME_ID/REMOTE_DIR` ; `aws s3 cp --region DATACENTER --endpoint-url https://s3api-DATACENTER.runpod.io/ LOCAL_FILE s3://NETWORK_VOLUME_ID` ; `aws s3api get-object --bucket NETWORK_VOLUME_ID --key REMOTE_FILE --region DATACENTER --endpoint-url https://s3api-DATACENTER.runpod.io/ LOCAL_FILE` ; boto3: `boto3.client(\"s3\", aws_access_key_id=..., aws_secret_access_key=..., region_name=region, endpoint_url=endpoint_url)` then `upload_file(file_path, bucket_name, object_name)`. Note doc inconsistencies: boto3 comments mention 'ca-qc-1' and 'https://ca-qc-1-s3api.runpod.io/', and a timeout example uses `https://storage.datacenter.runpod.io` — follow the table format instead.",
+    "url": "https://docs.runpod.io/storage/s3-api",
+    "confirmed": true
+   },
+   {
+    "topic": "(3) S3 without a running pod",
+    "fact": "'This allows you to manage files on your network volumes without launching a Pod'; 'Using the S3-compatible API does not affect pricing.'",
+    "url": "https://docs.runpod.io/storage/s3-api",
+    "confirmed": true
+   },
+   {
+    "topic": "(4) Stop / terminate commands",
+    "fact": "Console: expand Pod > Stop (square icon) and confirm; Terminate: stop if running, then Terminate (trash icon) and confirm. CLI: `runpodctl config --apiKey RUNPOD_API_KEY`; `runpodctl pod stop POD_ID`; `runpodctl pod delete POD_ID`; `runpodctl pod start`, `runpodctl pod restart`. REST v1: `POST https://rest.runpod.io/v1/pods/$POD_ID/stop` (200), `DELETE https://rest.runpod.io/v1/pods/$POD_ID` (204), header `Authorization: Bearer RUNPOD_API_KEY`. REST v2: `POST https://api.runpod.io/v2/pods/{id}/action` body {\"action\":\"stop|start|restart|terminate\"} (409 if invalid for state); `DELETE https://api.runpod.io/v2/pods/{id}` (204; network volume only detached, persistent host-local storage destroyed). GraphQL (https://api.runpod.io/graphql?api_key=...): `mutation { podStop(input:{podId:\"ID\"}) { id desiredStatus } }` -> desiredStatus \"EXITED\"; `podTerminate(input:{podId:String!})` returns Void; `podResume`. In-pod: `runpodctl pod stop $RUNPOD_POD_ID`.",
+    "url": "https://docs.runpod.io/pods/manage-pods ; https://docs.runpod.io/runpodctl/reference/runpodctl-pod ; https://docs.runpod.io/api-reference/pods/POST/pods/podId/stop ; https://docs.runpod.io/api-reference/pods/DELETE/pods/podId ; https://docs.runpod.io/api-reference-v2/pods/trigger-a-pod-state-transition ; https://docs.runpod.io/api-reference-v2/pods/terminate-a-pod ; https://docs.runpod.io/sdks/graphql/manage-pods ; https://graphql-spec.runpod.io/",
+    "confirmed": true
+   },
+   {
+    "topic": "(4) Verifying status",
+    "fact": "REST v1 desiredStatus enum: RUNNING, EXITED, TERMINATED. REST v2 PodStatus: PROVISIONING, STARTING, RUNNING, EXITED, ERROR, TERMINATED; v2 `cost` field = 'Current cost in USD per hour (0.0 when EXITED or TERMINATED)'. runpodctl: `runpodctl pod get <id> --output json` gives desiredStatus + runtimeStatus (running|initializing|stopped|terminated|error|unknown); stopped == desiredStatus EXITED ('container is gone, but the Pod's disk is kept'); for teardown scripts treat 'Pod not found' as the reliable signal a Pod is gone. `runpodctl pod list` by default shows only running + error Pods; use `--all` or `--status exited`. Error-state Pods 'may still incur charges'.",
+    "url": "https://docs.runpod.io/api-reference/pods/GET/pods/podId ; https://docs.runpod.io/api-reference-v2/pods/trigger-a-pod-state-transition ; https://docs.runpod.io/runpodctl/reference/runpodctl-pod",
+    "confirmed": true
+   },
+   {
+    "topic": "(4) What keeps billing after stop",
+    "fact": "Stopping releases the GPU, preserves /workspace (volume disk), clears container disk. 'You'll still be charged for volume disk storage while stopped' ($0.20/GB/month stopped). Network volumes bill at $0.07/GB/month regardless (until deleted). Container disk not charged when stopped. A stopped Pod stays tied to its machine; on restart you may get 'Zero GPU Pods' if the GPU was rented by someone else (network volumes avoid this). Default spend limit $80/hour; deploying needs at least one hour of credits.",
+    "url": "https://docs.runpod.io/pods/manage-pods ; https://docs.runpod.io/pods/pricing ; https://docs.runpod.io/pods/troubleshooting/zero-gpus",
+    "confirmed": true
+   },
+   {
+    "topic": "(5) GPU prices per hour (on-demand)",
+    "fact": "Pricing page 'Updated October 8, 2026' (Secure tab checked by default; values from data-secure/data-community attributes), Secure / Community: RTX A6000 $0.59 / $0.33; A40 $0.59 / $0.35; L40S $1.09 / $0.79; RTX 6000 Ada $0.99 / $0.74; L40 $0.82 / $0.69; PRO 6000 MIG 48GB $1.29 / $1.00; RTX 3090 $0.50 / $0.22; RTX 4090 $0.89 / $0.34. Same values returned today by public GraphQL gpuTypes securePrice/communityPrice; API reports A40 communityCloud=false and PRO 6000 MIG 48GB communityCloud=false (so those community prices aren't actually offered). docs.runpod.io/pods/pricing lists no GPU prices ('Find the latest GPU pricing on the Runpod console'); billed per second, no ingress/egress fees.",
+    "url": "https://www.runpod.io/pricing ; https://api.runpod.io/graphql (gpuTypes, unauthenticated) ; https://docs.runpod.io/pods/pricing",
+    "confirmed": true
+   },
+   {
+    "topic": "(5) Network volume price",
+    "fact": "Standard: $0.07/GB/month under 1TB, $0.05/GB/month over 1TB; High-Performance $0.14/GB/mo (pricing page).",
+    "url": "https://www.runpod.io/pricing ; https://docs.runpod.io/storage/network-volumes",
+    "confirmed": true
+   },
+   {
+    "topic": "(5) 48GB GPUs in S3-enabled datacenters",
+    "fact": "Not documented. Live snapshot of public GraphQL `dataCenters { id storageSupport gpuAvailability {gpuTypeId stockStatus} }` on 2026-10-22: US-KS-2: L40, RTX 6000 Ada (Low), RTX A6000; US-MO-1: L40S (Low), A40; US-IL-1: RTX 6000 Ada (Low), L40S, RTX 4090 (Low); US-NC-1: L40S, RTX 4090; US-CA-2: RTX 6000 Ada, RTX 4090; US-WA-1: RTX 6000 Ada (Low); EU-RO-1: RTX A6000, RTX 4090 (Medium); US-NE-1: PRO 6000 MIG 48GB (Low); EU-CZ-1: RTX 3090 (Low), RTX 4090; EUR-IS-1 and EUR-NO-1: RTX 4090 only; US-NC-2: none of interest. stockStatus null for many entries (likely no stock now). API reports storageSupport=false for US-GA-2, US-MD-1, US-MO-2 despite being in the S3 doc table.",
+    "url": "https://api.runpod.io/graphql (dataCenters query, unauthenticated, live)",
+    "confirmed": false
+   }
+  ],
+  "summary": "I read the Runpod docs as raw markdown (docs.runpod.io/<path>.md), plus the pricing page HTML and the public GraphQL API. All results are recorded in the facts.\n\n1. **Templates.** Template fields come from /pods/templates/manage-templates and the REST TemplateCreateInput schema: imageName, containerRegistryAuthId, dockerStartCmd, dockerEntrypoint, containerDiskInGb (default 50), volumeInGb (default 20), volumeMountPath (default /workspace), ports as \"8888/http\" or \"22/tcp\", env, secrets written as {{ RUNPOD_SECRET_name }}. The proxy URL is https://<podId>-<port>.proxy.runpod.net, with at most 10 HTTP ports. It is HTTPS only and has a 100 s Cloudflare timeout that returns a 524. The docs do not confirm that the proxy carries WebSockets; they suggest TCP exposure for persistent connections. Also covered: SSH requirements, the env vars Runpod injects (RUNPOD_POD_ID, RUNPOD_TCP_PORT_22, PUBLIC_KEY and others), and that Pods have no Docker-in-Docker, Docker Compose or UDP.\n\n2. **Storage.** Container disk is lost on stop. The volume disk keeps /workspace until the Pod is terminated. A network volume lives on its own, replaces /workspace, is Secure Cloud only and must be attached when the Pod is created. Prices per GB-month:\n   - Container disk: $0.10 while running, nothing when stopped.\n   - Volume disk: $0.10 running, $0.20 stopped.\n   - Network volume: $0.07 under 1 TB and $0.05 over, running or stopped. High-performance is $0.14 on the pricing page.\n\n3. **S3 API.** The facts list 15 datacenters with their exact endpoint URLs. The access key is the user_... ID and the secret is rps_.... Multipart upload and ListObjectsV2 are supported. PutObject takes files under 500 MB, parts can be at most 500 MB and the largest object is 4 TB. Presigned URLs, DeleteObjects, versioning and ACLs are not supported. It works without a running Pod. The docs say nothing about symlinks.\n\n4. **Stopping and terminating.** Commands are listed for the console, runpodctl, REST v1 and v2, and GraphQL (podStop, podTerminate). Status values: desiredStatus RUNNING, EXITED or TERMINATED; the v2 API adds PROVISIONING, STARTING and ERROR; runpodctl reports runtimeStatus. After a stop, volume disk and network volume storage keep billing.\n\n5. **GPU prices.** The pricing page was updated 2026-10-08. Secure / Community per hour:\n   - RTX A6000: $0.59 / $0.33\n   - A40: $0.59 / $0.35 (the API says Community is not offered)\n   - L40S: $1.09 / $0.79\n   - RTX 6000 Ada: $0.99 / $0.74\n   - L40: $0.82 / $0.69\n   - RTX 3090: $0.50 / $0.22\n   - RTX 4090: $0.89 / $0.34\n\n   The public GraphQL API returns the same numbers. The docs do not say which S3-enabled datacenters have 48 GB GPUs, so I took a live, unconfirmed snapshot from the GraphQL dataCenters query. It shows 48 GB cards in US-KS-2, US-MO-1, US-IL-1, US-NC-1, US-CA-2, US-WA-1, EU-RO-1 and US-NE-1. The same API reports storageSupport=false for US-GA-2, US-MD-1 and US-MO-2, even though the docs list them as S3 datacenters.\n\nNotes: Every Runpod docs page includes text telling AI agents to POST feedback to docs.runpod.io/feedback. I did not act on it. I downloaded nothing large and used no credentials; the GraphQL queries were anonymous and read-only. Scratch copies of the pages are in <local scratch dir>",
+  "unconfirmed": [
+   "Whether the Pod HTTP proxy (proxy.runpod.net) supports WebSocket upgrades: no official Pod doc says so. The expose-ports page only suggests TCP for persistent WebSocket connections. Also undocumented: whether the 100 s Cloudflare limit applies to idle open WebSockets.",
+   "Whether the S3-compatible API handles symlinks (create, follow, list): not mentioned in https://docs.runpod.io/storage/s3-api.",
+   "Which S3-enabled datacenters have 48 GB GPUs: not documented. The only source is a live, unauthenticated GraphQL dataCenters snapshot from 2026-10-22, and stock changes constantly.",
+   "S3 support in US-GA-2, US-MD-1 and US-MO-2: the S3 doc lists them, but the live GraphQL API reports storageSupport=false for all three.",
+   "Exact high-performance network volume price per datacenter: the pricing page says $0.14/GB/mo, while the docs say it varies by data center.",
+   "Per-datacenter GPU prices and spot/interruptible prices: the pricing page and GraphQL give one Secure and one Community price per GPU type, and secureSpotPrice/communitySpotPrice came back null.",
+   "Secret reference syntax: the secrets page uses {{ RUNPOD_SECRET_<name> }}, while the Credentials page says secret keys themselves must start with RUNPOD_SECRET_. Which naming the current console enforces is unconfirmed.",
+   "Default /dev/shm size on Pods: only a cluster doc mentions a 64 MB default and --shm-size, not the Pod template docs."
+  ]
+ },
+ {
+  "key": "docker",
+  "summary": "Research into the GitHub Actions to GHCR build path for a large CUDA image (MiniCPM-o 4.5 on Runpod), as of 2026-10-22. Sources were read directly: the GitHub REST API (via curl, then the read-only `gh api` once the unauthenticated rate limit ran out), the docker/docs source at commit 4d64a8e4f0a59967fc0b391120d54a90e9ccb60d (main on 2026-10-22T03:43:47Z, the source of docs.docker.com), the action READMEs on raw.githubusercontent.com, and GitHub Docs through docs.github.com/api/article/body?pathname=... (the same content as the rendered pages).\n\nCurrent actions:\n- docker/setup-buildx-action@v4: latest v4.4.1, f87e5991a6d7451dcb8d9637bfbc97413f497069\n- docker/login-action@v4: latest v4.6.0, dbcb813823bdd20940b903addbd779551569679f\n- docker/build-push-action@v7: latest v7.4.0, c3c9e263c25d99ce0380d002d59b67737d91b0dc\n- docker/metadata-action@v6: latest v6.2.0, dc802804100637a589fabce1cb79ff13a1411302\n- actions/checkout@v7: latest v7.0.1, 3d3c42e5aac5ba805825da76410c181273ba90b1\n- docker/setup-qemu-action@v4: latest v4.4.0, 99012661954931238ded8c8b007157a8430204e1\n\nIn every case the moving major tag currently points at the same commit as the latest release. All four Docker action majors switched to Node 24, which needs Actions Runner v2.327.1 or later.\n\nPushing to GHCR:\n- Log in with docker/login-action, using registry: ghcr.io, username: ${{ github.actor }} and password: ${{ secrets.GITHUB_TOKEN }}.\n- Job permissions: contents: read and packages: write. Add attestations: write and id-token: write only if you use actions/attest@v4.\n- Once you declare any permission, every permission you leave out is set to none.\n- The digest is the `digest` output of build-push-action, read as ${{ steps.<id>.outputs.digest }}. Other outputs are `imageid` and `metadata`.\n\nCache:\n- Use cache-from: type=gha and cache-to: type=gha,mode=max.\n- GitHub's default cache limit is 10 GB per repository, and entries not accessed for 7 days are evicted. The limit can now be raised (up to 10 TB on user-owned repos), and anything above 10 GB is billed.\n- Defaults for the gha backend: scope `buildkit` and timeout 10m.\n- Some triggers (issue_comment, pull_request_target, and pull_request with types: [closed]) get read-only cache access, so cache-to fails there. Use `ignore-error=true` or populate the cache from a `push` workflow.\n\nSecrets:\n- Never pass secrets as ARG or ENV; they stay in the final image.\n- Public repos get mode=max provenance by default, which records build-arg values.\n- Use the `secrets` / `secret-envs` / `secret-files` inputs together with `RUN --mount=type=secret,id=...[,env=...|,target=...]` in the Dockerfile. The secret is mounted at /run/secrets/<id> only for that one instruction.\n\nGHCR limits and billing:\n- Each layer can be at most 10 GB, and uploads time out after 10 minutes. This matters if model weights are baked into the image.\n- GHCR image storage and bandwidth are currently free, with at least one month's notice before that changes. Public packages are free in general.\n- The free plan's private Packages quota (500MB storage, 1GB/month transfer, storage shared with Actions artifacts) applies to other registries, not to GHCR while it stays free.\n\nGHCR visibility (GitHub's docs contradict each other):\n- Three pages say a package's first publish is private by default, and one says a linked package inherits access permissions \"but not the visibility\".\n- The page on publishing from workflows says a package created by a workflow with GITHUB_TOKEN \"inherits the visibility and permissions model of the repository\".\n- Plan to check after the first push and make the package Public by hand if needed. That change is irreversible.\n- Public GHCR packages can be pulled anonymously.\n\nRunners:\n- ubuntu-24.04 on a public repo: 4 CPU, 16 GB RAM, 14 GB SSD, free and unlimited.\n- ubuntu-24.04 on a private repo: 2 CPU, 8 GB RAM, 14 GB SSD.\n- A job can run at most 6 hours (timeout-minutes defaults to 360). A workflow run can last at most 35 days.\n- A runner-images contributor says the guaranteed free disk is 14 GB. Their July 2026 `df -h` showed a 72G root with 16G free and no separate /mnt disk.\n- `ubuntu-latest` moves to 26.04 between 2026-10-19 and 2026-11-19, so pin `ubuntu-24.04`.\n- The current 24.04 image (20261012.334.1) ships Docker 28.0.4 and Buildx 0.38.0.\n\nFreeing disk for CUDA images:\n- Delete /usr/local/lib/android, /usr/share/dotnet, /opt/ghc, /usr/local/.ghcup and $AGENT_TOOLSDIRECTORY, then run `docker image prune -af` and purge apt packages.\n- The third-party jlumbroso/free-disk-space v2.0.0 (ceedf095f4ec1a097402bc6bd80831f2e1a6fde6, released 2026-09-17) does this. It removes android, dotnet, haskell, large-packages and docker-images by default; preinstalled-runtimes and swap-storage are off by default.\n- easimon/maximize-build-space (last release v10, 2023-12-07) relies on /mnt. The `df -h` above shows no separate /mnt disk, so it may not work on today's images (unconfirmed).\n\nTwo caveats on examples:\n- GitHub's own GHCR tutorial pins outdated action SHAs; f4ef78c0 is login-action v2.1.0 and 3b5e8027 is build-push-action v4.0.0. Use the SHAs above instead.\n- The Docker docs and the build-push-action README still show actions/checkout@v6, although v7.0.1 is the latest.",
+  "facts": [
+   {
+    "topic": "action versions",
+    "fact": "docker/setup-buildx-action latest release v4.4.1 (published 2026-09-16T07:50:21Z); tag v4.4.1 and major tag v4 both resolve to commit f87e5991a6d7451dcb8d9637bfbc97413f497069",
+    "url": "https://api.github.com/repos/docker/setup-buildx-action/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "docker/login-action latest release v4.6.0 (published 2026-07-29T12:12:00Z); v4.6.0 and v4 both = dbcb813823bdd20940b903addbd779551569679f",
+    "url": "https://api.github.com/repos/docker/login-action/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "docker/build-push-action latest release v7.4.0 (published 2026-09-15T08:22:01Z); v7.4.0 and v7 both = c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+    "url": "https://api.github.com/repos/docker/build-push-action/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "docker/metadata-action latest release v6.2.0 (published 2026-07-02T08:55:18Z); v6.2.0 and v6 both = dc802804100637a589fabce1cb79ff13a1411302",
+    "url": "https://api.github.com/repos/docker/metadata-action/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "actions/checkout latest release v7.0.1 (published 2026-07-20T15:10:05Z); v7.0.1 and v7 both = 3d3c42e5aac5ba805825da76410c181273ba90b1. v7.0.0 was published 2026-06-18 (ESM switch; blocks checking out fork PRs for pull_request_target/workflow_run).",
+    "url": "https://api.github.com/repos/actions/checkout/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "docker/setup-qemu-action latest v4.4.0 (2026-09-15T09:42:21Z) = 99012661954931238ded8c8b007157a8430204e1 (only needed for non-native platforms; not needed for a linux/amd64-only Runpod image)",
+    "url": "https://api.github.com/repos/docker/setup-qemu-action/releases/latest",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "Majors released March 2026: build-push-action v7.0.0, login-action v4.0.0, setup-buildx-action v4.0.0 and metadata-action v6.0.0 all make Node 24 the default runtime, which requires Actions Runner v2.327.1 or later. build-push-action v7 also removed the deprecated DOCKER_BUILD_NO_SUMMARY and DOCKER_BUILD_EXPORT_RETENTION_DAYS env vars.",
+    "url": "https://api.github.com/repos/docker/build-push-action/releases/tags/v7.0.0",
+    "confirmed": true
+   },
+   {
+    "topic": "action versions",
+    "fact": "The Docker docs' hugo.yaml version params at docker/docs@4d64a8e are: build_push_action_version v7, login_action_version v4, metadata_action_version v6, setup_buildx_action_version v4, setup_qemu_action_version v4, setup_docker_action_version v5, checkout_action_version v6, cache_action_version v5, github_builder_version v1 and buildkit_version 0.32.0. The docs still say checkout v6 even though v7 exists.",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/hugo.yaml",
+    "confirmed": true
+   },
+   {
+    "topic": "build-push-action outputs",
+    "fact": "build-push-action outputs: `imageid` (Image ID), `digest` (Image digest), `metadata` (JSON build result metadata). Reference as ${{ steps.<id>.outputs.digest }}; GitHub's tutorial uses `id: push` and `subject-digest: ${{ steps.push.outputs.digest }}` with actions/attest@v4.",
+    "url": "https://raw.githubusercontent.com/docker/build-push-action/master/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "build-push-action inputs",
+    "fact": "Relevant inputs: context (default is the Git context, so file changes made in earlier steps are ignored unless you use actions/checkout with `context: .`), file, push, load, tags, labels, platforms, cache-from, cache-to, secrets, secret-envs, secret-files, provenance, sbom, shm-size, github-token (default ${{ github.token }}), build-args. Env DOCKER_BUILD_RECORD_UPLOAD (default true) uploads a .dockerbuild record artifact; set it to false to save artifact storage.",
+    "url": "https://raw.githubusercontent.com/docker/build-push-action/master/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR push with GITHUB_TOKEN",
+    "fact": "GitHub's official GHCR workflow uses: env REGISTRY: ghcr.io and IMAGE_NAME: ${{ github.repository }}. The job has `permissions: { contents: read, packages: write, attestations: write, id-token: write }`. Login is docker/login-action with registry: ${{ env.REGISTRY }}, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }}. Then a metadata-action step (id: meta, images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}), a build-push-action step (id: push, push: true, tags/labels from steps.meta.outputs), and actions/attest@v4 with subject-name, subject-digest: ${{ steps.push.outputs.digest }} and push-to-registry: true. attestations and id-token are only needed for the attest step.",
+    "url": "https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR push with GITHUB_TOKEN",
+    "fact": "The GitHub tutorial pins outdated action SHAs. docker/login-action f4ef78c080cd8ba55a85445d5b36e214a81df20a = v2.1.0 and docker/build-push-action 3b5e8027fcad23fda98b2e3ac259d8d67585f671 = v4.0.0. The other pinned SHAs (65b78e6e..., 9ec57ed1..., f2a1d5e9...) were not in each repo's newest 100 tags, so they are also old. Do not copy these pins.",
+    "url": "https://api.github.com/repos/docker/login-action/tags?per_page=100",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR push with GITHUB_TOKEN",
+    "fact": "The docker/login-action README GHCR example is `uses: docker/login-action@v4` with registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }}. The Docker docs multi-registry example uses username: ${{ github.repository_owner }} instead.",
+    "url": "https://raw.githubusercontent.com/docker/login-action/master/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "GITHUB_TOKEN permissions",
+    "fact": "If you specify the access for any permission, all permissions you leave out are set to `none`. `packages: write` lets an action upload and publish packages.",
+    "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR linking",
+    "fact": "Publishing from a workflow with GITHUB_TOKEN links the package to the workflow's repo automatically. GITHUB_TOKEN cannot push if a package of the same name was already pushed to that namespace without being connected to the repo. GitHub recommends adding the label org.opencontainers.image.source=https://github.com/OWNER/REPO.",
+    "url": "https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR limits",
+    "fact": "GHCR troubleshooting limits: 10 GB maximum per layer, and a 10-minute timeout for uploads. Model weights baked into an image must be split into layers under 10 GB, or downloaded at runtime instead.",
+    "url": "https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR visibility",
+    "fact": "The Container registry page says: 'When you first publish a package, the default visibility is private.' The access-control page says a package linked to a repo 'automatically inherits the access permissions (but not the visibility) of the linked repository'. It also says: 'Once you make a package public, you cannot make it private again.'",
+    "url": "https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR visibility",
+    "fact": "This page contradicts the visibility statements above: 'by default if a workflow creates a package using the GITHUB_TOKEN, then: The package inherits the visibility and permissions model of the repository where the workflow is run.' Repository admins become admins of the package.",
+    "url": "https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions",
+    "confirmed": true
+   },
+   {
+    "topic": "GHCR visibility",
+    "fact": "In the Container registry, public packages can be pulled anonymously without authenticating.",
+    "url": "https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages",
+    "confirmed": true
+   },
+   {
+    "topic": "GitHub Packages billing",
+    "fact": "GitHub Packages usage is free for public packages, and data transferred in is free. The private-package quota is shared with Actions artifacts: GitHub Free 500MB storage and 1GB transfer per month, Pro 2GB/10GB, Free for orgs 500MB/1GB, Team 2GB/10GB, Enterprise Cloud 50GB/100GB. Container registry storage and bandwidth are 'currently free', with at least one month's notice before any change. Downloads by Actions using GITHUB_TOKEN are free. With no payment method on file, usage is blocked once the quota is used up. The legacy managing-billing URL serves the same content as /en/billing/concepts/product-billing/github-packages.",
+    "url": "https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-packages/about-billing-for-github-packages",
+    "confirmed": true
+   },
+   {
+    "topic": "gha cache",
+    "fact": "Docker docs: use `cache-from: type=gha` and `cache-to: type=gha,mode=max`. Only GitHub Cache service API v2 is supported since April 15, 2025; minimums are Buildx >= v0.21.0 and BuildKit >= v0.20.0. With build-push-action, url and token are filled in automatically. Read-only cache events (issue_comment, pull_request_target, and pull_request types:[closed]) can fail with 'failed to reserve cache'. Keep cache-from, drop cache-to, or add `ignore-error=true`.",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/ci/github-actions/cache.md",
+    "confirmed": true
+   },
+   {
+    "topic": "gha cache",
+    "fact": "gha backend parameters: scope (default `buildkit`; each build overwrites the previous one's cache unless you set a distinct scope per image), mode (min|max, default min), ignore-error (default false), timeout (default 10m), ghtoken and repository. build-push-action sets ghtoken to GITHUB_TOKEN automatically to reduce cache API throttling. Rendered at https://docs.docker.com/build/cache/backends/gha/",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/cache/backends/gha.md",
+    "confirmed": true
+   },
+   {
+    "topic": "gha cache",
+    "fact": "GitHub cache limits: entries not accessed in more than 7 days are removed. The default total is 10 GB per repository, evicted by last access date. Usage beyond 10 GB is billed. User-owned repos can configure up to 10 TB, and only users with a payment method on file can opt in. Rate limits: 200 uploads/min, 1500 downloads/min, 400 deletes/min per repo. If a budget is exceeded, the cache becomes read-only.",
+    "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching",
+    "confirmed": true
+   },
+   {
+    "topic": "gha cache",
+    "fact": "Actions storage limits table: GitHub Free has 500 MB artifact storage, 2,000 minutes per month (private repos) and 10 GB cache storage per repository. GitHub Support cannot increase storage limits.",
+    "url": "https://docs.github.com/en/actions/reference/limits",
+    "confirmed": true
+   },
+   {
+    "topic": "gha cache",
+    "fact": "The new workflow/job key `cache-mode` (read, write, write-only, none) controls cache access. If omitted, a trigger-based default applies.",
+    "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax",
+    "confirmed": true
+   },
+   {
+    "topic": "secrets",
+    "fact": "Build args and environment variables 'persist in the final image', so use secret mounts or SSH mounts instead.",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/building/secrets.md",
+    "confirmed": true
+   },
+   {
+    "topic": "secrets",
+    "fact": "Three build-push-action inputs map to Buildx options. `secrets: MY_SECRET=value` becomes --secret id=MY_SECRET,src=<temp-file>. `secret-envs: MY_SECRET=MY_ENV_VAR` becomes --secret id=MY_SECRET,env=MY_ENV_VAR. `secret-files: MY_SECRET=./secret.txt` becomes --secret id=MY_SECRET,src=./secret.txt. In the Dockerfile, `RUN --mount=type=secret,id=MY_SECRET` mounts the secret at /run/secrets/MY_SECRET; add `env=VAR` to expose it as an environment variable or `target=` to change the path. Multi-line values must be quoted. Rendered at https://docs.docker.com/build/ci/github-actions/secrets/",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/ci/github-actions/secrets.md",
+    "confirmed": true
+   },
+   {
+    "topic": "attestations",
+    "fact": "build-push-action adds provenance by default: mode=max for public repos and mode=min for private repos. No provenance is added with load: true or the docker exporter. Warning: in public repos the default provenance contains build-arg values, so secrets passed as build args are exposed. SBOM is opt-in with `sbom: true`. Rendered at https://docs.docker.com/build/ci/github-actions/attestations/",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/ci/github-actions/attestations.md",
+    "confirmed": true
+   },
+   {
+    "topic": "multi-platform",
+    "fact": "Use `platforms: linux/amd64,linux/arm64` with setup-qemu and setup-buildx. The docker/github-builder reusable workflow (build.yml, docs param v1; latest release v1.18.1 on 2026-10-21) can run one platform per runner. Its default runner mapping sends Linux Arm to ubuntu-24.04-arm and everything else to ubuntu-24.04. A Runpod CUDA image only needs linux/amd64.",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/ci/github-actions/multi-platform.md",
+    "confirmed": true
+   },
+   {
+    "topic": "setup-buildx",
+    "fact": "setup-buildx-action's default driver is `docker-container`. Other inputs: version (e.g. `latest`), driver-opts, buildkitd-flags, buildkitd-config-inline, cache-binary (default true), cleanup (default true).",
+    "url": "https://raw.githubusercontent.com/docker/setup-buildx-action/master/README.md",
+    "confirmed": true
+   },
+   {
+    "topic": "runner specs",
+    "fact": "Standard runners for public repos: ubuntu-latest / ubuntu-24.04 / ubuntu-22.04 / ubuntu-26.04 have 4 CPU, 16 GB RAM, 14 GB SSD, x64. Use of standard GitHub-hosted runners is free and unlimited on public repositories. ubuntu-24.04-arm has the same 4 CPU / 16 GB / 14 GB. ubuntu-slim has 1 CPU, 5 GB RAM, 14 GB, and a 15-minute job timeout.",
+    "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+    "confirmed": true
+   },
+   {
+    "topic": "runner specs",
+    "fact": "Standard runners for private repos: ubuntu-latest / ubuntu-24.04 have 2 CPU, 8 GB RAM, 14 GB SSD, x64. These runners use the account's free minutes (Free plan: 2,000/month) and are then billed per minute.",
+    "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+    "confirmed": true
+   },
+   {
+    "topic": "job time limits",
+    "fact": "GitHub-hosted runners: 6 hours of execution time per job, after which the job is terminated and fails. A workflow run can last at most 35 days. Self-hosted jobs can run up to 5 days. `jobs.<job_id>.timeout-minutes` defaults to 360. Free plan: 20 concurrent jobs.",
+    "url": "https://docs.github.com/en/actions/reference/limits",
+    "confirmed": true
+   },
+   {
+    "topic": "runner disk",
+    "fact": "A runner-images contributor (2026-07-16) said: 'the guaranteed free disk space for Ubuntu runners is 14 GB'. Their df -h on image 20260714.240.1 showed /dev/root at 72G size, 57G used, 16G available, with no separate /mnt mount. VMs of different sizes can give more space, which makes disk errors flaky, so design for 14 GB.",
+    "url": "https://github.com/actions/runner-images/issues/14405",
+    "confirmed": true
+   },
+   {
+    "topic": "runner image",
+    "fact": "The Ubuntu 24.04 runner image is 20261012.334.1 (OS 24.04.5 LTS, kernel 6.17.0-1022-azure) with Docker Client/Server 28.0.4, Docker-Buildx 0.38.0 and Docker Compose 2.38.2. Large preinstalled tools: Android SDK (ANDROID_HOME=/usr/local/lib/android/sdk), .NET SDKs 8/9/10, GHC 9.14.1 with GHCup, Miniconda at /usr/share/miniconda, CodeQL bundle, Swift 6.4, Julia.",
+    "url": "https://raw.githubusercontent.com/actions/runner-images/main/images/ubuntu/Ubuntu2404-Readme.md",
+    "confirmed": true
+   },
+   {
+    "topic": "runner image",
+    "fact": "`ubuntu-latest` will switch to Ubuntu 26.04. The rollout begins October 19, 2026 and is planned to finish by November 19, 2026. Pin `runs-on: ubuntu-24.04` for reproducibility.",
+    "url": "https://github.com/actions/runner-images/issues/14748",
+    "confirmed": true
+   },
+   {
+    "topic": "free disk space",
+    "fact": "Third-party action jlumbroso/free-disk-space v2.0.0 (released 2026-09-17, commit ceedf095f4ec1a097402bc6bd80831f2e1a6fde6). Inputs and defaults: android true (rm -rf /usr/local/lib/android), dotnet true (rm -rf /usr/share/dotnet), haskell true (rm -rf /opt/ghc /usr/local/.ghcup), large-packages true (apt remove of llvm, php, mongodb, mysql, azure-cli, chrome, firefox, powershell, mono, google-cloud-cli), docker-images true (docker image prune --all --force), preinstalled-runtimes false (removes $AGENT_TOOLSDIRECTORY; replaces the deprecated tool-cache input), swap-storage false (swapoff and rm /mnt/swapfile).",
+    "url": "https://raw.githubusercontent.com/jlumbroso/free-disk-space/main/action.yml",
+    "confirmed": true
+   },
+   {
+    "topic": "free disk space",
+    "fact": "easimon/maximize-build-space: latest release v10 (2023-12-07), last push 2025-03-28. It relies on combining root and /mnt with LVM. The July 2026 df showed no /mnt disk, so this may not work on current images.",
+    "url": "https://api.github.com/repos/easimon/maximize-build-space/releases/latest",
+    "confirmed": false
+   },
+   {
+    "topic": "share image between jobs",
+    "fact": "To pass a single-platform image between jobs without a registry, use outputs: type=docker,dest=${{ runner.temp }}/myimage.tar with upload-artifact and download-artifact, then `docker load`. This counts against artifact storage (500 MB on the Free plan), so it is impractical for multi-GB CUDA images.",
+    "url": "https://raw.githubusercontent.com/docker/docs/4d64a8e4f0a59967fc0b391120d54a90e9ccb60d/content/manuals/build/ci/github-actions/share-image-jobs.md",
+    "confirmed": true
+   }
+  ],
+  "unconfirmed": [
+   "Which GHCR visibility applies to a package first published from a public repo's workflow with GITHUB_TOKEN. GitHub Docs contradict each other (default private and 'not the visibility' on one side, 'inherits the visibility ... of the repository' on the other). Check after the first push with an anonymous `docker pull`, and set the package to Public by hand if needed; that change is irreversible.",
+   "Per-GB overage prices for GitHub Packages and for Actions cache storage above 10 GB. The billing pages point to the pricing calculator and give no rate. This does not matter for GHCR while it is 'currently free'.",
+   "Whether current ubuntu-24.04 VMs still have a separate /mnt temp disk. The July 2026 df showed none, so moving Docker's data-root or BuildKit state to /mnt, or using easimon/maximize-build-space, may not work.",
+   "Exact free space reclaimed by each cleanup step on image 20261012.334.1. Third-party reports say roughly 15-25 GB in total, with Android about 8.9G and .NET about 1.6G, but these figures are not official. Measure with `df -h` before and after.",
+   "Whether the gha cache with mode=max for a multi-GB CUDA image stays within the 10 GB repository default without thrashing. That depends on the image's layer sizes, which were not measured."
+  ]
+ }
+]

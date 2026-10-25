@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "rhythm": {
+      "type": "http",
+      "url": "${RHYTHM_MCP_URL:-http://localhost:8000/rhythm/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${RHYTHM_MCP_TOKEN}"
+      }
+    }
+  }
+}

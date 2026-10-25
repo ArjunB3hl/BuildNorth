@@ -20,10 +20,12 @@ from surrealdb.memory import MemoryAPIError
 from app.ai import AIError
 from app.assistant import COACH_SCHEMA, RECIPE_SCHEMA, ROUTINE_SCHEMA
 from app.auth import ClerkVerifier
-from app.deps import get_ai, get_ai_optional, get_memory, get_verifier
+from app.deps import get_coach_ai, get_ai, get_ai_optional, get_memory, get_verifier
 from app.main import app
 from app.memory import MemoryService
 from app.planner import CHANGE_SCHEMA, PROPOSAL_SCHEMA
+from app.rhythm.learn import LEARN_SCHEMA
+from app.rhythm.summaries import SUMMARY_SCHEMA
 
 FRONTEND_API = "test-app.clerk.accounts.dev"
 PUBLISHABLE_KEY = "pk_test_" + base64.b64encode(f"{FRONTEND_API}$".encode()).decode().rstrip("=")
@@ -129,6 +131,12 @@ class FakeAI:
         # Scripted raw outputs for planner calls (validated by the app like real model output).
         self.proposal: dict[str, Any] = {"meals": [], "activities": []}
         self.change: dict[str, Any] = {"summary": "", "persistence": "temporary", "lasting_preference": None, "operations": []}
+        # Scripted reading for Rhythm's interest learning; by default the model adds nothing.
+        self.learn: dict[str, Any] = {"topics": [], "purposes": [], "experience_level": "unknown", "avoid": []}
+        self.video_notes: dict[str, Any] = {
+            "kind": "ideas", "overview": "Notes from this video.",
+            "sections": [{"heading": "Missing details", "numbered": False, "items": ["Only a transcript excerpt was captured."]}],
+        }
 
     def generate_json(self, *, system, messages, schema, temperature=0.2, max_tokens=4000):  # type: ignore[no-untyped-def]
         self.calls.append({"system": system, "messages": messages, "schema": schema})
@@ -162,6 +170,10 @@ class FakeAI:
             return self.proposal
         if schema is CHANGE_SCHEMA:
             return self.change
+        if schema is LEARN_SCHEMA:
+            return self.learn
+        if schema is SUMMARY_SCHEMA:
+            return self.video_notes
         raise AssertionError("unexpected schema")
 
 
@@ -178,6 +190,16 @@ def fake_ai() -> FakeAI:
 @pytest.fixture
 def client(tmp_path, monkeypatch, memory_client, fake_ai):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    # Real local bindings/keys must never turn an isolated test into live memory or video IO.
+    monkeypatch.setenv("SPECTRON_OWNER_USER_ID", "")
+    monkeypatch.setenv("RHYTHM_MEMORY_CONTEXTS_JSON", "")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "")
+    monkeypatch.setenv("AI_PROVIDER", "none")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("AI_API_KEY", "")
+    monkeypatch.setenv("SPEECH_WORKER_URL", "")
+    monkeypatch.setenv("SPEECH_WORKER_TOKEN", "")
+    monkeypatch.setenv("RHYTHM_RECOMMENDATIONS", "on")  # off by default; most Rhythm tests cover the video features
     verifier = ClerkVerifier(PUBLISHABLE_KEY)
     public_key = SIGNING_KEY.public_key()
     verifier.jwks = SimpleNamespace(get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=public_key))
@@ -186,6 +208,8 @@ def client(tmp_path, monkeypatch, memory_client, fake_ai):  # type: ignore[no-un
     app.dependency_overrides[get_memory] = lambda: service
     app.dependency_overrides[get_ai] = lambda: fake_ai
     app.dependency_overrides[get_ai_optional] = lambda: fake_ai
+    # Conversation/content tests use a stand-in connected provider. Connection tests remove this override.
+    app.dependency_overrides[get_coach_ai] = lambda: fake_ai
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

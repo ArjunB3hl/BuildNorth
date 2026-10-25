@@ -1,13 +1,17 @@
-# Work log: Mac app, Apple Watch, the move off iCloud and one repository (19–21 Oct 2026)
+# Work log: Mac app, Apple Watch, repository setup and web app (19–25 Oct 2026)
 
-What was built with Claude Code from 19 to 21 October 2026, where it lives, how it was checked, and what is still
-open. The detailed guides are elsewhere and this page links to them:
+The original entries record work with Claude Code from 19 to 21 October 2026.
+Section 5 records the React Native web work with Codex on 21 October 2026.
+Section 6 records the Apple Watch UI validation with Codex on 25 October 2026.
+Each entry covers where the work lives, how it was checked, and what is still open.
+The detailed guides are elsewhere and this page links to them:
 
 - the Mac app: [mac/README.md](../../mac/README.md)
 - the watch: the *Apple Watch* section of the main [README](../README.md#apple-watch)
+- the web app: [implementation and verification](web-app.md)
 
-**Nothing has been committed.** Since 21 Oct 2026 both apps live in one git repository at `~/Developer/BuildNorth`
-(`mobile/` and `mac/`), with no commits yet.
+**Historical repository note:** the original 21 October snapshot below predates the first commits.
+Both apps now live in the committed repository at `~/Developer/BuildNorth` (`mobile/` and `mac/`).
 
 ## Summary
 
@@ -24,6 +28,8 @@ open. The detailed guides are elsewhere and this page links to them:
 | 9 | Option A, with SurrealDB agents able to use watch data | SwiftUI watch app inside the Expo iPhone app; health data reaches Agent Memory, the Coach and MCP assistants |
 | 10 | Stop iCloud syncing the project | Moved from the iCloud Desktop to `~/Developer`; the three build workarounds and the `*.nosync` setup were removed |
 | 11 | Put both apps in one folder and one git repo | `~/Developer/BuildNorth/` with `mobile/` and `mac/`, a fresh git repository at the top, no commits yet |
+| 12 | Make a React Native web app with cookies and extension content access | Expo web layouts and content dashboard, optional display cookie, explicit existing Rhythm page grants, and extension-to-web links |
+| 13 | Test the simplified watch app through the paired simulator UI | Phone sign-in, Sleep/Workout flows, saving and phone summary sync verified; screenshots and environment recovery recorded |
 
 ## 1. Mac app (`mac/`)
 
@@ -143,15 +149,72 @@ Both apps now live in one folder and one git repository:
   the backend venv (same package versions), the iOS Pods of both apps, and the build output.
 - `EAS_NO_VCS=1` is still used for the Mac app's EAS builds, so only `mac/` is uploaded.
 
+## 5. React Native web app (21 Oct 2026)
+
+Extended the existing Expo app with web-specific authentication, responsive sidebar
+navigation and an overview of recommendations, saved videos, interests and permitted
+pages. The overview can save/unsave videos and revoke page access. Existing Coach,
+Meals, Activity and Profile routes reuse the same account and backend. Browser
+sign-out clears its account cache without unlinking the Apple Watch.
+
+Added an optional host-only display cookie with a 30-day expiry and withdrawal
+control. It only remembers compact padding in the cookie panel. Content sharing
+uses Rhythm's existing explicit per-page permission flow; cookies do not provide
+cross-site history or evidence that a video was watched. The extension now links
+to the web dashboard and interests editor using `WXT_WEB_APP_URL`.
+
+Validation passed: mobile typecheck, lint, 2 cookie tests, static web export;
+extension typecheck, all 4 existing Playwright tests and production build; and
+`git diff --check`. Local frontend and backend HTTP checks returned 200. Browser
+inspection confirmed the sign-in page rendered. The authenticated dashboard and
+web → extension → recommendation journey still need a live-account check. No
+hosted deployment or backend test rerun was performed for this addition.
+
+See [web-app.md](web-app.md) for the source map, commands, privacy/storage behavior,
+verification limits and deployment requirements. Earlier verification records below
+describe the preceding native/backend work, not this web addition.
+
+## 6. Apple Watch UI validation (25 Oct 2026)
+
+Tested `codex/watch-sleep-workout` at `d843a88` with Computer Use in the paired iPhone 17
+and Apple Watch Series 12 simulators. Confirmed phone-initiated sign-in, exactly two home
+options, Sleep permissions/empty state/sample nights/stages/history, Workout start and
+elapsed time/pause/resume/navigation persistence/end/save, and phone summary sync.
+
+The supplied binary first failed to save its link because simulator signing entitlements
+were missing. Rebuilding the unchanged watch source with signing enabled resolved that.
+A later simulator accessibility/display stall required service recovery; a fresh short
+workout then visibly saved to Apple Health. AI health sharing stayed off, and the watch
+was left home with no active session. No application source defect was confirmed by the UI run.
+
+Lint and TypeScript checks passed. The watch script passed 174 model checks and watchOS 11
+typechecking; the signed simulator build succeeded. Physical sensors and real overnight
+sleep were not validated. The unrelated untracked `.claude/launch.json` was preserved.
+
+See [the full report and committed screenshots](watch-ui-validation-2026-10-25.md).
+These captures show the BuildNorth-branded `d843a88` build, before integrating the later
+Rhythm branding from `main`.
+
+For the requested merge, integrated `main` at `95aed5e` and kept its Rhythm/demo branding
+alongside the new watch flows. A new home screenshot verifies exactly Sleep and Workout,
+with the demo label below the options after correcting an overlap. The final home smoke
+check retained sign-in and showed no active workout. The full-flow screenshots remain
+explicitly attributed to the earlier build.
+
+Pre-merge checks passed: lint, typecheck, 174 Swift model checks and watchOS 11 typechecking,
+13 phone-link/privacy Node tests, 54 backend watch tests, and a signed watch simulator build.
+The report includes the commands, environment repairs, limits and 12 screenshots.
+
 ## How to run
 
 - **Mac app:** `cd ~/Developer/BuildNorth/mac && npm start`, then `npm run macos`.
+- **Web app:** `cd ~/Developer/BuildNorth/mobile && npm run web`; backend on port 8000, web on 8081. See [web setup](web-app.md#run-locally).
 - **iPhone and watch:** follow the build steps in the README (prebuild, `pod install`, `run:ios`; no extra steps). After building:
   - Start Metro with `npx expo start` from this folder.
   - If the simulator shows **"No script URL provided"**, that is a debug build with no Metro running. Start Metro, then press ⌘R.
 - **Watch on the simulator:** the watch app is not installed automatically. Install it with `xcrun simctl install <watch> …/Debug-watchsimulator/watch.app`.
 
-## How it was checked (latest run 21 Oct 2026)
+## Earlier automated and API verification (21 Oct 2026)
 
 - **Backend:** 234 tests pass, 54 of them in `tests/test_watch.py`.
 - **Watch:** 156 model checks pass, and the app typechecks for watchOS 11 (`bash scripts/check-watch-models.sh`).
@@ -165,17 +228,20 @@ Both apps now live in one folder and one git repository:
 - **Reviews:** several rounds of multi-agent review. Each finding was verified before it was fixed, covering token isolation, sharing and erase ordering, write races, consent text, timeouts and backfill.
   - The last round found that health sync could hold the SQLite write lock while it waited on Agent Memory. This is fixed, with a regression test.
 
-### Not verified yet
+### Not verified in the 21 October run
 
 - Looking at or tapping the watch UI (simulator screen access wasn't granted).
 - Linking from the phone over WatchConnectivity (needs a Clerk sign-in in the simulator).
 - Real Apple Health data on a physical watch. The watch's own Health upload also hasn't run in the simulator yet, because Health permission needs a tap.
 - `scripts/live_check.py` against the real SurrealDB Agent Memory.
 
+The watch UI, phone linking and fictional Health upload gaps above were covered by the
+25 October run in section 6. Physical-watch data and real Agent Memory delivery remain unverified.
+
 ## Open items
 
 - **Preference code holds the database lock.** The older preference code (`preferences.py`, `assistant_proposals.py`) has the same lock bug that was fixed in health sync. A concurrent write, including a watch upload, can fail with "database is locked" while memory is slow. A follow-up session to fix it was proposed.
 - **No complication yet.** The watch complication (a watch-face widget) was planned for the first version but not built. It needs a separate `watch-widget` target.
 - **Unexpected `packageManager` field.** `package.json` has `"packageManager": "yarn@4.6.0…"` but the project uses npm (`package-lock.json`). This was not changed here.
-- **OpenCode token.** Create a new connection token for OpenCode in the app, and put it in `.env.opencode`.
+- **OpenCode retired (2026-10-25).** Its local Rhythm token was revoked and its setup files removed. Use ChatGPT or Claude account connections instead.
 - **Mac app not connected.** It still needs to be connected to the backend and Clerk (see the proposed session).

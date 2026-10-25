@@ -1,0 +1,81 @@
+# Stage MiniCPM-o 4.5 (the revision pinned in inference/minicpm-o/versions.env) onto a Runpod network volume through
+# Runpod's S3-compatible API, from a GitHub-hosted CPU runner. No GPU Pod, no Pod at all; nothing touches a laptop.
+# Resumable and idempotent: re-run the same inputs after any failure; files already on the volume are skipped.
+#
+# Needs repository secrets (Settings -> Secrets and variables -> Actions), never printed:
+#   RUNPOD_S3_ACCESS_KEY_ID      your Runpod user id (user_...), from Runpod Settings -> S3 API Keys
+#   RUNPOD_S3_SECRET_ACCESS_KEY  that S3 API key's secret (rps_...)
+name: minicpm-o stage model
+
+on:
+  workflow_dispatch:
+    inputs:
+      volume_id:
+        description: "Runpod network volume id (the S3 bucket)"
+        required: true
+        type: string
+      datacenter:
+        description: "The volume's data centre (S3 region)"
+        required: true
+        type: choice
+        options: [US-KS-2, US-MO-1, US-IL-1, US-NC-1, US-CA-2, US-WA-1, EU-RO-1, EU-CZ-1, EUR-IS-1, EUR-NO-1, US-NC-2, US-NE-1]
+      mode:
+        description: "dry-run = list what would be uploaded; stage = upload missing files; verify = check sizes + markers"
+        required: true
+        type: choice
+        default: dry-run
+        options: [dry-run, stage, verify]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minicpm-o-stage-${{ inputs.volume_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: inference/minicpm-o
+    shell: bash
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned staging dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/s"
+          "$RUNNER_TEMP/s/bin/pip" install -q --require-hashes -r scripts/requirements-stage.txt
+          df -h "$RUNNER_TEMP" | tail -1
+
+      - name: Stage / verify
+        env:
+          RUNPOD_S3_ACCESS_KEY_ID: ${{ secrets.RUNPOD_S3_ACCESS_KEY_ID }}
+          RUNPOD_S3_SECRET_ACCESS_KEY: ${{ secrets.RUNPOD_S3_SECRET_ACCESS_KEY }}
+          RUNPOD_VOLUME_ID: ${{ inputs.volume_id }}
+          RUNPOD_DATACENTER: ${{ inputs.datacenter }}
+          MODE: ${{ inputs.mode }}
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          case "$MODE" in
+            dry-run) flags=(--dry-run) ;;
+            verify)  flags=(--verify-only) ;;
+            stage)   flags=(--scratch "$RUNNER_TEMP/stage") ;;
+          esac
+          set +e          # keep going on failure: the summary below matters most when staging or verify fails
+          "$RUNNER_TEMP/s/bin/python" scripts/stage_model.py --target s3 "${flags[@]}" 2>&1 | tee "$RUNNER_TEMP/stage.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Model staging ($MODE)"
+            echo
+            echo '```'
+            grep -vE '^\S+ \[stage\]   ' "$RUNNER_TEMP/stage.log" | tail -15 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

@@ -1,3 +1,4 @@
+import { SymbolView } from 'expo-symbols';
 import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -7,6 +8,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -14,8 +16,9 @@ import {
 
 import { Accent, Button, Notice } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing, WideContentWidth } from '@/constants/theme';
 import { useBottomBarInset } from '@/hooks/use-bottom-bar-inset';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
 
@@ -26,6 +29,7 @@ export function Screen({
   onRefresh,
   footer,
   aboveTabBar = true,
+  wide = false,
 }: {
   children: ReactNode;
   refreshing?: boolean;
@@ -33,9 +37,14 @@ export function Screen({
   footer?: ReactNode;
   /** False for full-screen modals, where no tab bar covers the footer. */
   aboveTabBar?: boolean;
+  /** Web only: a wider column for grids and two-column pages. Phones are unaffected. */
+  wide?: boolean;
 }) {
   const theme = useTheme();
   const footerInset = useBottomBarInset(aboveTabBar);
+  const { width } = useWindowDimensions();
+  const narrowWeb = Platform.OS === 'web' && width < 600;
+  const columnWidth = Platform.OS === 'web' && wide ? { maxWidth: WideContentWidth } : null;
   return (
     <KeyboardAvoidingView
       style={[styles.fill, { backgroundColor: theme.background }]}
@@ -45,12 +54,15 @@ export function Screen({
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         // Without a footer, the end of the content must also clear the floating tab bar.
-        contentContainerStyle={[styles.scroll, !footer && { paddingBottom: Spacing.six + footerInset }]}
+        contentContainerStyle={[styles.scroll, narrowWeb && styles.scrollNarrow, !footer && { paddingBottom: Spacing.six + footerInset }]}
         refreshControl={onRefresh ? <PullToRefresh refreshing={!!refreshing} onRefresh={onRefresh} /> : undefined}>
-        <View style={styles.column}>{children}</View>
+        <View style={[styles.column, columnWidth]}>{children}</View>
       </ScrollView>
       {footer ? (
-        <View style={[styles.footer, { borderTopColor: theme.backgroundSelected, paddingBottom: footerInset }]}>{footer}</View>
+        <View style={[styles.footer, { borderTopColor: theme.border, paddingBottom: footerInset }]}>
+          {/* On the web the footer's content lines up with the page column instead of spanning the window. */}
+          {Platform.OS === 'web' ? <View style={[styles.footerColumn, columnWidth]}>{footer}</View> : footer}
+        </View>
       ) : null}
     </KeyboardAvoidingView>
   );
@@ -83,7 +95,11 @@ function PullToRefresh({ refreshing, onRefresh, ...props }: { refreshing: boolea
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
-  return <View style={[styles.card, { backgroundColor: theme.backgroundElement }, style]}>{children}</View>;
+  return (
+    <View style={[styles.card, { backgroundColor: theme.backgroundElement }, Platform.OS === 'web' && { borderColor: theme.border }, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
@@ -167,8 +183,9 @@ export function Chip({
       style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: selected ? Accent : theme.backgroundElement,
-          borderColor: selected ? Accent : theme.backgroundSelected,
+          // On the web, chips sit on white or raised cards, so unselected ones use a tinted fill to stay visible.
+          backgroundColor: selected ? Accent : Platform.OS === 'web' ? theme.backgroundSelected : theme.backgroundElement,
+          borderColor: selected ? Accent : Platform.OS === 'web' ? theme.border : theme.backgroundSelected,
         },
         pressed && styles.pressed,
       ]}>
@@ -347,18 +364,21 @@ export function ListItem({
           </ThemedText>
         ) : null}
       </View>
-      {trailing ?? (onPress ? <ThemedText themeColor="textSecondary">›</ThemedText> : null)}
+      {trailing ?? (onPress ? (
+        <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={18} tintColor={theme.textSecondary} />
+      ) : null)}
     </Pressable>
   );
 }
 
 export function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'success' | 'muted' | 'accent' }) {
   const theme = useTheme();
+  const dark = useColorScheme() === 'dark';
   const colors = {
     neutral: { bg: theme.backgroundSelected, fg: theme.text },
-    success: { bg: '#E7F6EC', fg: '#1E8E3E' },
+    success: dark ? { bg: '#16301F', fg: '#5BD07F' } : { bg: '#E7F6EC', fg: '#1E8E3E' },
     muted: { bg: theme.backgroundSelected, fg: theme.textSecondary },
-    accent: { bg: '#E8F1FE', fg: Accent },
+    accent: dark ? { bg: '#17263A', fg: '#6CB2F5' } : { bg: '#E8F1FE', fg: Accent },
   }[tone];
   return (
     <View style={[styles.pill, { backgroundColor: colors.bg }]}>
@@ -372,10 +392,21 @@ export function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutr
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   center: { textAlign: 'center' },
-  scroll: { padding: Spacing.three, paddingBottom: Spacing.six },
+  scroll: Platform.select({
+    web: { paddingHorizontal: Spacing.five, paddingTop: Spacing.four, paddingBottom: Spacing.six },
+    default: { padding: Spacing.three, paddingBottom: Spacing.six },
+  }),
   column: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.three },
   footer: { padding: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.two },
-  card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
+  footerColumn: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.two },
+  scrollNarrow: { paddingHorizontal: Spacing.three },
+  card: {
+    borderRadius: 16,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    // On the web, cards are white surfaces on a tinted page, separated by a hairline and a faint shadow.
+    ...Platform.select({ web: { borderWidth: 1, padding: Spacing.three + Spacing.one, boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)' } }),
+  },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.two },
   sectionTitle: { letterSpacing: 0.5, fontSize: 12 },
   empty: { alignItems: 'center', paddingVertical: Spacing.four, gap: Spacing.two },

@@ -148,6 +148,7 @@ export type Suggestion = { type: 'recipe' | 'routine' | 'preference'; title: str
 
 /** What a coach reply was built from. `memory` says whether long-term memory was actually checked. */
 export type CoachContext = {
+  calendarEntries?: number;
   memory: 'ok' | 'unavailable' | 'not_configured';
   topics: string[];
   preferences: number;
@@ -328,6 +329,17 @@ export type ConnectionsInfo = {
   tokens: ConnectionToken[];
 };
 
+export type ClaudeConnection = {
+  configured: boolean;
+  storageAvailable: boolean;
+  usable: boolean;
+  hint: string | null;
+  model: string;
+  scope: 'coach';
+  sharedAvailable: boolean;
+  sharedModel: string | null;
+};
+
 export type AssistantProposal = {
   id: string;
   kind: 'plan_changes' | 'recipe' | 'preference' | 'preference_update' | 'preference_delete';
@@ -370,12 +382,15 @@ export type HealthWorkout = {
   energyKcal: number | null;
   distanceMeters: number | null;
   averageHeartRateBpm: number | null;
+  minHeartRateBpm?: number | null;
+  maxHeartRateBpm?: number | null;
 };
 
 /** One local day of device-measured data. Missing metrics are null, never 0. */
 export type HealthDayInput = {
   /** Asleep time for the night that ended on this date. */
   sleepMinutes: number | null;
+  sleepPattern?: SleepPattern | null;
   restingHeartRateBpm: number | null;
   hrvSdnnMs: number | null;
   steps: number | null;
@@ -397,3 +412,41 @@ export type WatchToday = Today & { health: HealthDay | null; shareHealth: boolea
 
 /** PATCH /watch/checkins/{date} merges: omitted keys keep their stored values. A new day needs energy and mood. */
 export type CheckInPatch = Partial<Pick<CheckIn, 'energy' | 'mood' | 'sleepHours' | 'note'>>;
+
+export type CalendarEntry = {
+  id: string;
+  kind: 'meal' | 'activity' | 'sleep';
+  title: string;
+  occurredAt: string;
+  localDate: string;
+  localTime: string;
+  durationMinutes: number | null;
+  notes: string | null;
+  source: 'manual' | 'coach' | 'demo' | 'session' | 'plan' | 'watch';
+  timeEstimated: boolean;
+  editable: boolean;
+  sessionId: string | null;
+  workout?: HealthWorkout | null;
+  sleepPattern?: SleepPattern | null;
+  partial?: boolean;
+};
+export type CalendarInput = Pick<CalendarEntry, 'title' | 'occurredAt' | 'durationMinutes' | 'notes'> & { kind: 'meal' | 'activity' };
+
+export type SleepPattern = {
+  startedAt: string | null; endedAt: string | null;
+  coreMinutes: number | null; deepMinutes: number | null; remMinutes: number | null;
+  awakeMinutes: number | null; unspecifiedMinutes: number | null;
+};
+export type ReportMetric = { average: number | null; min: number | null; max: number | null; samples: number };
+export type MonthlyReport = {
+  month: string; through: string; reportDate: string; timezone: string; status: 'monthEnded' | 'inProgress'; generatedAt: string;
+  recordedDays: number; daysInPeriod: number; demoEntriesExcluded: number;
+  meals: number; appWorkouts: number; appMinutes: number; recordedSets: number;
+  watchWorkouts: number; watchMinutes: number; watchDays: number; completeWatchDays: number;
+  workoutTypes: { type: string; count: number; minutes: number; heartRate: ReportMetric }[];
+  sleep: ReportMetric; restingHeartRate: ReportMetric; hrv: ReportMetric; steps: ReportMetric; activeEnergy: ReportMetric;
+  checkIns: number; energy: ReportMetric; mood: ReportMetric; reportedSleep: ReportMetric;
+  plans: { total: number; done: number; skipped: number }; healthDays: HealthDay[]; notes: string[];
+};
+export type AIAccess = { linked: boolean; claude: boolean; sharedClaude: boolean; elevenlabs: boolean; textChat: boolean; camera: boolean; voiceProvider: 'elevenlabs' | 'parakeet_kokoro' | null };
+export type ElevenLabsConnection = { configured: boolean; usable: boolean; storageAvailable: boolean; hint: string | null; agentName: string | null };

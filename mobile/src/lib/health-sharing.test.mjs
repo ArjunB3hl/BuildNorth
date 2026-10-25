@@ -4,10 +4,10 @@ import { test } from 'node:test';
 
 import { coachAiService, SHARING_OFF, shareConfirmation, sharingRecipients } from './health-sharing.ts';
 
-test('coachAiService: names a hosted provider, and says when the model runs on BuildNorth\'s server', () => {
+test('coachAiService: names a hosted provider, and says when the model runs on Rhythm\'s server', () => {
   assert.match(coachAiService('openai'), /OpenAI/);
   assert.match(coachAiService('anthropic'), /Anthropic/);
-  assert.match(coachAiService('ollama'), /BuildNorth's own server/);
+  assert.match(coachAiService('ollama'), /Rhythm's own server/);
   assert.doesNotMatch(coachAiService('ollama'), /OpenAI|Anthropic/);
 });
 
@@ -33,5 +33,5 @@ test('shareConfirmation: covers today so far, every recipient, and what turning 
 
 test('SHARING_OFF: nobody sees them and memory is erased', () => {
   assert.match(SHARING_OFF, /none of them see your summaries/);
-  assert.match(SHARING_OFF, /already in BuildNorth's memory is erased/);
+  assert.match(SHARING_OFF, /already in Rhythm's memory is erased/);
 });

@@ -57,17 +57,17 @@ func same(_ a: [String: Any], _ b: [String: Any]) -> Bool {
 // MARK: - Request bodies (contract §2: input models are extra="forbid", missing metrics are null, never 0)
 
 let healthDayKeys: Set<String> = [
-  "sleepMinutes", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts", "complete",
+  "sleepMinutes", "sleepPattern", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts", "complete",
 ]
 let workoutKeys: Set<String> = [
   "externalId", "activityType", "startedAt", "durationMinutes", "energyKcal", "distanceMeters",
-  "averageHeartRateBpm",
+  "averageHeartRateBpm", "minHeartRateBpm", "maxHeartRateBpm",
 ]
 
 section("HealthDayIn / HealthWorkout encode the exact contract keys with explicit nulls") {
   let empty = try object(HealthDayIn(workouts: [], complete: false))
   check(Set(empty.keys) == healthDayKeys, "HealthDayIn keys: \(empty.keys.sorted())")
-  for key in ["sleepMinutes", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal"] {
+  for key in ["sleepMinutes", "sleepPattern", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal"] {
     check(isNull(empty[key]), "\(key) nil must encode as null, got \(String(describing: empty[key]))")
   }
   check((empty["workouts"] as? [Any])?.isEmpty == true, "no workouts must encode as []")
@@ -79,7 +79,7 @@ section("HealthDayIn / HealthWorkout encode the exact contract keys with explici
     averageHeartRateBpm: nil)
   let workout = try object(bare)
   check(Set(workout.keys) == workoutKeys, "HealthWorkout keys: \(workout.keys.sorted())")
-  for key in ["energyKcal", "distanceMeters", "averageHeartRateBpm"] {
+  for key in ["energyKcal", "distanceMeters", "averageHeartRateBpm", "minHeartRateBpm", "maxHeartRateBpm"] {
     check(isNull(workout[key]), "workout \(key) nil must encode as null")
   }
   check(workout["durationMinutes"] as? Double == 45, "durationMinutes")
@@ -87,9 +87,9 @@ section("HealthDayIn / HealthWorkout encode the exact contract keys with explici
   // The spec's example body, field for field.
   let spec = try parse(
     """
-    {"sleepMinutes": 412, "restingHeartRateBpm": 58, "hrvSdnnMs": 42.5, "steps": 8412, "activeEnergyKcal": 510.2,
+    {"sleepMinutes": 412, "sleepPattern": null, "restingHeartRateBpm": 58, "hrvSdnnMs": 42.5, "steps": 8412, "activeEnergyKcal": 510.2,
      "workouts": [{"externalId": "HK-UUID", "activityType": "running", "startedAt": "2026-10-20T07:12:00Z",
-                   "durationMinutes": 32.0, "energyKcal": 310.0, "distanceMeters": 5100.0, "averageHeartRateBpm": 148.0}],
+                   "durationMinutes": 32.0, "energyKcal": 310.0, "distanceMeters": 5100.0, "averageHeartRateBpm": 148.0, "minHeartRateBpm": null, "maxHeartRateBpm": null}],
      "complete": true}
     """)
   let day = HealthDayIn(
@@ -517,6 +517,58 @@ section("APIClient") {
   // 15 s per request; the session allows 30 s so a health upload can outlast the backend's 20 s memory timeout.
   check(config.timeoutIntervalForRequest == 15 && config.timeoutIntervalForResource == 30, "15 s request / 30 s upload timeouts")
   check(config.requestCachePolicy == .reloadIgnoringLocalCacheData && !config.waitsForConnectivity, "cache policy")
+}
+
+section("Calendar entries decode") {
+  let data = Data("""
+    [{"id":"demo-one","kind":"meal","title":"Oats","localDate":"2026-10-25","localTime":"08:15","durationMinutes":null,"source":"demo","timeEstimated":false},
+     {"id":"session:one","kind":"activity","title":"Strength","localDate":"2026-10-25","localTime":"17:40","durationMinutes":32,"source":"session","timeEstimated":true}]
+    """.utf8)
+  let entries = try JSONDecoder().decode([CalendarEntry].self, from: data)
+  check(entries.count == 2 && entries[0].source == "demo", "demo label retained")
+  check(entries[0].durationMinutes == nil && entries[1].durationMinutes == 32, "optional duration")
+  check(entries[1].timeEstimated && entries[0].localTime == "08:15", "time and precision")
+}
+
+section("Sleep patterns: missing nights, duplicate sources, clipped stages and awake time") {
+  let day = Date(timeIntervalSince1970: 1_700_000_000)
+  let window = DateInterval(start: day, duration: 600)
+  let missing = SleepSummary(day: day, samples: [], window: window)
+  check(missing.minutes == nil && missing.startedAt == nil && missing.endedAt == nil, "missing sleep stays missing")
+  let samples = [
+    SleepSample(stage: .core, start: day.addingTimeInterval(-60), end: day.addingTimeInterval(120)),
+    SleepSample(stage: .core, start: day, end: day.addingTimeInterval(120)),
+    SleepSample(stage: .awake, start: day.addingTimeInterval(120), end: day.addingTimeInterval(180)),
+    SleepSample(stage: .rem, start: day.addingTimeInterval(180), end: day.addingTimeInterval(300)),
+    SleepSample(stage: .unspecified, start: day, end: day.addingTimeInterval(300)),
+    SleepSample(stage: .deep, start: day.addingTimeInterval(540), end: day.addingTimeInterval(660)),
+  ]
+  let night = SleepSummary(day: day, samples: samples, window: window)
+  check(night.minutes == 6, "union of all asleep sources, clipped to window")
+  check(night.stages[.core] == 2, "duplicate core samples count once")
+  check(night.stages[.awake] == 1, "awake remains distinct")
+  check(night.stages[.deep] == 1, "stage duration clips to window")
+  check(night.startedAt == window.start && night.endedAt == window.end, "sleep times clip to window")
+  let awake = SleepSummary(day: day, samples: [samples[2]], window: window)
+  check(awake.minutes == nil, "awake-only night is not asleep")
+  check(SleepNight.display(minutes: 465) == "7 h 45 min", "sleep display")
+}
+
+section("Workout heart rate: stale readings, invalid samples, ordering and bounded history") {
+  let start = Date(timeIntervalSince1970: 1_700_000_000)
+  var series = HeartRateSeries()
+  check(series.current(at: start) == nil, "missing heart rate stays missing")
+  for value in [0.0, -2, Double.nan, Double.infinity] { series.append(bpm: value, at: start) }
+  check(series.points.isEmpty, "invalid samples excluded")
+  series.append(bpm: 120, at: start)
+  series.append(bpm: 125, at: start)
+  series.append(bpm: 125, at: start.addingTimeInterval(-1))
+  check(series.points.count == 1, "duplicate and old callbacks do not add points")
+  check(series.current(at: start.addingTimeInterval(30)) == 120, "fresh reading shown")
+  check(series.current(at: start.addingTimeInterval(31)) == nil, "stale reading hidden")
+  for n in 1...400 { series.append(bpm: 130, at: start.addingTimeInterval(Double(n))) }
+  check(series.points.count == 300, "chart history bounded")
+  check(series.points.first?.at == start.addingTimeInterval(101), "oldest samples dropped")
 }
 
 print(failures == 0 ? "OK: \(checks) checks passed" : "FAILED: \(failures) of \(checks) checks")

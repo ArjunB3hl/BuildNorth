@@ -99,7 +99,7 @@ export function RecipeScreen({ id }: { id: string }) {
     if (!cooking) {
       return;
     }
-    setKeepAwake(true, 'BuildNorth cook mode');
+    setKeepAwake(true, 'Rhythm cook mode');
     return () => setKeepAwake(false);
   }, [cooking]);
 
