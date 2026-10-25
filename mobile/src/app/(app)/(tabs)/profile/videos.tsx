@@ -26,6 +26,7 @@ import {
   type MemorySuggestion,
   type Recommendation,
   type RhythmResult,
+  type SavedVideo,
   type VideoTask,
 } from '@/lib/rhythm';
 
@@ -34,8 +35,7 @@ const LABELS: Record<Capability, string> = {
   recommend: 'Recommendations', memory: 'Memory context', feedback: 'Feedback suggestions',
 };
 
-// While recommendations are off there are no videos or tasks to show: only agents and memory.
-const SECTIONS = (RECOMMENDATIONS_ENABLED ? ['Videos', 'Connections', 'Memory', 'Tasks'] : ['Connections', 'Memory'])
+const SECTIONS = (RECOMMENDATIONS_ENABLED ? ['Saved videos', 'Videos', 'Connections', 'Memory', 'Tasks'] : ['Saved videos', 'Connections', 'Memory'])
   .map((value) => ({ value, label: value }));
 const FILTERS = [{ value: 'all', label: 'All recommendations' }, { value: 'saved', label: 'Saved videos' }];
 
@@ -60,6 +60,7 @@ export default function RhythmVideos() {
   const [savedOnly, setSavedOnly] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [summarizing, setSummarizing] = useState<string>();
   const [label, setLabel] = useState('My chosen agent');
   const [capabilities, setCapabilities] = useState<Capability[]>(
     RECOMMENDATIONS_ENABLED ? ['interests', 'page', 'search', 'transcripts', 'recommend', 'feedback'] : ['interests', 'saved']);
@@ -72,18 +73,29 @@ export default function RhythmVideos() {
   const query = useQuery({
     queryKey: ['rhythm', 'dashboard'],
     queryFn: async () => {
+      const saved = await api.rhythm.savedVideos();
       if (!RECOMMENDATIONS_ENABLED) {
         const [connections, memories] = await Promise.all([api.rhythm.connections(), api.rhythm.memories()]);
-        return { connections, memories, recommendations: undefined, tasks: undefined, metrics: undefined };
+        return { saved, connections, memories, recommendations: undefined, tasks: undefined, metrics: undefined };
       }
       const [recommendations, connections, memories, tasks, metrics] = await Promise.all([
         api.rhythm.recommendations(), api.rhythm.connections(), api.rhythm.memories(), api.rhythm.tasks(),
         api.rhythm.metrics(),
       ]);
-      return { recommendations, connections, memories, tasks, metrics };
+      return { saved, recommendations, connections, memories, tasks, metrics };
     },
     refetchInterval: 10_000,
   });
+
+  async function summarizeVideo(videoId: string) {
+    setSummarizing(videoId);
+    try {
+      const result = await api.rhythm.summarizeVideo(videoId);
+      setMessage(result.message);
+      await query.refetch();
+    } catch (e) { setMessage(e instanceof Error ? e.message : 'The summary could not be prepared. Try again.'); }
+    finally { setSummarizing(undefined); }
+  }
 
   async function act(action: () => Promise<RhythmResult>) {
     setBusy(true);
@@ -119,6 +131,7 @@ export default function RhythmVideos() {
   }
 
   const data = query.data;
+  const savedVideos = data?.saved.savedVideos ?? [];
   const videos = (data?.recommendations?.recommendations ?? []).filter((r) => !savedOnly || r.feedback === 'saved');
   const allAgents = data?.connections.agents ?? [];
   // Claude, ChatGPT and Codex approvals live in their own card.
@@ -190,8 +203,8 @@ export default function RhythmVideos() {
     <Screen wide refreshing={query.isRefetching} onRefresh={() => query.refetch()}>
       <Enter>
         <PageIntro
-          body={RECOMMENDATIONS_ENABLED ? 'Videos chosen to suit your interests.' : 'Agents that can read your interests, and what Rhythm remembers.'}
-          action={<Button title="Personalisation" variant="secondary" onPress={() => router.push('/profile/interests')} />}
+          body="Your saved videos, turned into useful recipes, exercise steps and ideas to return to."
+          action={<Button title="AI connections" variant="secondary" onPress={() => router.push('/profile/connections')} />}
         />
       </Enter>
       <Enter index={1}>
@@ -199,7 +212,7 @@ export default function RhythmVideos() {
       </Enter>
       {query.isPending ? (
         <View accessibilityLabel="Loading the content library">
-          {section === 'Videos' ? (
+          {section === 'Videos' || section === 'Saved videos' ? (
             <Grid columns={videoColumns}>
               {[0, 1, 2, 3].slice(0, Math.max(2, videoColumns * 2)).map((i) => <VideoCardSkeleton key={i} />)}
             </Grid>
@@ -212,6 +225,23 @@ export default function RhythmVideos() {
       ) : null}
       {query.isError ? <ErrorState error={query.error} onRetry={() => query.refetch()} /> : null}
       {message ? <FadeIn><Notice tone="info">{message}</Notice></FadeIn> : null}
+
+      {section === 'Saved videos' && <>
+        <Enter index={2}>
+          <View style={styles.details}>
+            <SectionHeader title="Keep the useful part" />
+            <Muted>Save a video with the Chrome extension. Its title, YouTube link and transcript notes appear here on web and phone.</Muted>
+          </View>
+        </Enter>
+        {data && savedVideos.length === 0 ? <EmptyState title="Your library starts with one video"
+          body="On a cooking, exercise or health video in YouTube, open Rhythm and choose Save to Rhythm. If a transcript is available, Rhythm prepares notes using your connected AI." /> : null}
+        {savedVideos.length >= 100 ? <Muted>Showing your latest 100 saved videos.</Muted> : null}
+        <Grid columns={videoColumns} delay={120}>
+          {savedVideos.map((video) => <SavedVideoCard key={video.videoId} video={video}
+            generating={summarizing === video.videoId || video.summaryState === 'generating'}
+            disabled={!!summarizing} onSummarize={() => void summarizeVideo(video.videoId)} onError={setMessage} />)}
+        </Grid>
+      </>}
 
       {section === 'Videos' && <>
         <Enter index={2}>
@@ -490,6 +520,46 @@ function TaskCard({ task, busy, agentLabel, videoTitle, onStart, onCancel }: {
       ) : null}
     </Card>
   );
+}
+
+function SavedVideoCard({ video, generating, disabled, onSummarize, onError }: {
+  video: SavedVideo; generating: boolean; disabled: boolean; onSummarize: () => void; onError: (message: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const blocks = video.summary?.split(/\n\s*\n/).filter(Boolean) ?? [];
+  const visible = expanded ? blocks : blocks.slice(0, 2);
+  return <Card style={styles.gridCard}>
+    <View style={styles.meta}>
+      <Pill label={video.topics.map(humanize).join(' · ') || 'Saved video'} tone="accent" />
+      {video.durationSeconds != null ? <Muted>{Math.ceil(video.durationSeconds / 60)} min</Muted> : null}
+    </View>
+    <ThemedText type="smallBold" style={styles.cardTitle}>{video.title || 'Saved YouTube video'}</ThemedText>
+    <Muted>{video.channel || 'YouTube'} · Saved {new Date(video.savedAt).toLocaleDateString()}</Muted>
+    <Divider />
+    {video.summary ? <View style={styles.details}>
+      {visible.map((block, i) => {
+        const [heading, ...lines] = block.split('\n');
+        return lines.length ? <View key={i} style={styles.details}>
+          <ThemedText type="smallBold">{heading}</ThemedText>
+          <ThemedText type="small" selectable>{lines.join('\n')}</ThemedText>
+        </View> : <ThemedText key={i} type={['Cooking notes', 'Exercise notes', 'Key ideas'].includes(block) ? 'smallBold' : 'small'} selectable>{block}</ThemedText>;
+      })}
+      {blocks.length > 2 ? <Button title={expanded ? 'Show less' : 'Read full notes'} variant="secondary" onPress={() => setExpanded(!expanded)} /> : null}
+    </View> : <Muted>{generating ? 'Preparing useful notes from the captured transcript…'
+      : video.hasTranscript ? 'Your video and transcript are saved. Generate useful notes with your connected AI.'
+        : 'No transcript was captured, so instructions haven’t been generated. Open the video and save it again from the extension to retry.'}</Muted>}
+    {!video.summary && video.description ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={3}>
+      Video description: {video.description}
+    </ThemedText> : null}
+    <View style={styles.cardActions}>
+      {video.summary ? <Muted>Notes use the captured source, which may be incomplete. Check the original video for missing details.</Muted> : null}
+      <Button title="Watch on YouTube ↗" onPress={() => {
+        void Linking.openURL(video.url).catch(() => onError('YouTube could not be opened. Please try again.'));
+      }} />
+      {!video.summary && video.hasTranscript ? <Button title={generating ? 'Preparing summary…' : 'Generate summary'}
+        variant="secondary" disabled={disabled || generating} loading={generating} onPress={onSummarize} /> : null}
+    </View>
+  </Card>;
 }
 
 function basisLabel(basis: string): string {

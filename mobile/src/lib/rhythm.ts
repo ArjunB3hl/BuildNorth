@@ -122,9 +122,16 @@ export type RhythmMetrics = {
   day: string; candidateChecks: number; transcriptAttempts: number; cacheHits: number;
   blockedRequests: number; providerFailures: number; searchRequests: number;
 };
+export type SavedVideo = {
+  videoId: string; url: string; title: string | null; channel: string | null; durationSeconds: number | null;
+  topics: string[]; description: string | null; summary: string | null; hasTranscript: boolean;
+  summaryState: 'ready' | 'generating' | 'no_transcript' | 'not_ready';
+  summarizedAt: string | null; savedAt: string;
+};
 export type RhythmResult = {
   status: RhythmStatus; message: string; profileRevision?: number; profile?: InterestsProfile; taskId?: string;
   mcpUrl?: string;
+  savedVideos?: SavedVideo[];
   task?: VideoTask; tasks?: VideoTask[]; candidates?: Candidate[]; browser?: BrowserSession; browsers?: BrowserSession[];
   agents?: AgentConnection[]; requests?: BrowserRequest[]; transcript?: Transcript; recommendations?: Recommendation[];
   memories?: MemorySuggestion[]; memoryStatus?: string; metrics?: RhythmMetrics;
@@ -157,6 +164,8 @@ export function createRhythmApi(request: Request) {
     /** `transcript`: what Save to Rhythm read from YouTube's transcript panel, when the video has one. */
     react: (metadata: VideoMetadata, capturedAt: string, reaction: Reaction, transcript?: { segments: TranscriptSegment[] }) =>
       call('POST', '/reactions', { metadata, capturedAt, reaction, ...(transcript ? { transcript } : {}) }),
+    savedVideos: () => call('GET', '/saved'),
+    summarizeVideo: (videoId: string) => call('POST', `/saved/${encodeURIComponent(videoId)}/summary`),
     /** What Rhythm learned, with the user's choices and any "You've watched…" prompt (`result.learned`). */
     learned: () => call('GET', '/learned'),
     /** Only the fields you send change; send a whole list to replace it, and null to hand a value back to learning. */
