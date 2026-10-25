@@ -509,6 +509,23 @@ class RhythmUsage(Base):
     search_requests: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class CalendarEntry(Timestamped, Base):
+    """A completed meal or workout. Demo entries are explicitly labelled and user-owned."""
+
+    __tablename__ = "calendar_entries"
+    __table_args__ = (UniqueConstraint("user_id", "source_key"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(120))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(String(2000))
+    source: Mapped[str] = mapped_column(String(20))
+    source_key: Mapped[str] = mapped_column(String(160))
+    time_estimated: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 # Tables holding per-user rows, in a safe deletion order (children before parents).
 USER_TABLES: tuple[type[Base], ...] = (
     RhythmSignal,
@@ -526,6 +543,7 @@ USER_TABLES: tuple[type[Base], ...] = (
     ConnectionToken,
     WatchToken,
     CoachMessage,
+    CalendarEntry,
     AppliedChangeSet,
     PlanItem,
     ShoppingItem,

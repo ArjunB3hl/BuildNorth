@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { StyleSheet, View } from 'react-native';
 
@@ -83,6 +83,7 @@ function AssistantMessage({ message, wide, reveal, enter, latest }: {
       <CoachLabel still={!latest} />
       <View style={[styles.assistantBody, wide && styles.indented]}>
         <Markdown blocks={blocks} reveal={plan} />
+        {message.context?.calendarEntries ? <Link href="/calendar"><ThemedText type="smallBold" style={{ color: '#208AEF' }}>✓ {message.context.calendarEntries} {message.context.calendarEntries === 1 ? 'entry' : 'entries'} added to Calendar ↗</ThemedText></Link> : null}
         {message.context ? (
           <Appear when={!!plan} delay={after}>
             <ContextLine context={message.context} />

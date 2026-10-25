@@ -11,7 +11,13 @@ import type { ImageSourcePropType } from 'react-native';
 // The iPhone app's five tabs become sidebar sections. Each section keeps its own
 // stack, like a tab's native stack on iOS.
 
-export type Section = 'today' | 'coach' | 'meals' | 'activity' | 'profile';
+export type Section =
+  | 'today'
+  | 'coach'
+  | 'calendar'
+  | 'meals'
+  | 'activity'
+  | 'profile';
 
 export type Route =
   | { name: 'root' }
@@ -42,16 +48,10 @@ export const SECTIONS: {
     icon: require('./assets/icons/coach.png'),
   },
   {
-    key: 'meals',
-    label: 'Meals',
-    symbol: 'fork.knife',
-    icon: require('./assets/icons/meals.png'),
-  },
-  {
-    key: 'activity',
-    label: 'Activity',
-    symbol: 'figure.run',
-    icon: require('./assets/icons/activity.png'),
+    key: 'calendar',
+    label: 'Calendar',
+    symbol: 'calendar',
+    icon: require('./assets/icons/today.png'),
   },
   {
     key: 'profile',
@@ -71,7 +71,10 @@ const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
 
 function routeTitle(section: Section, route: Route): string {
   if (route.name === 'root') {
-    return SECTIONS.find(s => s.key === section)!.label;
+    return (
+      SECTIONS.find(s => s.key === section)?.label ??
+      (section === 'meals' ? 'Recipes' : 'Workouts')
+    );
   }
   return ROUTE_TITLES[route.name];
 }
@@ -94,6 +97,7 @@ const ROOT: Route[] = [{ name: 'root' }];
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const [section, setSection] = useState<Section>('today');
   const [stacks, setStacks] = useState<Record<Section, Route[]>>({
+    calendar: ROOT,
     today: ROOT,
     coach: ROOT,
     meals: ROOT,

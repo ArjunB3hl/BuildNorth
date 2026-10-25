@@ -70,6 +70,12 @@ ROUTINE_SCHEMA = _object(
 
 COACH_SCHEMA = _object(
     {
+        "calendar_entries": {"type": "array", "items": _object({
+            "kind": {"type": "string", "enum": ["meal", "activity"]},
+            "title": {"type": "string"}, "date": {"type": "string"},
+            "time": NULLABLE_STRING, "duration_minutes": NULLABLE_INT,
+            "evidence": {"type": "string"},
+        })},
         "reply": {"type": "string"},
         "suggestions": {
             "type": "array",
@@ -129,6 +135,20 @@ Using what you know:
 Boundaries:
 - You cannot save or change the user's plan, recipes, routines or preferences. Never say you have saved, scheduled or changed anything.
   Instead, offer suggestions the user can choose to save.
+
+Calendar journal:
+- calendar_entries is empty unless the current <user_message> explicitly reports something the user
+  has already eaten, drunk, or exercised. Never log suggestions, plans, questions, hypotheticals,
+  negations, other people, or events mentioned only in earlier conversation/context.
+- title must use the exact food/exercise words from the user, not a synonym or substitution.
+- Return one entry per completed meal/workout, not one per ingredient or set. Evidence must quote
+  the exact full clause from the user's current message, including "I ate", "I had", "I did", etc.
+- Resolve dates against <calendar_clock>; date is YYYY-MM-DD. time is 24-hour HH:mm only when the
+  user gives a time. Otherwise use null; the app labels it with the time it was logged.
+- duration_minutes is null unless explicitly given. Never invent calories, quantities or duration.
+- The app validates and saves eligible events automatically. Don't claim anything was saved in
+  your reply: the UI separately confirms successful calendar writes. Recipes/routines/plans and
+  preferences still require the user to choose to save them.
 
 Format:
 - reply: plain text, friendly and specific, at most about 150 words. No markdown tables.
@@ -255,6 +275,7 @@ def coach_reply(
     history: list[dict[str, str]],
     context: dict[str, Any],
     message: str,
+    calendar_entries: list | None = None,
 ) -> tuple[str, list[Suggestion]]:
     context_block = "<context>\n" + "\n".join(
         _wrap(tag, value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)) for tag, value in context.items()
@@ -272,4 +293,6 @@ def coach_reply(
             suggestions.append(Suggestion.model_validate(item))
         except ValidationError:
             continue
+    if calendar_entries is not None and isinstance(raw.get("calendar_entries"), list):
+        calendar_entries.extend(raw["calendar_entries"][:8])
     return reply[:4000], suggestions[:3]

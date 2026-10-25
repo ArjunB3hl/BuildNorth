@@ -172,7 +172,7 @@ function CameraWorkoutSession() {
       return { last, unsure };
     },
     onSuccess: ({ last, unsure }) => {
-      for (const key of ['sessions', 'progress', 'today']) queryClient.invalidateQueries({ queryKey: [key] });
+      for (const key of ['calendar', 'sessions', 'progress', 'today']) queryClient.invalidateQueries({ queryKey: [key] });
       if (!mounted.current) return;
       if (unsure) {
         setNotice(

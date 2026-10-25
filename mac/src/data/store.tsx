@@ -1,3 +1,4 @@
+import { demoCalendar, type DemoCalendarEntry } from './calendar';
 import { randomUUID } from 'expo-crypto';
 import {
   createContext,
@@ -8,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { addDays } from '../lib/dates';
+import { addDays, localDate } from '../lib/dates';
 import { loadState, saveState } from '../lib/persist';
 import { createSampleData, type SampleData } from './sample';
 import type {
@@ -27,6 +28,8 @@ import type {
 type State = SampleData;
 
 type Action =
+  | { type: 'calendar/save'; entry: DemoCalendarEntry }
+  | { type: 'calendar/remove'; id: string }
   | {
       type: 'plan/update';
       id: string;
@@ -51,13 +54,54 @@ const now = () => new Date().toISOString();
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'plan/update':
+    case 'calendar/save':
       return {
         ...state,
+        calendarEntries: [
+          ...state.calendarEntries.filter(e => e.id !== action.entry.id),
+          action.entry,
+        ],
+      };
+    case 'calendar/remove':
+      return {
+        ...state,
+        calendarEntries: state.calendarEntries.filter(e => e.id !== action.id),
+      };
+    case 'plan/update': {
+      let calendarEntries = state.calendarEntries;
+      const item = state.plan.find(i => i.id === action.id);
+      if (item && action.patch.status) {
+        const id = `plan-${item.id}`;
+        if (
+          action.patch.status === 'done' &&
+          !calendarEntries.some(e => e.id === id)
+        ) {
+          const at = new Date();
+          calendarEntries = [
+            ...calendarEntries,
+            {
+              id,
+              kind: item.kind,
+              title: item.title,
+              date: localDate(at),
+              time: `${String(at.getHours()).padStart(2, '0')}:${String(
+                at.getMinutes(),
+              ).padStart(2, '0')}`,
+              minutes: item.minutes,
+            },
+          ];
+        } else if (action.patch.status !== 'done') {
+          calendarEntries = calendarEntries.filter(e => e.id !== id);
+        }
+      }
+      return {
+        ...state,
+        calendarEntries,
         plan: state.plan.map(i =>
           i.id === action.id ? { ...i, ...action.patch } : i,
         ),
       };
+    }
     case 'plan/add':
       return {
         ...state,
@@ -158,11 +202,12 @@ type Store = { state: State; dispatch: (action: Action) => void };
 const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
-    reducer,
-    undefined,
-    () => loadState() ?? createSampleData(),
-  );
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const saved = loadState();
+    return saved
+      ? { ...saved, calendarEntries: saved.calendarEntries ?? demoCalendar() }
+      : createSampleData();
+  });
   useEffect(() => saveState(state), [state]);
   const value = useMemo(() => ({ state, dispatch }), [state]);
   return (

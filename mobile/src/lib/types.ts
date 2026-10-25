@@ -148,6 +148,7 @@ export type Suggestion = { type: 'recipe' | 'routine' | 'preference'; title: str
 
 /** What a coach reply was built from. `memory` says whether long-term memory was actually checked. */
 export type CoachContext = {
+  calendarEntries?: number;
   memory: 'ok' | 'unavailable' | 'not_configured';
   topics: string[];
   preferences: number;
@@ -397,3 +398,19 @@ export type WatchToday = Today & { health: HealthDay | null; shareHealth: boolea
 
 /** PATCH /watch/checkins/{date} merges: omitted keys keep their stored values. A new day needs energy and mood. */
 export type CheckInPatch = Partial<Pick<CheckIn, 'energy' | 'mood' | 'sleepHours' | 'note'>>;
+
+export type CalendarEntry = {
+  id: string;
+  kind: 'meal' | 'activity';
+  title: string;
+  occurredAt: string;
+  localDate: string;
+  localTime: string;
+  durationMinutes: number | null;
+  notes: string | null;
+  source: 'manual' | 'coach' | 'demo' | 'session' | 'plan' | 'watch';
+  timeEstimated: boolean;
+  editable: boolean;
+  sessionId: string | null;
+};
+export type CalendarInput = Pick<CalendarEntry, 'kind' | 'title' | 'occurredAt' | 'durationMinutes' | 'notes'>;

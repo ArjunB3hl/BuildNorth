@@ -22,6 +22,11 @@ final class AppModel {
   /// A link from the phone that couldn't be saved on this watch. Its message stays unhandled and is tried again.
   private(set) var linkError: String?
 
+  private(set) var calendarEntries: [CalendarEntry] = []
+  private(set) var calendarError: String?
+  private(set) var calendarLoading = false
+  @ObservationIgnored private var calendarRequest = UUID()
+
   private(set) var today: WatchToday?
   private(set) var todayLoadedAt: Date?
   private(set) var isLoading = false
@@ -138,6 +143,10 @@ final class AppModel {
   }
 
   private func clearLocalData() {
+    calendarRequest = UUID()
+    calendarEntries = []
+    calendarError = nil
+    calendarLoading = false
     today = nil
     todayLoadedAt = nil
     loadError = nil
@@ -164,6 +173,24 @@ final class AppModel {
       return api.errorDescription
     }
     return HealthSync.message(for: error) ?? "Something went wrong. Try again."
+  }
+
+  func refreshCalendar(date: String) async {
+    let request = UUID()
+    calendarRequest = request
+    calendarEntries = []
+    calendarError = nil
+    guard let link else { return }
+    calendarLoading = true
+    defer { if calendarRequest == request { calendarLoading = false } }
+    do {
+      let entries = try await APIClient(link: link).calendar(date: date)
+      guard link == self.link, calendarRequest == request else { return }
+      calendarEntries = entries
+    } catch {
+      guard link == self.link, calendarRequest == request else { return }
+      calendarError = message(for: error, using: link)
+    }
   }
 
   // MARK: Today

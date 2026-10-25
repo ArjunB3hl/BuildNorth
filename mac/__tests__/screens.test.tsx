@@ -71,7 +71,14 @@ test('every section and page renders', async () => {
   expect(text()).toContain('What should I cook tonight? Something quick.');
   expect(text()).toContain('Memory checked');
 
-  await press(renderer, 'Meals');
+  await press(renderer, 'Calendar');
+  expect(text()).toContain('Your days, in rhythm.');
+  expect(text()).toContain('Greek yogurt & berries');
+  expect(text()).toContain('Full body at home'); // marking the plan done added a timed entry
+  await press(renderer, 'Edit Greek yogurt & berries');
+  expect(text()).toContain('Edit a moment');
+  await press(renderer, 'Save on this Mac');
+  await press(renderer, 'Recipe library ↗');
   expect(text()).toContain('YOUR RECIPES');
   await pressFirst(renderer, 'Chickpea and spinach curry');
   expect(text()).toContain('INGREDIENTS');
@@ -79,15 +86,16 @@ test('every section and page renders', async () => {
   expect(text()).toContain('1000 g'); // 800 g of chickpeas scaled from 4 to 5 servings
   await press(renderer, 'Add to shopping list');
   expect(text()).toContain('to your shopping list');
-  await press(renderer, 'Back to Meals');
+  await press(renderer, 'Back to Recipes');
   await pressFirst(renderer, 'Shopping list');
   expect(text()).toContain('TO BUY');
 
-  await press(renderer, 'Activity');
+  await press(renderer, 'Calendar');
+  await press(renderer, 'Workout library ↗');
   await pressFirst(renderer, 'Full body at home');
   expect(text()).toContain('EXERCISES');
   expect(text()).toContain('Last done yesterday · 28 min');
-  await press(renderer, 'Back to Activity');
+  await press(renderer, 'Back to Workouts');
   await pressFirst(renderer, '· 32:00 ·'); // the session, not the routine
   expect(text()).toContain('Set 1');
 

@@ -47,7 +47,7 @@ export function Sidebar() {
           symbol={s.symbol}
           icon={s.icon}
           badge={badges[s.key]}
-          selected={nav.section === s.key}
+          selected={(nav.section === 'meals' || nav.section === 'activity' ? 'calendar' : nav.section) === s.key}
           onPress={() => nav.go(s.key)}
         />
       ))}

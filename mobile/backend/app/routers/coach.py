@@ -2,8 +2,8 @@
 saved preferences, what long-term memory recalls for the message, and the recipes, routines,
 week plan and (when the user shares them) Apple Watch health summaries the message is about.
 
-The coach never changes app data: suggestions are returned for the user to
-confirm, and the client saves them through the normal recipe/routine/preference
+Completed meals/workouts explicitly reported by the user are journalled to Calendar.
+Other suggestions are returned for the user to confirm, and the client saves them through the normal recipe/routine/preference
 endpoints. A turn is stored only once a reply has been produced, so a failed
 request leaves no half-written conversation behind. Each reply stores what it was
 built from, including whether long-term memory was actually checked.
@@ -17,13 +17,14 @@ from datetime import date
 from fastapi import APIRouter, BackgroundTasks, Query, Request, Response, status
 from sqlalchemy import delete, select
 
+from app.calendar import log_coach_entries, zone
 from app import health
 from app import preferences as prefs
 from app import user_context
 from app.ai import AIError
 from app.assistant import coach_reply
 from app.deps import AI, CurrentUser, Db, Memory, ai_failure
-from app.models import CheckIn, CoachMessage, PlanItem, Profile
+from app.models import CheckIn, CoachMessage, PlanItem, Profile, utcnow
 from app.rhythm import learn as rhythm_learn
 from app.schemas import CoachHistoryOut, CoachMessageIn, CoachMessageOut, CoachReplyOut, Suggestion
 
@@ -128,7 +129,9 @@ def send(
             .limit(HISTORY_TURNS)
         )
     )
+    tz = zone(body.timezone)
     context = {
+        "calendar_clock": utcnow().astimezone(tz).isoformat(),
         "profile": _profile_text(db.get(Profile, user.user_id)),
         "preferences": "\n".join(f"- {t}" for t in saved) or "(none saved)",
         "memory_notes": "\n".join(f"- {n.text}" for n in ctx.memory_notes) or "(none)",
@@ -136,12 +139,14 @@ def send(
         **_records_text(ctx),
         "today": _today_text(db, user.user_id, body.local_date),
     }
+    calendar_entries: list = []
     try:
         reply, suggestions = coach_reply(
             ai,
             history=[{"role": m.role, "content": _clip(m.content)} for m in reversed(recent)],
             context=context,
             message=body.content,
+            calendar_entries=calendar_entries,
         )
     except AIError as exc:
         raise ai_failure(exc) from exc
@@ -150,9 +155,11 @@ def send(
     user_message = CoachMessage(user_id=user.user_id, role="user", content=body.content, suggestions=[])
     db.add(user_message)
     db.flush()
+    logged = log_coach_entries(db, user.user_id, body.client_key or user_message.id,
+                               body.content, calendar_entries, body.timezone)
     assistant = CoachMessage(
         user_id=user.user_id, role="assistant", content=reply, suggestions=[s.model_dump() for s in suggestions],
-        context=ctx.summary(),
+        context={**ctx.summary(), "calendar_entries": logged},
     )
     db.add(assistant)
     db.commit()

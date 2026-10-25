@@ -9,6 +9,12 @@ struct TodayView: View {
       header
         .listRowBackground(Color.clear)
 
+      NavigationLink {
+        CalendarView()
+      } label: {
+        Label("Calendar", systemImage: "calendar")
+      }
+
       if let error = model.loadError {
         Section {
           VStack(alignment: .leading, spacing: 4) {

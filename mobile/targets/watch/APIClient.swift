@@ -55,6 +55,14 @@ struct APIClient: Sendable {
     return URLSession(configuration: config)
   }()
 
+  func calendar(date: String) async throws -> [CalendarEntry] {
+    try await send("GET", ["watch", "calendar"], query: [
+      URLQueryItem(name: "start", value: date),
+      URLQueryItem(name: "days", value: "1"),
+      URLQueryItem(name: "timezone", value: TimeZone.current.identifier),
+    ])
+  }
+
   func today(date: String) async throws -> WatchToday {
     try await send("GET", ["watch", "today"], query: [URLQueryItem(name: "date", value: date)])
   }

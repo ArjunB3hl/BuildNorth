@@ -519,5 +519,16 @@ section("APIClient") {
   check(config.requestCachePolicy == .reloadIgnoringLocalCacheData && !config.waitsForConnectivity, "cache policy")
 }
 
+section("Calendar entries decode") {
+  let data = Data("""
+    [{"id":"demo-one","kind":"meal","title":"Oats","localDate":"2026-10-25","localTime":"08:15","durationMinutes":null,"source":"demo","timeEstimated":false},
+     {"id":"session:one","kind":"activity","title":"Strength","localDate":"2026-10-25","localTime":"17:40","durationMinutes":32,"source":"session","timeEstimated":true}]
+    """.utf8)
+  let entries = try JSONDecoder().decode([CalendarEntry].self, from: data)
+  check(entries.count == 2 && entries[0].source == "demo", "demo label retained")
+  check(entries[0].durationMinutes == nil && entries[1].durationMinutes == 32, "optional duration")
+  check(entries[1].timeEstimated && entries[0].localTime == "08:15", "time and precision")
+}
+
 print(failures == 0 ? "OK: \(checks) checks passed" : "FAILED: \(failures) of \(checks) checks")
 exit(failures == 0 ? 0 : 1)

@@ -84,7 +84,7 @@ export default function RunSession() {
       }),
     onSuccess: async (saved) => {
       await store.clear();
-      for (const key of ['sessions', 'progress', 'today']) queryClient.invalidateQueries({ queryKey: [key] });
+      for (const key of ['calendar', 'sessions', 'progress', 'today']) queryClient.invalidateQueries({ queryKey: [key] });
       router.replace({ pathname: '/activity/session/[id]', params: { id: saved.id, justFinished: '1' } });
     },
   });

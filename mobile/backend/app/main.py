@@ -25,7 +25,7 @@ from app.config import load_settings
 from app.db import make_engine, make_session_factory, migrate
 from app import mcp_server
 from app.memory import MemoryService
-from app.routers import account, activity, coach, connections, daily, meals, planner, profile, watch
+from app.routers import account, activity, calendar, coach, connections, daily, meals, planner, profile, watch
 from app.rhythm import router as rhythm
 from app.rhythm.config import RhythmSettings
 from app.rhythm.memory import Registry as RhythmMemoryRegistry
@@ -116,7 +116,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for module in (account, profile, coach, meals, activity, daily, planner, connections, watch, rhythm):
+for module in (account, calendar, profile, coach, meals, activity, daily, planner, connections, watch, rhythm):
     app.include_router(module.router)
 app.include_router(rhythm.videos)
 

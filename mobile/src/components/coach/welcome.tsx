@@ -34,7 +34,7 @@ export function CoachWelcome({ onSelect, disabled, wide }: { onSelect: (text: st
           How can I help today?
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-          Meals, cooking and workouts, tailored to your profile and memory. Nothing is saved unless you choose, and it isn’t
+          Meals, cooking and workouts, tailored to your profile and memory. Completed meals and workouts you report are added to Calendar, and it isn’t
           medical advice.
         </ThemedText>
       </FadeIn>
