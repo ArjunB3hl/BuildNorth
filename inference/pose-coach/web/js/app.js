@@ -126,13 +126,14 @@ S.plan = null;           // connections.js resolve(): {brain, voice, why, label}
 const choice = () => ({ coach: coachChoice(), voice: voiceChoice(), failed: S.failed });
 
 /**
- * The voice that speaks on this page (Kokoro or the Mac's); with the agent's own voice, it speaks only the engine's cues.
+ * The voice that speaks on this page (Kokoro or the Mac's). With the agent's own voice there is no second speaker:
+ * fallback cues are shown on screen while the agent answers. If the agent fails, the fallback plan restores Kokoro.
  * Until Kokoro is ready (a few seconds on the server, about 10 s in the browser) the Mac's voice stands in, so no cue
  * goes unspoken. A voice replaced, or one that arrives after the picker moved on, is closed (its audio and its worker).
  */
 async function ensureVoice() {
   const v0 = S.plan?.voice ?? voiceChoice();
-  const kind = v0 === 'eleven' || v0 === 'auto' ? 'kokoro' : v0;
+  const kind = v0 === 'eleven' ? 'off' : v0 === 'auto' ? 'kokoro' : v0;
   if (S.voiceFor === kind) return S.voiceOut;
   const load = S.voiceLoad = {};                        // this load: a later one makes it moot
   S.voiceFor = kind;
@@ -161,16 +162,14 @@ function speak(text, who, t0 = null, heard = false, { label = 'event to voice', 
   $('say').textContent = text;
   log(`${who === 'coach' ? 'Coach' : 'Engine'}: ${text}`, who === 'coach' ? 'coach' : 'cue');
   if (/[\p{L}\p{N}]/u.test(text)) chat(who, text);
-  if (heard) return;
-  if (!/[\p{L}\p{N}]/u.test(text)) return;            // nothing to say ("..."): leave the cue that is playing alone
-  // duplex: the Mac's voice plays outside the browser, where echo cancellation cannot keep it out of the microphone,
-  // and the agent would take the cue for the user talking: shown only (Kokoro plays in the page, as the agent's voice)
-  const c = S.eleven;
-  if (c?.listen && (c.mic === 'on' || c.mic === 'connecting') && S.voiceOut?.kind === 'mac') {
-    if (!S.macQuietTold) { S.macQuietTold = true; log("(the Mac's voice stays quiet while the coach listens, or it would hear the cues as you: they are shown)"); }
+  // Cover the transition too: a local cue may still be synthesizing when a voice agent connects. Cancel it before
+  // it can arrive over the agent. A text-only agent still uses the selected local voice.
+  if (S.eleven && !S.eleven.textOnly) {
+    S.voiceOut?.cancel(); S.voiceOld?.close(); S.voiceOld = null;
     return;
   }
-  c?.echo(text);                                      // (heard back through the microphone, it is not the user's words)
+  if (heard) return;
+  if (!/[\p{L}\p{N}]/u.test(text)) return;            // nothing to say ("..."): leave the cue that is playing alone
   S.voiceOld?.close(); S.voiceOld = null;
   if (S.voiceOut?.standIn && !S.voiceOut.told) { S.voiceOut.told = true; log("voice: the Mac's voice until Kokoro is ready"); }
   // listening here: what the Mac's voice says comes back through the microphone (it plays outside the page, where echo
@@ -364,17 +363,23 @@ async function stopEleven() {
   clearTimeout(S.elevenEnd);
   S.elevenEnding = false;
   const coach = S.eleven;
-  S.eleven = null; S.elevenPending = new Map();
+  S.eleven = null;
+  clearElevenPending();
   if (coach) {
-    standIn(coach, coach.waiting.slice());              // what never went to it (a summary included) still gets a cue
     // (one still connecting ends as soon as it is up). The next session waits for this one to close: the agent takes
     // one at a time, and refuses a second
     const closing = S.elevenClosing = coach.stop().catch(() => {});
+    standIn(coach, coach.waiting.slice());              // only after the old agent's audio has been silenced
     await closing;
     if (S.elevenClosing === closing) S.elevenClosing = null;
   }
   if (coach && !S.eleven && brain() === 'eleven') $('coachState').textContent = 'starts with the workout';
   renderMic();
+}
+/** A retired or disconnected session must not speak from a fallback timer after its replacement starts. */
+function clearElevenPending() {
+  for (const p of S.elevenPending.values()) clearTimeout(p.timer);
+  S.elevenPending.clear();
 }
 /**
  * Events still waiting to go to an agent that will not take them in time (it is still connecting after FALLBACK_MS, it
@@ -429,6 +434,7 @@ async function startEleven() {
   const awake = () => { if (S.eleven === coach) { S.elevenLast = performance.now(); armIdle(); armTalkIdle(); } };
   if (S.elevenAsleep) log('ElevenLabs: reconnecting');
   S.eleven = coach; S.elevenAsleep = false;
+  if (!coach.textOnly) { S.voiceOut?.cancel(); S.voiceOld?.close(); S.voiceOld = null; }
   $('coachState').textContent = 'connecting...';
   renderMic();
   armIdle();
@@ -437,6 +443,7 @@ async function startEleven() {
     await coach.start({
       // the reply started (with the agent's voice, its sound comes before its text): no fallback needed
       onReply: marks => {
+        if (S.eleven !== coach) return;
         answered = true;
         const p = S.elevenPending.get(marks);
         if (!p || p.late) return;
@@ -445,6 +452,7 @@ async function startEleven() {
         if (marks.audio) $('cueDelay').textContent = `${((marks.audio - p.t0) / 1000).toFixed(1)} s (event to voice)`;
       },
       onCue: ({ text, marks, user }) => {
+        if (S.eleven !== coach) return;
         answered = true;
         const p = S.elevenPending.get(marks);
         // (a late reply that also answers the user's words is theirs: it is heard, see eleven-coach.js)
@@ -460,8 +468,8 @@ async function startEleven() {
       },
       // duplex: the user's words, and what the agent said to them (or on its own): no message of the page's
       // (the agent speaking up on its own is no activity: it would keep the session up for ever)
-      onUser: text => { answered = true; awake(); log(`You: ${text}`, 'you'); chat('you', text); },
-      onSaid: ({ text, user }) => { answered = true; if (user) awake(); speak(text, 'coach', null, !coach.textOnly); },
+      onUser: text => { if (S.eleven !== coach) return; answered = true; awake(); log(`You: ${text}`, 'you'); chat('you', text); },
+      onSaid: ({ text, user }) => { if (S.eleven !== coach) return; answered = true; if (user) awake(); speak(text, 'coach', null, !coach.textOnly); },
       // ... and what the agent does with the user's words: the page applies it, and the agent says a few words with what
       // the tool returns (a voice answer is confirmed by the agent itself: the coach is not sent exercise_set or set_end).
       // Only in a reply to the user's own words: live, the agent read "Set 1 finished (the user said they are done)" as
@@ -476,21 +484,24 @@ async function startEleven() {
           : onItsOwn('set_movement')),
       },
       // a message went to the agent (an event, or the ones that came while it answered): the engine speaks the latest
-      // event's own cue if no reply comes in time, and the reply, should it still come, is not heard (release). The next
+      // event's own cue if no reply comes in time. With the agent's voice that fallback is on screen only; with a local
+      // voice it is spoken and the late reply is suppressed (release). The next
       // message waits for that reply all the same (up to the coach's cap): two messages out at once get one reply
       onDispatch: (marks, events) => {
+        if (S.eleven !== coach) return;
         for (const e of events) clearTimeout(S.elevenFallback.get(e)?.timer);    // (one that waited for the connect)
         const final = S.elevenEnding && events.some(e => S.elevenFinal.has(e));
         // (while the user is talking with the agent, its answer is coming, likely for this message too: the engine's cue
         // would talk over it, so it waits, up to the coach's cap)
         const fire = () => {
+          if (S.eleven !== coach || S.elevenPending.get(marks) !== p) return;
           if (coach.userBusy && performance.now() - marks.t0 < CAP_MS) { p.timer = setTimeout(fire, 500); return; }
-          p.late = true;
+          p.late = coach.textOnly;                  // a visible cue must not mute the agent's only spoken answer
           // the latest event's cue, but not a question the user has answered meanwhile
           const fb = events.map(e => S.elevenFallback.get(e)).reverse().find(f => !f?.ev?.withdrawn);
           if (fb !== undefined || !events.length) speak(fb?.text ?? FALLBACK.praise(), 'engine');
-          coach.release(marks);
-          if (p.final && S.elevenEnding && S.eleven === coach) stopEleven();     // the summary was spoken
+          if (coach.textOnly) coach.release(marks);
+          if (p.final && coach.textOnly && S.elevenEnding && S.eleven === coach) stopEleven(); // the summary was spoken
         };
         const p = {
           final, events,
@@ -503,7 +514,9 @@ async function startEleven() {
       // that message is finished with (its reply heard and played out, cut off, or none came): after the workout
       // summary's, the session ends
       onDone: (marks, how) => {
+        if (S.eleven !== coach) return;
         const p = S.elevenPending.get(marks);
+        clearTimeout(p?.timer);
         S.elevenPending.delete(marks);
         if (how === 'cap') log('(no reply from the agent in time: the next message goes once it has gone quiet)');
         if (p?.final && S.elevenEnding && S.eleven === coach) stopEleven();
@@ -514,6 +527,7 @@ async function startEleven() {
       onDisconnect: details => {
         if (S.eleven !== coach) return;
         S.eleven = null;
+        clearElevenPending();
         $('coachState').textContent = 'stopped';
         renderMic();
         if (!answered && (S.running || S.starting || S.talking)) {
@@ -534,6 +548,7 @@ async function startEleven() {
   } catch (e) {
     if (S.eleven === coach) {
       S.eleven = null;
+      clearElevenPending();
       standIn(coach, coach.waiting.slice());       // events sent while it connected: their own cue now
       await failBrain('eleven', e.message);        // (the agent refused the session, or could not be reached)
     }

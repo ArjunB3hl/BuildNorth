@@ -242,8 +242,10 @@ export class ElevenCoach {
       },
       onInterruption: ({ event_id: id }) => this.interrupted(id),
       onModeChange: ({ mode }) => {
+        if (this.stopped) return;
         this.mode = mode;
         clearTimeout(this.gapTimer);                           // (its voice goes on: that was a gap)
+        if (mode === 'speaking' && !this.hushed) this.talk();
         // what waited for the voice goes; while a reply plays, once the client has stayed back in listening GAP_MS
         if (mode === 'listening') { if (this.talking) this.gapTimer = setTimeout(() => this.quiet(), GAP_MS); else this.quiet(); }
         this.waitQuiet();
@@ -382,6 +384,7 @@ export class ElevenCoach {
   /** Every event from the agent, in order: the last reply id seen, and each chunk of its voice before it plays. A reply
    * newer than the message held for keeps the hold up while it comes (it is that message's: see giveUp). */
   incoming(ev) {
+    if (this.stopped) return;
     const id = ev?.audio_event?.event_id ?? ev?.agent_response_event?.event_id ?? ev?.text_response_part?.event_id;
     if (Number.isFinite(id)) {
       this.lastId = Math.max(this.lastId, id);
@@ -396,18 +399,23 @@ export class ElevenCoach {
    * heard (the caller spoke its own cue for it), unless it answers the user: the voice stays down until a reply to be
    * heard starts. */
   audio(id) {
+    if (this.stopped) return;
     clearTimeout(this.quietTimer);
+    clearTimeout(this.gapTimer);
     const m = this.owner(id, 'audio');
-    if (!m || m.marks.audio != null) return;
+    if (m?.marks.audio != null) { if (!this.hushed) this.talk(); return; }
+    // The greeting and other replies without a tracker message still own the speaker. Hold new prompts through
+    // gaps in their audio too, even when their transcript has not arrived yet.
+    if (m?.late && !m.user) this.hush(m); else { this.unhush(); this.talk(); }
+    if (!m) return;
     m.marks.audio = performance.now();
-    if (this.talking) this.talk();                                        // (its voice has started: wait for it to end)
     if (this.playing && this.playing !== m) { this.finish(this.playing); this.playing = null; }   // a newer reply
-    if (m.late && !m.user) this.hush(m); else this.unhush();
     if (!m.own) this.onReply(m.marks);
   }
 
   /** The agent's text for a reply: the cue. The message in flight ends there, and what waited goes. */
   reply(id, text) {
+    if (this.stopped) return;
     const m = this.owner(id, 'text');
     const after = this.tooling;                                           // words after a client tool ran: the answer's
     this.tooling = false;
@@ -455,6 +463,7 @@ export class ElevenCoach {
    * ("..." for a noise), is not the user speaking.
    */
   heard(id, text) {
+    if (this.stopped) return;
     if (!hasWords(text) || this.sentText.has(text) || this.isEcho(text)) return;
     const said = this.said = { id: Number.isFinite(id) ? id : this.lastId + 1, text, at: performance.now(), answered: false };
     clearTimeout(this.saidTimer);
@@ -525,6 +534,7 @@ export class ElevenCoach {
     if (this.listen && !(this.inFlight?.overVoice && this.inFlight.replyId == null)) this.waitUser(USER_MS);
     if (cut(this.inFlight)) this.giveUp('cut');                            // its text will not come
     if (cut(this.held)) this.unhold();
+    this.quiet();                                // an explicit interruption ended playback; this is not an audio gap
   }
 
   /**
@@ -605,6 +615,7 @@ export class ElevenCoach {
 
   async stop() {
     this.stopped = true;
+    this.setVolume(0);                            // silence playback immediately, even if closing the socket takes time
     this.clearTimers();
     await this.started?.catch(() => {});                                   // a session still connecting ends once it is up
     const conversation = this.conversation;

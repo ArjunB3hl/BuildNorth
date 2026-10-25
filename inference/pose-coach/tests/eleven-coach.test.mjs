@@ -75,6 +75,44 @@ globalThis.window = {
 const { ElevenCoach, CAP_MS, ECHO_MS, GAP_MS, GRACE_MS, QUIET_MS, START_MS, TALK_MS, USER_MS, echoOf } = await import('../web/js/eleven-coach.js');
 const later = () => { let open; const p = new Promise(r => { open = r; }); p.open = open; return p; };
 
+test('the greeting holds workout messages through playback gaps even before its transcript arrives', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const coach = new ElevenCoach({ agentId: 'agent_0123456789abcdefghijklmnopqr', listen: true });
+  await coach.start();
+  const s = session;
+  s.audio(1);                                          // the agent's greeting, no tracker message or transcript yet
+  coach.send({ summary: 'ask_exercise' });
+  s.played();                                         // a short gap in the greeting, not the end of the turn
+  t.mock.timers.tick(GAP_MS - 1);
+  assert.equal(s.sent.length, 0);
+  s.audio(1);
+  s.text(1, 'Hello. What exercise are you starting with?');
+  assert.equal(s.sent.length, 0);
+  s.played();
+  t.mock.timers.tick(GAP_MS);
+  assert.equal(s.sent.length, 1);
+  await coach.stop();
+});
+
+test('stopping silences the current audio immediately and ignores late audio, text and user callbacks', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const said = [], heard = [];
+  const coach = new ElevenCoach({ agentId: 'agent_0123456789abcdefghijklmnopqr', listen: true });
+  await coach.start({ onSaid: x => said.push(x), onUser: x => heard.push(x) });
+  const s = session, closing = later();
+  s.conversation.endSession = () => closing;
+  s.audio(1);
+  const stopped = coach.stop();
+  assert.equal(s.volumes.at(-1), 0, 'audio is muted before the asynchronous close finishes');
+  s.audio(2);
+  s.text(2, 'An old answer.');
+  s.user(3, 'An old transcript.');
+  assert.deepEqual(said, []);
+  assert.deepEqual(heard, []);
+  closing.open();
+  await stopped;
+});
+
 test('one message in flight; what comes meanwhile goes together, as one message, when the reply arrives', async () => {
   const cues = [], dispatched = [];
   const coach = new ElevenCoach({ agentId: 'agent_0123456789abcdefghijklmnopqr', llm: 'gemini-2.5-flash', textOnly: true });

@@ -33,7 +33,7 @@ engine event (web/js/engine.js, web/js/auto.js) -> web/js/app.js, with the plan 
   chatgpt  the same as Claude Code, with codex exec
   none     the engine's own sentence
   voice    the agent's own, or web/js/voice.js: Kokoro (GET /api/tts, MLX) -> Kokoro in the browser (WebGPU) -> the Mac's
-           (no cue within 3 s: the engine's own sentence is spoken instead)
+           (no cue within 3 s: the engine's sentence; on screen only when the agent owns the voice)
   listen   eleven: the agent itself (duplex). claude, chatgpt, none: the microphone -> web/js/listen.js (the detector)
            -> POST /api/stt (server/stt.py -> stt_worker.py: Parakeet on MLX) -> the words -> web/js/intents.js
            -> applied here, and POST /api/coach/event {kind: "user_said"} (none: the engine's own sentence)
@@ -205,7 +205,8 @@ one; the page plans with `resolve()` in `web/js/connections.js`.
     Claude goes through Claude Code.
 - **Cues already owed.** Every event sent to a Claude or ChatGPT session waits 3 s (`FALLBACK_MS`) for its cue. After
   that the engine's sentence is spoken, and a cue that comes later is skipped ("(late coach cue skipped: ...)"). This
-  holds across a failover too. If `/api/coach/event` or `/api/coach/describe` fails, the engine's sentence is spoken.
+  holds across a failover too. If `/api/coach/event` or `/api/coach/describe` fails, the engine's sentence is used
+  (on screen only while the ElevenLabs voice is active).
 
 **The voice rules** (the *Voice* picker: Auto, Kokoro, the agent's own, Mac voice, Off):
 
@@ -215,7 +216,8 @@ one; the page plans with `resolve()` in `web/js/connections.js`.
 - With the agent as the coach and another voice, the agent's session is text-only and the page speaks its text. A
   text-only session has no microphone: the user answers the coach's questions with the chips and buttons.
 - Kokoro means Kokoro on the server, else Kokoro in the browser, else the Mac's voice. The Mac's voice stands in until
-  Kokoro is ready. Kokoro is loaded with the agent's voice too, for the engine's fallback sentences.
+  Kokoro is ready. Selecting the agent's voice closes both local voices: ElevenLabs is the only speaker, and engine
+  fallback sentences stay on screen. A failed agent can still hand over to another coach with Kokoro.
 - Changing the voice ends an agent session of the other mode; the new one connects with the workout.
 
 Both pickers are remembered per browser in `localStorage` (`pose-coach-coach`, `pose-coach-voice`).
@@ -660,9 +662,12 @@ should my lunges be?" got "Lower until both knees are around ninety degrees, bac
   happened while you were answering. Give one short cue for the most important one, ..."). The next message goes when
   the reply's text arrives, when an interruption cuts it off, or after 10 s (`CAP_MS`). Replies are told apart by the
   agent's event ids. If nothing of a reply has come by the cap, the next message waits until the agent has said nothing
-  for 3 s (`GRACE_MS`). With its voice, a reply has played out after 1.5 s back in listening mode (`QUIET_MS`).
-- **Late replies.** The page's 3 s fallback starts when a message actually goes. A reply that comes after it is not
-  heard: its voice is turned down, and what is left of it is cut when the next reply starts.
+  for 3 s (`GRACE_MS`). With its voice, the next message waits through audio gaps of 0.5 s (`GAP_MS`), including the
+  greeting before its transcript arrives. Playback completion is confirmed after 1.5 s in listening mode (`QUIET_MS`).
+- **Late replies.** The page's 3 s fallback starts when a message actually goes. With the agent's own voice it is
+  shown on screen only, so a slow spoken answer can still be heard without a second voice. With a text-only agent,
+  the selected local voice speaks the fallback and skips the late reply. Interruptions, stops and disconnects clear
+  fallback timers, and callbacks from a retired session cannot speak over its replacement.
 - **One session per workout** (it bills by the minute). It connects at Start, and ends once the workout summary's
   reply has been heard or its fallback spoken: at most 25 s after the summary went (`END_MS`), or 15 s after Stop if
   no summary went (`STOP_END_MS`). With no event for 5 minutes, or the page hidden for a minute, it ends early, and the
@@ -1366,7 +1371,8 @@ npm test                                                   # 486 node tests (nod
 | File | Tests | What |
 |---|---|---|
 | `tests/connections.test.mjs` | 14 | Auto and hand picks, failover forward only, the voice rules, the panel's words, cues owed across a failover; who hears the user (the agent, the page with Parakeet, nobody), an answer to the user's words waiting longer than a cue; Claude through the API on the user's key (usable, refused, not checked) else through Claude Code, in Auto and in the panel's words |
-| `tests/eleven-coach.test.mjs` | 20 | one message in flight, the cap and the grace wait, reply ids, late replies hushed and cut, a reply played out before the next message, stop while connecting, the keep-alive, the silent input without duplex; duplex: the user's words answered apart from the tracker's messages, the client tools, words the agent left unanswered expiring, the real microphone, a muted start, and the session going on muted when it is refused |
+| `tests/eleven-coach.test.mjs` | 22 | one message in flight, the cap and the grace wait, reply ids, late replies hushed and cut, a reply played out before the next message, greeting audio gaps, immediate silence and stale callback rejection on stop, stop while connecting, the keep-alive, the silent input without duplex; duplex: the user's words answered apart from the tracker's messages, the client tools, words the agent left unanswered expiring, the real microphone, a muted start, and the session going on muted when it is refused |
+| `tests/coach-dialogue.test.mjs` | 7 | the page's real callbacks: a single voice owner, fallback cues on screen for voice agents, spoken fallbacks for text-only agents, pending timer cleanup on interruption/stop/disconnect, and callbacks from retired sessions |
 | `tests/voice.test.mjs` | 5 | Kokoro's page and seq, a superseded cue ends quietly, close() releases everything, a Mac voice stops only its own cue, when a voice is speaking (for barge-in) |
 | `tests/listen.test.mjs` | 11 | the page's detector on made-up frames: an utterance with its pre-roll ended after 700 ms of quiet, short pauses and trailing words kept (hysteresis), the room's level learnt (a fan), 15 s at most, knocks and clicks dropped, a louder sound needed while the page's voice talks, push-to-talk, 16 kHz PCM16 |
 | `tests/intents.test.mjs` | 15 | every exercise's names and the forms people say, the more specific name and the one meant, answers to "which exercise?", short switches but never a question, done against not yet, counting and fillers; a movement of the library by its spoken names and key, its longer name over the exercise in it, as a short switch or an answer but never a question or about pain, the library's everyday words neither taking an exercise named with them nor making a longer answer, and each name of the built library finding its own movement (skipped without `.data/moves/library.json`) |
