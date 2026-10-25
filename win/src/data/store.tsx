@@ -1,18 +1,35 @@
+import { demoCalendar, type DemoCalendarEntry } from './calendar';
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useReducer,
+  useRef,
+  useState,
   type ReactNode,
 } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { addDays } from '../lib/dates';
+import { Button, Notice, ThemedText } from '../components/ui';
+import { describe, useAccount } from '../lib/account';
+import type { Api } from '../lib/api';
+import { addDays, localDate } from '../lib/dates';
 import { randomUUID } from '../lib/ids';
 import { loadState, saveState } from '../lib/persist';
+import { Spacing, useTheme } from '../theme';
+import {
+  loadAccountState,
+  loadSlices,
+  slicesFor,
+  syncAction,
+  type Slice,
+} from './remote';
 import { createSampleData, type SampleData } from './sample';
 import type {
   CheckIn,
+  CoachMessage,
   Ingredient,
   PlanItem,
   PreferenceSource,
@@ -20,13 +37,18 @@ import type {
   ProgressWindow,
 } from './types';
 
-// Local store standing in for the BuildNorth API, saved on this PC (src/lib/persist.ts).
-// Every change here maps to one API call in the iPhone app, so swapping this for real
-// requests later keeps the screens as is.
+// One store, two sources. Signed out, it's local demo data saved on this PC (src/lib/persist.ts), as in the
+// Mac app. Signed in, the same state comes from the Rhythm API and every action is also sent there
+// (src/data/remote.ts); each action maps to one API call, as in the iPhone app, so the screens don't change.
 
-type State = SampleData;
+export type State = SampleData & {
+  /** Signed in: the server's numbers (GET /progress); the demo computes them from local data. */
+  serverProgress?: Progress | null;
+};
 
-type Action =
+export type Action =
+  | { type: 'calendar/save'; entry: DemoCalendarEntry }
+  | { type: 'calendar/remove'; id: string }
   | {
       type: 'plan/update';
       id: string;
@@ -37,13 +59,21 @@ type Action =
   | { type: 'checkin/save'; checkIn: CheckIn }
   | { type: 'shopping/toggle'; id: string }
   | { type: 'shopping/clearChecked' }
-  | { type: 'shopping/add'; recipeId: string; ingredients: Ingredient[] }
+  | {
+      type: 'shopping/add';
+      recipeId: string;
+      ingredients: Ingredient[];
+      servings?: number;
+    }
   | { type: 'preference/add'; text: string; source: PreferenceSource }
   | { type: 'preference/correct'; id: string; text: string }
   | { type: 'preference/remove'; id: string }
   | { type: 'memory/erase' }
   | { type: 'coach/clear' }
-  | { type: 'store/reset' };
+  | { type: 'coach/exchange'; message: string; reply: string }
+  | { type: 'coach/append'; messages: CoachMessage[] }
+  | { type: 'store/reset' }
+  | { type: 'store/replace'; patch: Partial<State> };
 
 // UUIDs rather than a counter: saved items outlive the app process.
 const newId = (prefix: string) => `${prefix}-${randomUUID()}`;
@@ -51,13 +81,81 @@ const now = () => new Date().toISOString();
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'plan/update':
+    case 'coach/exchange':
       return {
         ...state,
+        coach: [
+          ...state.coach,
+          {
+            id: newId('message'),
+            role: 'user',
+            content: action.message,
+            suggestions: [],
+          },
+          {
+            id: newId('message'),
+            role: 'assistant',
+            content: action.reply,
+            suggestions: [],
+            context: {
+              memory: 'not_configured',
+              preferences: state.preferences.length,
+              recalled: 0,
+              recipes: 0,
+              routines: 0,
+              planItems: state.plan.length,
+            },
+          },
+        ],
+      };
+    case 'calendar/save':
+      return {
+        ...state,
+        calendarEntries: [
+          ...state.calendarEntries.filter(e => e.id !== action.entry.id),
+          action.entry,
+        ],
+      };
+    case 'calendar/remove':
+      return {
+        ...state,
+        calendarEntries: state.calendarEntries.filter(e => e.id !== action.id),
+      };
+    case 'plan/update': {
+      let calendarEntries = state.calendarEntries;
+      const item = state.plan.find(i => i.id === action.id);
+      if (item && action.patch.status) {
+        const id = `plan-${item.id}`;
+        if (
+          action.patch.status === 'done' &&
+          !calendarEntries.some(e => e.id === id)
+        ) {
+          const at = new Date();
+          calendarEntries = [
+            ...calendarEntries,
+            {
+              id,
+              kind: item.kind,
+              title: item.title,
+              date: localDate(at),
+              time: `${String(at.getHours()).padStart(2, '0')}:${String(
+                at.getMinutes(),
+              ).padStart(2, '0')}`,
+              minutes: item.minutes,
+            },
+          ];
+        } else if (action.patch.status !== 'done') {
+          calendarEntries = calendarEntries.filter(e => e.id !== id);
+        }
+      }
+      return {
+        ...state,
+        calendarEntries,
         plan: state.plan.map(i =>
           i.id === action.id ? { ...i, ...action.patch } : i,
         ),
       };
+    }
     case 'plan/add':
       return {
         ...state,
@@ -149,26 +247,174 @@ function reducer(state: State, action: Action): State {
       return { ...state, preferences: [] };
     case 'coach/clear':
       return { ...state, coach: [] };
+    case 'coach/append':
+      return { ...state, coach: [...state.coach, ...action.messages] };
     case 'store/reset':
       return createSampleData();
+    case 'store/replace':
+      return { ...state, ...action.patch };
   }
 }
 
-type Store = { state: State; dispatch: (action: Action) => void };
+type Store = {
+  state: State;
+  dispatch: (action: Action) => void;
+  /** 'account' while signed in (the Rhythm API), 'demo' otherwise (local sample data). */
+  mode: 'demo' | 'account';
+  /** Signed in only. */
+  api: Api | null;
+  /** The last change the server refused or couldn't receive (signed in only). */
+  syncError: string | null;
+  dismissSyncError: () => void;
+};
 const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
-    reducer,
-    undefined,
-    () => loadState() ?? createSampleData(),
-  );
+  const { account, api } = useAccount();
+  if (account.status === 'loading') {
+    return <Splash message="Starting Rhythm…" />;
+  }
+  if (account.status === 'signed-in' && api) {
+    // Keyed by user, so switching accounts never shows the previous account's data.
+    return (
+      <AccountStore key={account.user.id} api={api}>
+        {children}
+      </AccountStore>
+    );
+  }
+  return <DemoStore>{children}</DemoStore>;
+}
+
+function DemoStore({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const saved = loadState();
+    return saved
+      ? { ...saved, calendarEntries: saved.calendarEntries ?? demoCalendar() }
+      : createSampleData();
+  });
   useEffect(() => saveState(state), [state]);
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  const value = useMemo<Store>(
+    () => ({
+      state,
+      dispatch,
+      mode: 'demo',
+      api: null,
+      syncError: null,
+      dismissSyncError: () => {},
+    }),
+    [state],
+  );
   return (
     <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
   );
 }
+
+function AccountStore({ api, children }: { api: Api; children: ReactNode }) {
+  const { signOut } = useAccount();
+  const [state, setState] = useState<State | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  // The latest state, for building API calls outside render.
+  const latest = useRef<State | null>(null);
+  latest.current = state;
+
+  const load = useCallback(() => {
+    setLoadError(null);
+    loadAccountState(api)
+      .then(setState)
+      .catch(error => setLoadError(describe(error)));
+  }, [api]);
+  useEffect(load, [load]);
+
+  const reload = useCallback(
+    async (slices: Slice[]) => {
+      if (!slices.length) {
+        return;
+      }
+      try {
+        const patch = await loadSlices(api, slices);
+        setState(prev => (prev ? { ...prev, ...patch } : prev));
+      } catch (error) {
+        setSyncError(`Couldn’t refresh from Rhythm: ${describe(error)}`);
+      }
+    },
+    [api],
+  );
+
+  const dispatch = useCallback(
+    (action: Action) => {
+      const before = latest.current;
+      if (!before || action.type === 'store/reset') {
+        return;
+      }
+      setState(prev => (prev ? reducer(prev, action) : prev));
+      syncAction(api, action, before)
+        .then(reload)
+        .catch(error => {
+          setSyncError(describe(error));
+          reload(slicesFor(action));
+        });
+    },
+    [api, reload],
+  );
+
+  const value = useMemo<Store | null>(
+    () =>
+      state && {
+        state,
+        dispatch,
+        mode: 'account',
+        api,
+        syncError,
+        dismissSyncError: () => setSyncError(null),
+      },
+    [state, dispatch, api, syncError],
+  );
+
+  if (!value) {
+    return loadError ? (
+      <Splash message="Couldn’t load your Rhythm account" detail={loadError}>
+        <Button title="Try again" onPress={load} />
+        <Button title="Sign out" variant="secondary" onPress={signOut} />
+      </Splash>
+    ) : (
+      <Splash message="Loading your Rhythm account…" />
+    );
+  }
+  return (
+    <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  );
+}
+
+/** Full-window message while the store isn't ready. */
+function Splash({
+  message,
+  detail,
+  children,
+}: {
+  message: string;
+  detail?: string;
+  children?: ReactNode;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.splash, { backgroundColor: theme.background }]}>
+      <ThemedText type="subtitle">{message}</ThemedText>
+      {detail ? <Notice tone="error">{detail}</Notice> : null}
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.three,
+    padding: Spacing.four,
+  },
+});
 
 export function useStore(): Store {
   const store = useContext(StoreContext);

@@ -201,6 +201,7 @@ export function RecipeScreen({ id }: { id: string }) {
               type: 'shopping/add',
               recipeId: recipe.id,
               ingredients: scaled,
+              servings,
             });
             setAdded(
               `Added ${scaled.length} ingredients for ${servings} serving${

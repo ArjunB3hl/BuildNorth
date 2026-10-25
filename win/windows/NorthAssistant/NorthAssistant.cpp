@@ -79,7 +79,7 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
 
   // Get the AppWindow so we can configure its initial title and size
   auto appWindow{reactNativeWin32App.AppWindow()};
-  appWindow.Title(L"BuildNorth");
+  appWindow.Title(L"Rhythm");
   // AppWindow sizes are physical pixels, so scale the logical size by the display's DPI.
   auto const scale = GetDpiForSystem() / 96.0;
   auto const pixels = [scale](int logical) { return static_cast<int32_t>(logical * scale); };

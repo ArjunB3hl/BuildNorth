@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { setBadge } from '../../modules/north-win';
 import { useStore } from '../data/store';
+import { useAccount } from '../lib/account';
 import { localDate } from '../lib/dates';
 import { SECTIONS, useNav, type Section } from '../navigation';
 import { Spacing, useTheme } from '../theme';
@@ -10,6 +11,8 @@ import { ThemedText, useHover } from './ui';
 
 /** Sidebar standing in for the iPhone app's tab bar, as in the Mac app. */
 export function Sidebar() {
+  const { account } = useAccount();
+  const signedIn = account.status === 'signed-in' ? account : null;
   const theme = useTheme();
   const nav = useNav();
   const { state } = useStore();
@@ -35,9 +38,9 @@ export function Sidebar() {
       ]}
     >
       <View style={styles.brand}>
-        <ThemedText style={styles.wordmark}>BuildNorth</ThemedText>
+        <ThemedText style={styles.wordmark}>Rhythm</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Personal assistant
+          Demo version
         </ThemedText>
       </View>
       {SECTIONS.map(s => (
@@ -46,17 +49,25 @@ export function Sidebar() {
           label={s.label}
           icon={s.icon}
           badge={badges[s.key]}
-          selected={nav.section === s.key}
+          selected={
+            (nav.section === 'meals' || nav.section === 'activity'
+              ? 'calendar'
+              : nav.section) === s.key
+          }
           onPress={() => nav.go(s.key)}
         />
       ))}
       <View style={styles.footer}>
         <View style={styles.status}>
-          <View style={styles.dot} />
-          <ThemedText type="smallBold">Saved on this PC</ThemedText>
+          <View style={[styles.dot, signedIn && styles.dotSynced]} />
+          <ThemedText type="smallBold">
+            {signedIn ? 'Synced with Rhythm' : 'Saved on this PC'}
+          </ThemedText>
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          Sample data. Not connected to the BuildNorth backend yet.
+          {signedIn
+            ? signedIn.user.email ?? signedIn.user.name ?? 'Signed in'
+            : 'Local demo data. Sign in from Profile to sync your account.'}
         </ThemedText>
       </View>
     </View>
@@ -142,4 +153,5 @@ const styles = StyleSheet.create({
   },
   status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#B06000' },
+  dotSynced: { backgroundColor: '#1E8E3E' },
 });

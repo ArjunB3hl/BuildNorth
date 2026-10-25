@@ -7,7 +7,7 @@ A demo version of a personal assistant for meals, activity and the week's plan, 
 |---|---|---|
 | [`mobile/`](mobile/) | The Expo app (iPhone, Android, and an Apple Watch app in SwiftUI) plus the FastAPI backend in `mobile/backend/` | [mobile/README.md](mobile/README.md) |
 | [`mac/`](mac/) | The native macOS app: React Native for macOS with parts of Expo SDK 55 (project name `NorthAssistant`) | [mac/README.md](mac/README.md) |
-| [`win/`](win/) | The native Windows app: React Native for Windows with Expo SDK 56's tooling, ported from the Mac app (project name `NorthAssistant`) | [win/README.md](win/README.md) |
+| [`win/`](win/) | The native Windows app: React Native for Windows with Expo SDK 56's tooling, ported from the Mac app; local demo data, or your account through the backend once signed in (project name `NorthAssistant`) | [win/README.md](win/README.md) |
 | [`extension/`](extension/) | Rhythm, a Chrome side panel for phone-controlled video interests and user-chosen MCP agents | [extension/README.md](extension/README.md) (backend side: [Rhythm guide](mobile/docs/rhythm.md)) |
 | [`inference/pose-coach/`](inference/pose-coach/) | Browser camera coach, embedded in the website; counted sets save to Activity | [Website integration](mobile/docs/pose-coach.md) |
 
@@ -77,7 +77,8 @@ distinguishes verified behavior, labelled fixtures, required credentials and rem
 
 - The apps don't share code or packages yet. Each has its own `package.json`, `node_modules` and native projects.
   The Mac app mirrors the mobile app's screens and API types, but isn't connected to the backend yet. The Windows
-  app is ported from the Mac app.
+  app is ported from the Mac app and can also sign in (Clerk over its Frontend API) to use the backend with your
+  account.
 - Rhythm shares the phone's pure TypeScript API contract and the backend's metadata vocabulary, with its own extension dependencies.
 - Secrets stay out of git: every `.env` file is ignored, and only `.env.example` templates are committed. The
   backend's local SQLite database (`mobile/backend/var/`) is ignored too.

@@ -1,5 +1,18 @@
-import { useState } from 'react';
-import { Alert, FlatList, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Linking,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+
+import { WEB_URL } from '../config';
+import { describe } from '../lib/account';
+import type { AIAccess } from '../lib/api';
+import { localDate } from '../lib/dates';
+import { randomUUID } from '../lib/ids';
 
 import {
   Button,
@@ -11,6 +24,8 @@ import {
   ThemedText,
 } from '../components/ui';
 import { useStore } from '../data/store';
+import { useDemoClaude } from '../lib/claude-demo';
+import { useNav } from '../navigation';
 import type { CoachContext, CoachMessage, Suggestion } from '../data/types';
 import { Accent, MaxContentWidth, Spacing, useTheme } from '../theme';
 
@@ -20,15 +35,79 @@ const STARTERS = [
   'Help me plan meals for tomorrow',
 ];
 
-// Until the Windows app talks to the BuildNorth backend the coach can't reply, so it behaves
-// like the iPhone app does when the AI service is unavailable.
-const COACH_CONNECTED = false;
-
 export function CoachScreen() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, mode, api } = useStore();
+  const claude = useDemoClaude(),
+    nav = useNav();
+  // Signed in, the account's Coach on the server replies (whatever AI the account or server has connected);
+  // signed out, the demo Coach calls Claude directly with a key held in memory, as on the Mac.
+  const account = mode === 'account' && api != null;
+  const [access, setAccess] = useState<AIAccess | null>(null);
+  const [accessError, setAccessError] = useState('');
+  const checkAccess = useCallback(() => {
+    if (!api) return;
+    setAccessError('');
+    api
+      .access()
+      .then(setAccess)
+      .catch(e => setAccessError(describe(e)));
+  }, [api]);
+  useEffect(() => {
+    if (account) checkAccess();
+  }, [account, checkAccess]);
+  const connected = account ? !!access?.linked : !!claude.connection;
   const theme = useTheme();
   const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  // Retrying the same text reuses its key, so the server journals it to the Calendar once (as on iPhone).
+  const pending = useRef<{ text: string; key: string } | null>(null);
   const messages = state.coach;
+
+  async function send() {
+    const message = draft.trim();
+    if (!message || !connected || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (account && api) {
+        if (pending.current?.text !== message)
+          pending.current = { text: message, key: randomUUID() };
+        const sent = await api.coach.send(
+          message,
+          localDate(),
+          pending.current.key,
+        );
+        pending.current = null;
+        dispatch({
+          type: 'coach/append',
+          messages: [sent.userMessage, sent.reply],
+        });
+      } else {
+        const reply = await claude.reply(
+          message,
+          {
+            source: 'Windows local demo',
+            profile: state.profile,
+            preferences: state.preferences.map(p => p.text),
+            plan: state.plan.slice(0, 20),
+            calendar: state.calendarEntries.slice(-30),
+          },
+          messages,
+        );
+        dispatch({ type: 'coach/exchange', message, reply });
+      }
+      setDraft('');
+    } catch (e) {
+      setError(
+        e instanceof Error && e.name !== 'AbortError'
+          ? e.message
+          : 'The request timed out or was cancelled. Try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const clear = () =>
     Alert.alert(
@@ -42,6 +121,48 @@ export function CoachScreen() {
           onPress: () => dispatch({ type: 'coach/clear' }),
         },
       ],
+    );
+
+  if (account && !connected)
+    return (
+      <View style={styles.connectionGate}>
+        <PageHeader
+          title={
+            access || accessError
+              ? 'Connect your coach first'
+              : 'Checking your coach…'
+          }
+        />
+        {accessError ? <Notice tone="error">{accessError}</Notice> : null}
+        {access ? (
+          <ThemedText>
+            Your Rhythm account has no AI connected for the Coach yet. Connect
+            Claude or ElevenLabs in AI connections on the Rhythm website, then
+            check again.
+          </ThemedText>
+        ) : null}
+        <Button
+          title="Open AI connections on the website"
+          onPress={() => Linking.openURL(`${WEB_URL}/profile/connections`)}
+        />
+        <Button title="Check again" variant="secondary" onPress={checkAccess} />
+      </View>
+    );
+
+  if (!connected)
+    return (
+      <View style={styles.connectionGate}>
+        <PageHeader title="Connect your coach first" />
+        <ThemedText>
+          Verify a Claude API key in AI connections to unlock this PC’s demo
+          Coach, or sign in from Profile to use your Rhythm account’s Coach.
+          ElevenLabs and account assistants are available through the website.
+        </ThemedText>
+        <Button
+          title="Open AI connections"
+          onPress={() => nav.go('profile', { name: 'connections' })}
+        />
+      </View>
     );
 
   return (
@@ -61,17 +182,53 @@ export function CoachScreen() {
                     size="small"
                     variant="quiet"
                     onPress={clear}
+                    disabled={busy}
                   />
                 ) : null
               }
             />
-            {!COACH_CONNECTED ? (
+            {account ? (
+              <Button
+                title="AI settings on the website"
+                variant="quiet"
+                onPress={() =>
+                  Linking.openURL(`${WEB_URL}/profile/connections`)
+                }
+              />
+            ) : (
+              <Button
+                title={
+                  connected
+                    ? 'Claude connected · AI settings'
+                    : 'Connect Claude or ChatGPT'
+                }
+                variant="quiet"
+                onPress={() => nav.go('profile', { name: 'connections' })}
+              />
+            )}
+            {error ? <Notice tone="error">{error}</Notice> : null}
+            {busy ? (
               <Notice tone="info">
-                The coach isn’t connected on Windows yet. The conversation below is
-                sample data; replies will come from the BuildNorth backend, as
-                on iPhone.
+                {account ? 'Your coach is replying…' : 'Claude is replying…'}
               </Notice>
             ) : null}
+            {account ? (
+              <Notice tone="info">
+                Your Rhythm Coach replies with your account’s profile, saved
+                preferences, long-term memory, plan and Calendar. The
+                conversation is saved in your account.
+              </Notice>
+            ) : !connected ? (
+              <Notice tone="info">
+                Connect a Claude API key to try the demo Coach. The existing
+                conversation is local demo data.
+              </Notice>
+            ) : (
+              <Notice tone="info">
+                Claude uses this PC’s local demo profile, preferences, plan and
+                Calendar. Your conversation is saved only on this PC.
+              </Notice>
+            )}
             {messages.length === 0 ? (
               <Card>
                 <ThemedText type="smallBold">Your personal coach</ThemedText>
@@ -89,7 +246,7 @@ export function CoachScreen() {
                       size="small"
                       variant="secondary"
                       onPress={() => setDraft(s)}
-                      disabled={!COACH_CONNECTED}
+                      disabled={!connected || busy}
                     />
                   </View>
                 ))}
@@ -110,13 +267,14 @@ export function CoachScreen() {
             value={draft}
             onChangeText={setDraft}
             placeholder={
-              COACH_CONNECTED ? 'Message your coach' : 'Coach unavailable'
+              connected ? 'Message your coach' : 'Connect Claude to chat'
             }
             placeholderTextColor={theme.textSecondary}
             multiline
             maxLength={4000}
-            editable={COACH_CONNECTED}
+            editable={connected && !busy}
             accessibilityLabel="Message to coach"
+            onSubmitEditing={send}
             style={[
               styles.input,
               { color: theme.text, backgroundColor: theme.backgroundElement },
@@ -124,8 +282,8 @@ export function CoachScreen() {
           />
           <Button
             title="Send"
-            onPress={() => {}}
-            disabled={!COACH_CONNECTED || !draft.trim()}
+            onPress={send}
+            disabled={!connected || busy || !draft.trim()}
           />
         </Row>
       </View>
@@ -252,6 +410,7 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 }
 
 const styles = StyleSheet.create({
+  connectionGate: { padding: 28, gap: 16 },
   fill: { flex: 1 },
   start: { alignItems: 'flex-start' },
   list: {

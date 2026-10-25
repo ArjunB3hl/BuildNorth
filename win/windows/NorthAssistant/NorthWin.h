@@ -9,10 +9,16 @@
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.UI.Notifications.h>
 
+#include <wincrypt.h>
+#include <dpapi.h>
+
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
+
+#pragma comment(lib, "crypt32.lib")
 
 namespace NorthAssistant {
 
@@ -71,6 +77,69 @@ struct NorthWin {
       }
       MoveFileExW(temp.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
     } catch (...) {
+    }
+  }
+
+  // Small secrets (the Clerk client token that keeps you signed in), encrypted with DPAPI for the current
+  // Windows user and kept in LocalState\secrets — what expo-secure-store does with the Keychain on iPhone.
+  // Names are fixed by the app; anything else is refused. Empty when the secret isn't there or can't be decrypted.
+  REACT_SYNC_METHOD(ReadSecret, L"readSecret")
+  std::string ReadSecret(std::string name) noexcept {
+    try {
+      auto file = SecretFile(name);
+      if (file.empty()) {
+        return {};
+      }
+      std::ifstream in(file, std::ios::binary);
+      if (!in) {
+        return {};
+      }
+      std::vector<char> encrypted{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+      DATA_BLOB input{static_cast<DWORD>(encrypted.size()), reinterpret_cast<BYTE *>(encrypted.data())};
+      DATA_BLOB output{};
+      if (!CryptUnprotectData(&input, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+        return {};
+      }
+      std::string value(reinterpret_cast<char *>(output.pbData), output.cbData);
+      SecureZeroMemory(output.pbData, output.cbData);
+      LocalFree(output.pbData);
+      return value;
+    } catch (...) {
+      return {};
+    }
+  }
+
+  // Replaces the secret; an empty value deletes it. Returns whether it was stored.
+  REACT_SYNC_METHOD(WriteSecret, L"writeSecret")
+  bool WriteSecret(std::string name, std::string value) noexcept {
+    try {
+      auto file = SecretFile(name);
+      if (file.empty()) {
+        return false;
+      }
+      std::error_code ignored;
+      if (value.empty()) {
+        std::filesystem::remove(file, ignored);
+        return true;
+      }
+      std::filesystem::create_directories(file.parent_path(), ignored);
+      DATA_BLOB input{static_cast<DWORD>(value.size()), reinterpret_cast<BYTE *>(value.data())};
+      DATA_BLOB output{};
+      if (!CryptProtectData(&input, L"BuildNorth", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+        return false;
+      }
+      auto temp = file;
+      temp += L".tmp";
+      bool written = false;
+      {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<char *>(output.pbData), static_cast<std::streamsize>(output.cbData));
+        written = static_cast<bool>(out);
+      }
+      LocalFree(output.pbData);
+      return written && MoveFileExW(temp.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    } catch (...) {
+      return false;
     }
   }
 
@@ -165,6 +234,15 @@ struct NorthWin {
       m_dataFile = folder / L"buildnorth.json";
     }
     return m_dataFile;
+  }
+
+  // LocalState\secrets\<name>.bin for the names the app uses; empty for anything else, so a name can't
+  // reach outside the folder.
+  std::filesystem::path SecretFile(std::string const &name) noexcept {
+    if (name != "clerk-client") {
+      return {};
+    }
+    return DataFile().parent_path() / L"secrets" / (winrt::to_hstring(name) + L".bin").c_str();
   }
 
   void ReleaseKeepAwake() noexcept {

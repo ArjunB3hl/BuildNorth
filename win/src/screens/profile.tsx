@@ -23,6 +23,8 @@ import {
 import { computeProgress, useStore } from '../data/store';
 import type { Preference, Progress } from '../data/types';
 import { friendlyDateInline, localDate } from '../lib/dates';
+import { API_URL } from '../config';
+import { useAccount } from '../lib/account';
 import { useNav } from '../navigation';
 import { Accent, Spacing, useTheme } from '../theme';
 
@@ -30,13 +32,33 @@ const capitalise = (s: string) => s[0].toUpperCase() + s.slice(1);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export function ProfileScreen() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, mode } = useStore();
+  const { account } = useAccount();
   const nav = useNav();
   const p = state.profile;
-  const progress = computeProgress(state, localDate());
+  const progress = state.serverProgress ?? computeProgress(state, localDate());
+  const signedIn = account.status === 'signed-in' ? account : null;
 
   return (
-    <Screen title={p.preferredName || 'Your profile'} subtitle="Sample profile">
+    <Screen
+      title={p.preferredName || 'Your profile'}
+      subtitle={mode === 'account' ? 'Your Rhythm account' : 'Sample profile'}
+    >
+      <ListItem
+        title={
+          signedIn
+            ? `Signed in${
+                signedIn.user.email ? ` as ${signedIn.user.email}` : ''
+              }`
+            : 'Sign in to your Rhythm account'
+        }
+        subtitle={
+          signedIn
+            ? 'Synced with your Rhythm account · sign out'
+            : 'Sync this PC with your phone and the website'
+        }
+        onPress={() => nav.push({ name: 'account' })}
+      />
       <SectionHeader title="This week" />
       <ProgressCard progress={progress} />
 
@@ -55,7 +77,7 @@ export function ProfileScreen() {
         />
       </Card>
       <ListItem
-        title="What BuildNorth remembers"
+        title="What Rhythm remembers"
         subtitle={`${plural(
           state.preferences.length,
           'saved preference',
@@ -63,6 +85,11 @@ export function ProfileScreen() {
         onPress={() => nav.push({ name: 'memory' })}
       />
 
+      <ListItem
+        title="AI connections"
+        subtitle="ChatGPT, Claude and your demo API key"
+        onPress={() => nav.push({ name: 'connections' })}
+      />
       <SectionHeader title="This PC" />
       <Card>
         <Summary label="Computer" values={[deviceName ?? 'This PC']} />
@@ -70,11 +97,20 @@ export function ProfileScreen() {
           label="System"
           values={[windowsVersion ?? `${Platform.OS} ${Platform.Version}`]}
         />
-        <Summary label="Account" values={['Not signed in']} />
+        <Summary
+          label="Account"
+          values={[
+            signedIn
+              ? signedIn.user.email ?? signedIn.user.id
+              : 'Not signed in',
+          ]}
+        />
         <Summary
           label="Data"
           values={[
-            dataFile
+            mode === 'account'
+              ? `Your Rhythm account on ${API_URL}`
+              : dataFile
               ? `Sample data, saved on this PC in ${dataFile}`
               : 'Sample data, not saved (NorthWin isn’t built in)',
           ]}
@@ -88,26 +124,28 @@ export function ProfileScreen() {
           ]}
         />
       </Card>
-      <View style={styles.start}>
-        <Button
-          title="Reset to sample data"
-          variant="secondary"
-          onPress={() =>
-            Alert.alert(
-              'Reset to sample data?',
-              'This replaces everything saved on this PC (plan, check-ins, shopping list and preferences) with the original sample data.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Reset',
-                  style: 'destructive',
-                  onPress: () => dispatch({ type: 'store/reset' }),
-                },
-              ],
-            )
-          }
-        />
-      </View>
+      {mode === 'demo' ? (
+        <View style={styles.start}>
+          <Button
+            title="Reset to sample data"
+            variant="secondary"
+            onPress={() =>
+              Alert.alert(
+                'Reset to sample data?',
+                'This replaces everything saved on this PC (plan, check-ins, shopping list and preferences) with the original sample data.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Reset',
+                    style: 'destructive',
+                    onPress: () => dispatch({ type: 'store/reset' }),
+                  },
+                ],
+              )
+            }
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -235,7 +273,7 @@ export function MemoryScreen() {
   const list = state.preferences;
 
   return (
-    <Screen title="What BuildNorth remembers">
+    <Screen title="What Rhythm remembers">
       <ThemedText themeColor="textSecondary">
         Preferences you save or confirm are used by the Coach and by AI
         assistants you connect. Your profile, recipes and routines are stored
@@ -288,7 +326,7 @@ export function MemoryScreen() {
       ) : null}
       <View style={styles.start}>
         <Button
-          title="Erase everything BuildNorth remembers"
+          title="Erase everything Rhythm remembers"
           variant="danger"
           disabled={list.length === 0}
           onPress={() =>

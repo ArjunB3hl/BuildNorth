@@ -6,7 +6,8 @@ This repository holds three apps and a Chrome companion; see README.md for the l
   native setup: Expo has no macOS target there, and only some Expo modules compile for macOS.
 - `win/`: the Windows app (React Native for Windows 0.85 + Expo SDK 56 tooling, ported from `mac/`). Read
   `win/README.md` before changing its native setup: Expo modules don't run on Windows at all, `win/windows/` is
-  committed source (no prebuild), and Windows alerts show at most three buttons.
+  committed source (no prebuild), and Windows alerts show at most three buttons. Signed in, its screens use the
+  backend through `win/src/data/remote.ts`; test that with `win/tools/local-backend`, not a real account.
 - `extension/`: Rhythm (WXT, React, TypeScript, Manifest V3). Read `extension/README.md` and
   `mobile/docs/rhythm.md`. Its backend lives in `mobile/backend/app/rhythm/`.
 

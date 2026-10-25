@@ -169,6 +169,8 @@ export function TextField({
       {label ? <ThemedText type="smallBold">{label}</ThemedText> : null}
       <TextInput
         placeholderTextColor={theme.textSecondary}
+        // Narrator reads the visible label unless the caller names the field.
+        accessibilityLabel={label}
         style={[
           styles.input,
           {

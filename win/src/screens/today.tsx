@@ -508,7 +508,7 @@ function AddPlanItemCard({
 
 /** Seven days of the plan: add, move, mark done or skipped. */
 function WeekPlan({ today }: { today: string }) {
-  const { state } = useStore();
+  const { state, mode } = useStore();
   const [start, setStart] = useState(() => weekStart(today));
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -581,8 +581,9 @@ function WeekPlan({ today }: { today: string }) {
         </Card>
       ))}
       <Notice tone="info">
-        “Help plan my week” and plan changes in your own words need the
-        BuildNorth backend, so they aren’t in the Windows app yet.
+        {mode === 'account'
+          ? '“Help plan my week” and plan changes in your own words are on the phone and website for now; plans you make there show up here.'
+          : '“Help plan my week” and plan changes in your own words need the Rhythm backend. Sign in from Profile; they’re on the phone and website.'}
       </Notice>
     </View>
   );
