@@ -22,7 +22,8 @@ from app.ai import AIError, AIProvider
 from app.auth import AuthenticatedUser, ClerkVerifier, unauthorized
 from app.mcp_auth import WATCH_TOKEN_PREFIX, hash_token
 from app.memory import MemoryService
-from app.models import WatchToken
+from app.models import ClaudeCredential, WatchToken
+from app.provider_credentials import personal_provider
 
 log = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
@@ -120,6 +121,24 @@ Db = Annotated[Session, Depends(get_db)]
 Memory = Annotated[MemoryService | None, Depends(get_memory)]
 AI = Annotated[AIProvider, Depends(get_ai)]
 OptionalAI = Annotated[AIProvider | None, Depends(get_ai_optional)]
+
+
+def get_coach_ai(request: Request, user: CurrentUser, db: Db, fallback: OptionalAI) -> Iterator[AIProvider]:
+    row = db.get(ClaudeCredential, user.user_id)
+    if row:
+        provider = personal_provider(getattr(request.app.state, "credential_cipher", None), row,
+                                     request.app.state.settings.ai_timeout_seconds)
+        try:
+            yield provider
+        finally:
+            provider._client.close()
+    elif fallback is not None:
+        yield fallback
+    else:
+        raise HTTPException(503, "Connect a Claude API key in Profile → AI connections to use Coach.")
+
+
+CoachAI = Annotated[AIProvider, Depends(get_coach_ai)]
 
 
 def not_found(what: str) -> HTTPException:

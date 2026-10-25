@@ -38,6 +38,8 @@ class Settings:
     mcp_oauth_client_ids: tuple[str, ...]  # extra exact client IDs allowed (e.g. a pre-registered Clerk OAuth app)
     mcp_require_resource_audience: bool  # OAuth tokens must name MCP_PUBLIC_URL in `aud` (RFC 8707)
     spectron_owner_user_id: str = ""  # explicit owner when the app Context is private to one account
+    ai_credential_key: str = ""  # Fernet key for account-owned Claude credentials
+    web_allowed_origins: tuple[str, ...] = ()
 
     @property
     def missing(self) -> list[str]:
@@ -99,4 +101,6 @@ def load_settings() -> Settings:
         mcp_oauth_client_ids=tuple(c.strip() for c in env("MCP_OAUTH_CLIENT_IDS").split(",") if c.strip()),
         mcp_require_resource_audience=env("MCP_REQUIRE_RESOURCE_AUDIENCE", "true").lower() not in {"0", "false", "no"},
         spectron_owner_user_id=env("SPECTRON_OWNER_USER_ID"),
+        ai_credential_key=env("AI_CREDENTIAL_ENCRYPTION_KEY"),
+        web_allowed_origins=tuple(o.strip().rstrip("/") for o in env("WEB_ALLOWED_ORIGINS").split(",") if o.strip()),
     )

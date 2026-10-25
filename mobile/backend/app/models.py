@@ -509,6 +509,16 @@ class RhythmUsage(Base):
     search_requests: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class ClaudeCredential(Timestamped, Base):
+    """Encrypted, account-owned API key. Never included in account context or MCP responses."""
+
+    __tablename__ = "claude_credentials"
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ciphertext: Mapped[str] = mapped_column(Text)
+    hint: Mapped[str] = mapped_column(String(4))
+    model: Mapped[str] = mapped_column(String(100))
+
+
 class CalendarEntry(Timestamped, Base):
     """A completed meal or workout. Demo entries are explicitly labelled and user-owned."""
 
@@ -528,6 +538,7 @@ class CalendarEntry(Timestamped, Base):
 
 # Tables holding per-user rows, in a safe deletion order (children before parents).
 USER_TABLES: tuple[type[Base], ...] = (
+    ClaudeCredential,
     RhythmSignal,
     RhythmBrowserRequest,
     RhythmCandidate,

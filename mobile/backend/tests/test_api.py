@@ -375,13 +375,13 @@ def test_coach_suggestions_are_validated_not_saved(client: TestClient, fake_ai) 
 
 
 def test_coach_unavailable_reports_reason(client: TestClient) -> None:
-    from app.deps import get_ai
+    from app.deps import get_ai_optional
     from app.main import app
 
-    app.dependency_overrides.pop(get_ai)
+    app.dependency_overrides.pop(get_ai_optional)
     app.state.ai, app.state.ai_unavailable_reason = None, "AI isn't configured on the server (set AI_PROVIDER in backend/.env)."
     response = client.post("/coach/messages", headers=auth(), json={"content": "Hi"})
-    assert response.status_code == 503 and "AI_PROVIDER" in response.json()["detail"]
+    assert response.status_code == 503 and "AI connections" in response.json()["detail"]
 
 
 # --- data deletion -----------------------------------------------------------------------------

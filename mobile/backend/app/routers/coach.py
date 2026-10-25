@@ -23,7 +23,7 @@ from app import preferences as prefs
 from app import user_context
 from app.ai import AIError
 from app.assistant import coach_reply
-from app.deps import AI, CurrentUser, Db, Memory, ai_failure
+from app.deps import CoachAI, CurrentUser, Db, Memory, ai_failure
 from app.models import CheckIn, CoachMessage, PlanItem, Profile, utcnow
 from app.rhythm import learn as rhythm_learn
 from app.schemas import CoachHistoryOut, CoachMessageIn, CoachMessageOut, CoachReplyOut, Suggestion
@@ -108,7 +108,7 @@ def _keep(suggestion: Suggestion, message: str) -> bool:
 
 @router.post("/coach/messages")
 def send(
-    body: CoachMessageIn, request: Request, background: BackgroundTasks, user: CurrentUser, db: Db, memory: Memory, ai: AI,
+    body: CoachMessageIn, request: Request, background: BackgroundTasks, user: CurrentUser, db: Db, memory: Memory, ai: CoachAI,
 ) -> CoachReplyOut:
     if prefs.sync_pending(db, memory, user.user_id):
         health.sync_pending_health(db, memory, user.user_id)
