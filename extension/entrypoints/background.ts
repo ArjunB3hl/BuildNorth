@@ -1,5 +1,6 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { LEARN_KEY, YOUTUBE_ACCESS, chromeLearningEnv, createLearningObserver, type LearningFlag } from '../lib/learning';
+import { isSignInChange, syncHostFor } from '../lib/website-sign-in';
 import { forgetSignedInAccount, signedInAccount } from '../lib/worker-session';
 
 /**
@@ -46,6 +47,11 @@ export default defineBackground(() => {
   chrome.permissions.onRemoved.addListener((removed) => {
     // Removing YouTube access (in the panel or in Chrome's own settings) turns learning off in this browser.
     if (removed.origins?.some((origin) => YOUTUBE_ACCESS.origins.includes(origin))) void learning.stop(true);
+  });
+  const syncHost = syncHostFor(import.meta.env);
+  chrome.cookies.onChanged.addListener((change) => {
+    // Signed in, out or into another account on the website: ask Clerk again before learning sends anything.
+    if (isSignInChange(change, syncHost)) forgetSignedInAccount();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;

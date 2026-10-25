@@ -21,7 +21,7 @@ journey from phone to panel to agent haven't been completed with a real account 
 | Extension | "Rhythm — your interests, your videos", version 0.1.0, Manifest V3, Chrome 116 or later |
 | Stack | WXT 0.21.4, React 19.2.3, TypeScript 6.0, `@clerk/chrome-extension` 3.1.97 |
 | Backend | The BuildNorth FastAPI server in `mobile/backend/`: REST routes under `/rhythm/…` (code in `app/rhythm/`), and MCP for agents at `/rhythm/mcp` |
-| Sign-in | The same Clerk account as the phone app |
+| Sign-in | The BuildNorth website's Clerk sign-in, shared with the panel and service worker through Clerk's Sync Host. Email and password in the panel as a fallback. The same Clerk account as the phone app |
 | Sites | YouTube watch pages only (`https://www.youtube.com/watch?v=…`). Learning needs an optional YouTube permission, which Chrome asks for when you turn it on |
 | Tests | Playwright 1.64.1 with its own Chromium |
 
@@ -70,7 +70,11 @@ Your agent (Claude Code, OpenCode, …) ── bnr_ token or OAuth ──▶ bac
   (`0007_rhythm_learning.py`) and `0008` (`0008_rhythm_engagement.py`, for played seconds and reactions) applied.
   The backend applies migrations on startup unless `AUTO_MIGRATE=false`; see [mobile/README.md](../mobile/README.md)
   for its setup.
-- **An existing BuildNorth account.** The panel only signs in; it has no sign-up link.
+- **A BuildNorth account, and the website running** (`npm run web` in `mobile/`, at `WXT_WEB_APP_URL`). You sign in,
+  or sign up, on the website and the panel uses that sign-in (see *Sign in to the panel*). The panel itself has no
+  sign-up link.
+- **The extension's origin in Clerk's `allowed_origins`**, as Clerk's Sync Host requires (see *Extension ID, Clerk and
+  other backends*).
 - **Learning turned on**, with the panel's switch (see *Using Rhythm*). Choosing pages and starting tasks need a profile
   Rhythm has learned: at least one topic and one purpose, with YouTube and page details allowed. Turning learning on in
   the panel allows both.
@@ -102,9 +106,10 @@ belong in the extension.
 | `WXT_API_URL` | `http://localhost:8000` | The backend. Every request goes here, and its origin is the extension's only backend host permission. Must be HTTPS unless it's `localhost` or `127.0.0.1`, and must not contain a user name or password |
 | `WXT_CLERK_PUBLISHABLE_KEY` | none (required) | The Clerk publishable key, the same value as the phone's `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` |
 | `WXT_CLERK_FRONTEND_API` | none | The Clerk Frontend API origin (for example `https://casual-rabbit-7268.clerk.accounts.dev`), added to the host permissions for Clerk's SDK. `build:local` derives it from the key |
-| `WXT_CRX_PUBLIC_KEY` | empty | Optional public key written to the manifest's `key`, which fixes the extension ID |
+| `WXT_CRX_PUBLIC_KEY` | empty | Public key written to the manifest's `key`, which fixes the extension ID. Recommended, since Clerk's `allowed_origins` names the ID (see *Extension ID, Clerk and other backends*) |
 | `WXT_PROFILE_URL` | `buildnorth://profile/interests` | Where the panel's *Open profile ↗* link goes. The default is the phone app's deep link |
-| `WXT_WEB_APP_URL` | `http://localhost:8081` | Web dashboard origin; the panel links to its overview (*Open web dashboard ↗*) and to `/profile/interests` (*Rhythm settings ↗*). HTTPS except on localhost. No cookies or tokens are passed in these links |
+| `WXT_WEB_APP_URL` | `http://localhost:8081` | Web dashboard origin; the panel links to its overview (*Open web dashboard ↗*), to `/profile/interests` (*Rhythm settings ↗*) and, when signed out, to `/sign-in`. HTTPS except on localhost. No cookies or tokens are passed in these links |
+| `WXT_CLERK_SYNC_HOST` | derived | Where Clerk reads the website's sign-in (Clerk's [Sync Host](https://clerk.com/docs/guides/sessions/sync-host)), added to the host permissions. Empty means: the web app's host without its port for a development key (`http://localhost` for `http://localhost:8081`), or the Clerk Frontend API for a live key. HTTPS unless it's `localhost` or `127.0.0.1` |
 
 For anything other than the defaults, create `extension/.env` from the template (`.env` files are git-ignored):
 
@@ -127,6 +132,7 @@ npm run build:local
 | Clerk publishable key | `WXT_CLERK_PUBLISHABLE_KEY` in the shell, then `extension/.env`, then `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in `mobile/.env` |
 | Clerk Frontend API | the shell, then `extension/.env`, then decoded from the publishable key |
 | Backend URL | the shell, then `extension/.env`, then `http://localhost:8000` |
+| Sync host | the shell, then `extension/.env`, then derived from the web app URL as described above |
 
 It reads only the public key from `mobile/.env` and prints nothing from it. If no key is found, it stops with
 "Configure the public Clerk key in extension/.env or mobile/.env."
@@ -163,11 +169,35 @@ WXT's dev mode builds a development copy, opens Chrome with it loaded by default
 - **Extension ID.** Without `WXT_CRX_PUBLIC_KEY`, Chrome derives an unpacked extension's ID from its folder path. The ID
   changes if the folder moves or the extension is loaded on another Mac. Clerk's docs warn that a changing ID can break
   its integration ([consistent CRX ID guide](https://clerk.com/docs/guides/development/configure-consistent-crx-id)).
-  Set the key to fix the ID.
-- **Authorized parties.** If the backend sets `CLERK_AUTHORIZED_PARTIES`, add `chrome-extension://<extension id>` to
-  it. Otherwise the backend rejects the panel's tokens.
-- **Sign-in methods.** Clerk doesn't support OAuth or social sign-in in an extension's side panel, and the panel hides
-  those buttons. Use email and password, or another method your Clerk instance offers that works in a side panel
+  Set the key to fix the ID. Any RSA key will do; only its public half goes in `extension/.env`:
+
+  ```bash
+  echo "WXT_CRX_PUBLIC_KEY=$(openssl genrsa 2048 2>/dev/null | openssl rsa -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')" >> .env
+  ```
+
+  The ID is then the first 32 hex digits of the key's SHA-256, written with the letters `a`–`p`, and Chrome shows it on
+  Rhythm's card in `chrome://extensions`. Changing the key changes the ID: remove Rhythm in `chrome://extensions` and
+  load it again (this resets its learning switch on this browser), and update `allowed_origins`. A Chrome Web Store
+  listing has its own key, shown in the developer dashboard; use that one there.
+- **Allowed origins.** Clerk's Sync Host needs `chrome-extension://<extension id>` in the Clerk instance's
+  `allowed_origins`. Clerk's guide sets it through the Backend API, with the instance's secret key. Read the current list
+  first, then send it back with the extension's origin added, since the update replaces the list. From the repository
+  root, with `CLERK_SECRET_KEY` in `mobile/backend/.env`:
+
+  ```bash
+  SECRET=$(grep -E '^CLERK_SECRET_KEY=' mobile/backend/.env | cut -d= -f2- | tr -d "\"'")
+  curl -s -H "Authorization: Bearer $SECRET" https://api.clerk.com/v1/instance
+  curl -s -X PATCH -H "Authorization: Bearer $SECRET" -H 'Content-Type: application/json' \
+    -d '{"allowed_origins": ["<every origin already listed>", "chrome-extension://<extension id>"]}' \
+    https://api.clerk.com/v1/instance
+  ```
+
+  Read the list again to check it. Repeat this whenever the extension ID changes.
+- **Authorized parties.** If the backend sets `CLERK_AUTHORIZED_PARTIES`, it must list both the website's origin
+  (`http://localhost:8081`) and `chrome-extension://<extension id>`. Otherwise the backend rejects one of them.
+- **Sign-in methods.** On the website you can use any sign-in method the Clerk instance offers, Google included; the
+  panel then uses that sign-in. Clerk doesn't support OAuth or social sign-in inside an extension's side panel, so the
+  panel's own email and password form hides those buttons
   ([Clerk Chrome extension overview](https://clerk.com/docs/reference/chrome-extension/overview)).
 - **Same backend as the phone.** The phone and the panel must use the same backend, or the panel won't see your
   settings or what Rhythm learned. For a backend that isn't on this Mac, set `WXT_API_URL` to its HTTPS address, rebuild, and set the phone's
@@ -204,8 +234,33 @@ and again after each *Save to Rhythm*, *Not interested* or answer.
 
 ### 1. Sign in to the panel
 
-Click Rhythm's toolbar icon to open the panel, then sign in with your BuildNorth account. Switching accounts clears
-the panel.
+The panel uses the BuildNorth website's sign-in, through Clerk's
+[Sync Host](https://clerk.com/docs/guides/sessions/sync-host). Its Clerk reads the website's Clerk cookie on the sync
+host (`http://localhost` for the local website), so it is signed in to whichever account the website is, and the
+service worker's learning uses that account too.
+
+1. Click Rhythm's toolbar icon to open the panel.
+2. Signed out, it shows **Sign in on the BuildNorth website**. That opens the website's sign-in page (`/sign-in` on
+   `WXT_WEB_APP_URL`) in a new tab; if you're already signed in there, the website shows your overview instead.
+3. Sign in on the website, with any method it offers.
+4. Back in the panel, it signs in by itself within a second or so. If it doesn't, close the panel and open it again.
+
+Clerk's own Sync Host doesn't refresh side panels, so the panel watches the website's Clerk cookies
+(`lib/website-sign-in.ts`) and reloads itself when the website's sign-in differs from its own:
+
+| On the website | In the panel |
+|---|---|
+| Sign in | Signs in to the same account |
+| Sign out | Signs out |
+| Switch to another account | Reloads with that account. Learning stops sending until that account turns it on in this browser |
+| Nothing changes, or the website refreshes its session | Nothing; the panel doesn't reload |
+
+The website and the panel share one sign-in, so **signing out in the panel (its account menu) signs you out of the
+website too**, which notices the next time it checks with Clerk or is reloaded.
+
+**Fallback:** *Sign in here with email and password* opens Clerk's form in the panel. That sign-in is shared with the
+website as well, once the website has been opened in this browser at least once. Before that, it stays in the panel,
+until the website is opened; from then on the website's sign-in wins.
 
 ### 2. Turn on learning
 
@@ -516,11 +571,14 @@ All of it disappears when Chrome closes, when learning is turned off, and when t
 Non-matching videos are never added to the list of recorded IDs.
 
 **Signing in from the worker.** `lib/worker-session.ts` uses Clerk's documented background client,
-`createClerkClient({ publishableKey, background: true })` from `@clerk/chrome-extension/client`
+`createClerkClient({ publishableKey, background: true, syncHost })` from `@clerk/chrome-extension/client`
 ([Clerk docs](https://clerk.com/docs/reference/chrome-extension/create-clerk-client)). The older
-`@clerk/chrome-extension/background` import still exists in 3.1.97 but is deprecated. The client reads the client token
-the panel's Clerk keeps in `chrome.storage.local`, so the worker is signed in exactly when the panel is. The worker
-loads it again when that token changes, and asks Clerk for a fresh session token for every request.
+`@clerk/chrome-extension/background` import still exists in 3.1.97 but is deprecated. Like the panel's, the client
+reads the website's Clerk cookie on the sync host (`__clerk_db_jwt` for a development instance, `__client` for a
+production one) and otherwise the client token the panel's Clerk keeps in `chrome.storage.local`, so the worker is
+signed in exactly when the panel is. It loads the sign-in again when that token changes or when the website's
+`__client_uat` cookie does (signing in, out or into another account there), and asks Clerk for a fresh session token
+for every request.
 
 **Bundle.** clerk-js makes the worker about 890 KB. `wxt.config.ts` swaps Clerk's sign-in UI, which only its
 non-background code path loads, for an empty module, and builds the worker as one classic script. Service workers
@@ -661,9 +719,9 @@ The full table is in the integration guide's *Policy and limits*.
 | `scripting` | Runs the readers in the isolated world: in the tab you chose; in the active tab when you choose *Save to Rhythm* or *Not interested*; and, with learning on, the playback check in a YouTube tab every 30 seconds, then the two readers once a minute has played |
 | `sidePanel` | The panel itself |
 | `storage` | The current toolbar click (session storage), the learning flag (local storage), and learning's retry queue, recorded video IDs and per-tab measurements (session storage). Clerk's SDK also requires this permission |
-| `cookies` | Required by Clerk's Chrome extension SDK |
+| `cookies` | Required by Clerk's Chrome extension SDK, which reads the website's Clerk cookie on the sync host. To notice when the website's sign-in changes, the panel also watches its `__client_uat` and `__session` cookies there, and the worker its `__client_uat`. They read no other cookies |
 | `alarms` | Learning's repeating 30-second check, one per tab on a watch page and none while learning is off. A service worker can be stopped between checks, so a plain timer isn't reliable |
-| Host permissions | Only the backend origin and the Clerk Frontend API origin |
+| Host permissions | Only the backend origin, the Clerk Frontend API origin and the sync host (`http://localhost/*` for the local website, any port). The sync host is there so Clerk can read the website's sign-in; Rhythm reads no pages there |
 | Optional host permission | `https://www.youtube.com/*`, requested only when you turn learning on, and removed when you turn it off. It lets the service worker see YouTube tab addresses and run the readers in them, and lets *Save to Rhythm* and *Not interested* read the active YouTube tab without a toolbar click. Chrome shows it as "Read and change your data on www.youtube.com" |
 
 What the manifest doesn't have:
@@ -778,7 +836,7 @@ Their inputs and results are in the integration guide's *MCP contracts*.
 entrypoints/
   background.ts             service worker: toolbar click → open the panel, remember the chosen tab; learning's events
   sidepanel/
-    index.html, main.tsx    Clerk sign-in, then the panel
+    index.html, main.tsx    sign-in (the website's, or email and password), then the panel
     App.tsx                 page permission, status line, page decision, counters
     Learning.tsx            top card: learning status and switch (asks Chrome for YouTube access)
     Suggestion.tsx          "Rhythm noticed": the learned-interest question (Yes, Not interested, Forget this)
@@ -795,6 +853,7 @@ lib/
   learning.ts               learning: checks, engagement maths, reading, local check, sending, the update and the queue
   reactions.ts              the panel's reactions and answers to the question, apart from React (tested directly)
   worker-session.ts         Clerk's background client: the signed-in user and session tokens in the service worker
+  website-sign-in.ts        the sync host, and noticing when the website's sign-in changes
   use-browser-bridge.ts     polls for transcript reads, claims, reads and uploads them
 clients/                    MCP config templates for Claude Code and OpenCode
 scripts/build-local.mjs     build with the phone's public Clerk key
@@ -828,7 +887,7 @@ npx playwright install chromium
 npm test
 ```
 
-`npm test` builds into `.output-tests/chrome-mv3`, so your loaded copy in `.output/` isn't touched. It then runs 12
+`npm test` builds into `.output-tests/chrome-mv3`, so your loaded copy in `.output/` isn't touched. It then runs 15
 Playwright tests on fixture pages and in-memory stand-ins, with no real account or YouTube response:
 
 1. **Page details.** Only the visible description excerpt is read. Comments, the hidden full description and
@@ -891,9 +950,17 @@ Playwright tests on fixture pages and in-memory stand-ins, with no real account 
 11. **Transcript reader.** Text is marked partial with an unknown language, and other page text is ignored. A segment
     that contains instructions is kept as plain text. A hidden panel gives *unavailable*, and a different video gives
     nothing.
-12. **The unpacked extension in Chromium.**
+12. **The sync host.** With no setting it's `http://localhost` (for `http://localhost:8081` or no web app URL) or
+    `http://127.0.0.1`, the website's own host for a development key elsewhere, and the Frontend API for a live key (from
+    `WXT_CLERK_FRONTEND_API` or the key). `WXT_CLERK_SYNC_HOST` wins, reduced to its origin.
+13. **The website's sign-in.** With a stand-in for `chrome.cookies`, signing in on the website (several cookies at once)
+    is reported once, as that user; switching accounts reports the new user; signing out reports signed out. Cookies on
+    another host, and Chrome's removal half of an overwrite, are ignored, and nothing is reported after unsubscribing.
+    The panel reloads only when it shows something else than the website, and the worker ignores token refreshes.
+14. **The unpacked extension in Chromium.**
     - The manifest has no YouTube or all-sites host access, content scripts or external messaging. YouTube is only in
-      `optional_host_permissions`, and `alarms` is requested.
+      `optional_host_permissions`, and `alarms` is requested. The sync host `http://localhost/*` is a host permission.
+    - The service worker can read a Clerk cookie on `localhost`, but not one on another site.
     - Before a toolbar click, the extension can't access the tab.
     - After a simulated toolbar click, it can, and the stored URL has tracking parameters removed.
     - Injected scripts can't read extension storage.
@@ -917,9 +984,13 @@ cd ../mobile/backend && .venv/bin/python -m pytest -q
 | Symptom | Fix |
 |---|---|
 | `build:local`: "Configure the public Clerk key in extension/.env or mobile/.env." | Set `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in `mobile/.env`, or `WXT_CLERK_PUBLISHABLE_KEY` in `extension/.env` |
-| Build: "Rhythm requires HTTPS except for a local development backend." | `WXT_API_URL` or `WXT_CLERK_FRONTEND_API` uses `http` on a host other than `localhost` or `127.0.0.1` |
+| Build: "Rhythm requires HTTPS except for a local development backend." | `WXT_API_URL`, `WXT_CLERK_FRONTEND_API`, `WXT_WEB_APP_URL` or `WXT_CLERK_SYNC_HOST` uses `http` on a host other than `localhost` or `127.0.0.1` |
 | Build: "Do not put credentials in a service URL." | Remove the user name or password from the URL |
 | Panel: "Finish the local setup to sign in." | The build had no publishable key. Use `npm run build:local`, or fill in `.env`, then rebuild and reload |
+| Signed in on the website, but the panel still asks you to sign in | Close the panel and open it again. Then check: the extension was reloaded after the last build; the website runs on the sync host (`http://localhost` by default, so not `127.0.0.1`); the website uses the same Clerk instance; and `allowed_origins` includes `chrome-extension://<the ID on Rhythm's card>` |
+| The panel shows another account than the website, or signs out by itself | The website's sign-in wins: the panel follows it, including a sign-out or another account there. Sign in on the website with the account you want |
+| Signing out in the panel signed you out of the website | Expected: they share one sign-in |
+| Build: "Invalid URL" | `WXT_CLERK_SYNC_HOST`, `WXT_WEB_APP_URL` or `WXT_CLERK_FRONTEND_API` isn't a full URL. Use, for example, `http://localhost` |
 | Panel: "Sign-in could not load. Check your connection and reopen Rhythm." | Clerk couldn't be reached. Check `WXT_CLERK_FRONTEND_API` and the network |
 | Requests fail with "Your sign-in expired. Sign in again." | The backend rejected the token. Sign in again; if it keeps happening, check that the backend uses the same Clerk instance and that `CLERK_AUTHORIZED_PARTIES` (if set) includes the extension's origin |
 | "Rhythm couldn't reach your account. Check the server connection." or "Could not refresh Rhythm. Check your connection." | Start the backend, or fix `WXT_API_URL` and rebuild |
@@ -952,6 +1023,26 @@ cd ../mobile/backend && .venv/bin/python -m pytest -q
 | *Open profile ↗* does nothing on a Mac | Nothing on the Mac opens the default `buildnorth://` link. Set `WXT_PROFILE_URL` to a web address, or use the phone |
 
 ## What was tested
+
+On 2026-10-25, after switching to the website's sign-in (Sync Host):
+- `npm run typecheck` passes, and `npm test`: all 15 tests pass. Making `isSignInChange` accept any host, or count the
+  removal half of an overwrite, fails test 13.
+- `npm run build:local`: host permissions are the backend, the development Clerk instance and `http://localhost/*`;
+  YouTube is still only optional. With `WXT_CRX_PUBLIC_KEY` set in `extension/.env`, Chrome gives the extension the ID
+  computed from the key.
+- That build in Playwright's Chromium, next to the running website at `http://localhost:8081` (signed out, no
+  credentials used):
+  - The website sets `__clerk_db_jwt` (and `__client_uat`, `0` while signed out) on `localhost`, not `HttpOnly`, and the
+    service worker reads the same value through the sync host. It can't read a cookie on another site.
+  - Every request the panel's Clerk made to the Frontend API (`/v1/client`, `/v1/environment`) carried the website's
+    `__clerk_db_jwt`, and Clerk answered 200, before the extension's origin was in `allowed_origins`.
+  - The signed-out panel shows *Sign in on the BuildNorth website*, which opened `http://localhost:8081/sign-in` in a
+    new tab; *Sign in here with email and password* opens Clerk's form.
+  - A `__client_uat` that turned non-zero on `localhost` reloaded the signed-out panel once; the same cookie on
+    `127.0.0.1` didn't.
+- The development instance's `allowed_origins` was empty; it is now `["chrome-extension://pgljohlbjkangpaeclifmhfbhbcmomoe"]`
+  (the update returned HTTP 204, and reading it back showed the list). The checks above gave the same results
+  afterwards.
 
 On 2026-10-22, after adding engagement, *Save to Rhythm* / *Not interested* and the question:
 - `npm run typecheck` passes.
@@ -1003,7 +1094,10 @@ Earlier, as recorded in the [integration guide](../mobile/docs/rhythm.md#verific
 - **Search.** Live YouTube Data API search and details lookups worked with the backend key.
 
 Not done yet:
-- Signing in to the panel with Clerk. Automated attempts stopped at email verification.
+- Signing in with a real account. Earlier automated attempts in the panel stopped at email verification. For the
+  website's sign-in, not yet seen: the panel and the worker signed in after signing in on the website; a real sign-out
+  and account switch there; signing out in the panel ending the website's session; and Clerk and the backend accepting
+  the panel's session tokens.
 - Learning with a real account: Chrome's real permission prompt, the worker getting a session token from Clerk while
   signed in, a minute of real playback producing `POST /rhythm/signals` with `engagement`, the update when the tab
   leaves, and the profile then being learned.
@@ -1015,7 +1109,9 @@ Not done yet:
 - The full signed-in journey: learned interests → panel page grant → agent recommendation → saved video on the phone.
 - A successful live transcript read, including long or non-English transcripts.
 - A second agent with a working model. OpenCode's model provider returned HTTP 403.
-- Icons, a fixed extension ID, and Chrome Web Store packaging and review.
+- Icons, and Chrome Web Store packaging and review (a store listing has its own key and ID, which `allowed_origins`
+  then needs). The panel's automatic refresh with a production Clerk instance, whose cookies live on the app's own
+  domain rather than the sync host.
 
 ## Limitations
 

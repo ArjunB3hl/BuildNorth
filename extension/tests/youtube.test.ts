@@ -10,6 +10,9 @@ import {
 } from '../lib/learning';
 import { CANT_TELL, PAGE_DETAILS_OFF, answerSuggestion, answeredChoices, learnedView, reactToVideo } from '../lib/reactions';
 import {
+  differsFromWebsite, isSignInChange, syncHostFor, watchWebsiteSignIn, websiteSignIn, type WebsiteSignIn,
+} from '../lib/website-sign-in';
+import {
   EMPTY_INTERESTS, type LearnedView, type RhythmResult, type VideoMetadata, type WatchSignal,
 } from '../../mobile/src/lib/rhythm';
 
@@ -616,6 +619,91 @@ test('a transcript read opens YouTube’s transcript panel when it is closed, an
   expect(missing?.limitation).toContain('couldn’t be opened or read');
 });
 
+test('the sync host is the website’s host for a development key, and the Frontend API for a live one', () => {
+  const live = (host: string) => `pk_live_${Buffer.from(`${host}$`).toString('base64')}`;
+  const development = `pk_test_${Buffer.from('example.clerk.accounts.dev$').toString('base64')}`;
+  expect(syncHostFor({})).toBe('http://localhost');
+  expect(syncHostFor({ WXT_CLERK_PUBLISHABLE_KEY: development, WXT_WEB_APP_URL: 'http://localhost:8081' })).toBe('http://localhost');
+  expect(syncHostFor({ WXT_WEB_APP_URL: 'http://127.0.0.1:8081/' })).toBe('http://127.0.0.1');
+  expect(syncHostFor({ WXT_CLERK_PUBLISHABLE_KEY: development, WXT_WEB_APP_URL: 'https://app.example.com/home' }))
+    .toBe('https://app.example.com');
+  expect(syncHostFor({ WXT_CLERK_PUBLISHABLE_KEY: live('clerk.example.com'), WXT_WEB_APP_URL: 'https://example.com' }))
+    .toBe('https://clerk.example.com');
+  expect(syncHostFor({ WXT_CLERK_PUBLISHABLE_KEY: live('clerk.example.com'), WXT_CLERK_FRONTEND_API: 'https://clerk.other.com/' }))
+    .toBe('https://clerk.other.com');
+  expect(syncHostFor({ WXT_CLERK_SYNC_HOST: 'http://localhost:8081/', WXT_CLERK_PUBLISHABLE_KEY: live('clerk.example.com') }))
+    .toBe('http://localhost:8081');
+  expect(syncHostFor({ WXT_CLERK_SYNC_HOST: '', WXT_WEB_APP_URL: 'http://localhost:19006' })).toBe('http://localhost');
+});
+
+test('the website’s sign-in: signing in, switching accounts and signing out are noticed once each, other hosts ignored', async () => {
+  const token = (sub: string) => `e30.${Buffer.from(JSON.stringify({ sub, sid: 'sess_1' })).toString('base64url')}.signature`;
+  const jar = new Map<string, string>();
+  const listeners = new Set<(change: { cookie: { name: string; domain: string }; removed: boolean; cause: string }) => void>();
+  const cookies = {
+    get: async ({ url, name }: { url: string; name: string }) => {
+      const value = jar.get(`${new URL(url).hostname}|${name}`);
+      return value === undefined ? null : { value };
+    },
+    onChanged: { addListener: (l: Parameters<typeof listeners.add>[0]) => { listeners.add(l); },
+      removeListener: (l: Parameters<typeof listeners.add>[0]) => { listeners.delete(l); } },
+  };
+  /** A page on `domain` writes a cookie. Chrome reports an overwrite as a removal, then the new cookie. */
+  const set = (name: string, value: string | null, domain = 'localhost') => {
+    const at = `${domain}|${name}`, emit = (removed: boolean, cause: string) => {
+      for (const listener of listeners) listener({ cookie: { name, domain }, removed, cause });
+    };
+    if (value === null) { jar.delete(at); emit(true, 'explicit'); return; }
+    if (jar.has(at)) emit(true, 'overwrite');
+    jar.set(at, value); emit(false, 'explicit');
+  };
+  const seen: WebsiteSignIn[] = [];
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+  const stop = watchWebsiteSignIn(cookies, 'http://localhost', (website) => seen.push(website), 20);
+
+  set('__clerk_db_jwt', 'dvb_1');
+  set('__client_uat', '0'); set('__client_uat_suffix', '0');
+  await settle();
+  expect(seen).toEqual([{ signedIn: false }]);
+  // Signing in writes several cookies at once; the panel hears about it once.
+  set('__client_uat', '1761390000'); set('__client_uat_suffix', '1761390000'); set('__session', token('user_1'));
+  await settle();
+  expect(seen.at(-1)).toEqual({ signedIn: true, userId: 'user_1' });
+  expect(seen).toHaveLength(2);
+  set('__client_uat', '0', '127.0.0.1');
+  await settle();
+  expect(seen).toHaveLength(2);
+  set('__session', token('user_2'));
+  await settle();
+  expect(seen.at(-1)).toEqual({ signedIn: true, userId: 'user_2' });
+  set('__client_uat', '0'); set('__session', null);
+  await settle();
+  expect(seen.at(-1)).toEqual({ signedIn: false });
+  stop();
+  set('__client_uat', '1761390100');
+  await settle();
+  expect(seen).toHaveLength(4);
+  expect(listeners.size).toBe(0);
+
+  // The panel reloads only when it shows something else than the website.
+  expect(differsFromWebsite(null, { signedIn: false })).toBe(false);
+  expect(differsFromWebsite('user_1', { signedIn: false })).toBe(true);
+  expect(differsFromWebsite(null, { signedIn: true, userId: 'user_1' })).toBe(true);
+  expect(differsFromWebsite('user_1', { signedIn: true, userId: 'user_1' })).toBe(false);
+  expect(differsFromWebsite('user_1', { signedIn: true, userId: 'user_2' })).toBe(true);
+  expect(differsFromWebsite(null, websiteSignIn('1761390000', 'not a token'))).toBe(true);
+  expect(differsFromWebsite('user_1', websiteSignIn('1761390000', 'not a token'))).toBe(false);
+
+  // The worker reacts to __client_uat only, so the website's token refreshes don't wake it.
+  const change = (name: string, domain: string, removed = false, cause = 'explicit') => ({ cookie: { name, domain }, removed, cause });
+  expect(isSignInChange(change('__client_uat', 'localhost'), 'http://localhost')).toBe(true);
+  expect(isSignInChange(change('__client_uat', 'localhost', true, 'explicit'), 'http://localhost')).toBe(true);
+  expect(isSignInChange(change('__client_uat', 'localhost', true, 'overwrite'), 'http://localhost')).toBe(false);
+  expect(isSignInChange(change('__session', 'localhost'), 'http://localhost')).toBe(false);
+  expect(isSignInChange(change('__client_uat', 'evil-localhost'), 'http://localhost')).toBe(false);
+  expect(isSignInChange(change('__client_uat', '.example.com'), 'https://clerk.example.com')).toBe(true);
+});
+
 test('unpacked MV3 action grants one page, keeps storage private, and invalidates navigation', async () => {
   test.setTimeout(90_000);
   const extensionPath = resolve('.output-tests/chrome-mv3');
@@ -625,6 +713,8 @@ test('unpacked MV3 action grants one page, keeps storage private, and invalidate
   // YouTube access is optional, requested only by the learning switch, and never granted at install.
   expect(manifest.optional_host_permissions).toEqual(['https://www.youtube.com/*']);
   expect(manifest.host_permissions.some((host: string) => host.includes('youtube') || host === '<all_urls>')).toBe(false);
+  // The sync host for the local website, where Clerk reads its sign-in.
+  expect(manifest.host_permissions).toContain('http://localhost/*');
   expect(manifest.permissions.some((p: string) => p.includes('youtube') || p.includes('://') || p === 'tabs')).toBe(false);
   expect(manifest.optional_permissions).toBeUndefined();
   expect(manifest.content_scripts).toBeUndefined();
@@ -654,6 +744,19 @@ test('unpacked MV3 action grants one page, keeps storage private, and invalidate
       } catch { return 'permission denied'; }
     });
     expect(before).toBe('permission denied');
+    // Clerk's sync reads the website's dev-browser cookie on localhost, whatever the website's port; other sites'
+    // cookies stay out of reach.
+    await context.addCookies([
+      { name: '__clerk_db_jwt', value: 'dvb_fixture', domain: 'localhost', path: '/' },
+      { name: '__clerk_db_jwt', value: 'dvb_elsewhere', domain: 'example.com', path: '/' },
+    ]);
+    const cookies = await worker.evaluate(async () => {
+      const read = async (url: string) => {
+        try { return (await chrome.cookies.get({ url, name: '__clerk_db_jwt' }))?.value ?? 'none'; } catch { return 'denied'; }
+      };
+      return { website: await read('http://localhost'), other: await read('https://example.com') };
+    });
+    expect(cookies).toEqual({ website: 'dvb_fixture', other: 'denied' });
     const { targetInfos } = await cdp.send('Target.getTargets', { filter: [{ type: 'tab' }] });
     const tabTarget = targetInfos.find((target: { url: string }) => target.url === page.url());
     if (!tabTarget) throw new Error('The selected browser tab target is unavailable.');
