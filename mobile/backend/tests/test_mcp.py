@@ -626,7 +626,7 @@ def test_rhythm_phone_to_mcp_flow_obeys_grants_tasks_and_source_claims(live: Sim
     with pytest.raises(Exception):
         call(live, token, "get_profile")
     tool_names = {item.name for item in call(rhythm, token, "__list__").tools}
-    assert "get_profile" not in tool_names and len(tool_names) == 14
+    assert "get_profile" not in tool_names and len(tool_names) == 16
     # It is not an app session and cannot self-approve a task.
     assert httpx.put(live.base + "/rhythm/interests", headers={"Authorization": f"Bearer {token}"},
                      json=interests(), timeout=10).status_code == 401
@@ -691,3 +691,97 @@ def test_rhythm_phone_to_mcp_flow_obeys_grants_tasks_and_source_claims(live: Sim
     ui("DELETE", f"/rhythm/agents/{agent['id']}")
     with pytest.raises(Exception):
         tool("get_interests")
+
+
+def test_rhythm_agent_summarises_saved_videos(live: SimpleNamespace) -> None:
+    """With the Saved videos permission, an agent reads saved videos with their transcripts and stores summaries."""
+    from app.models import RhythmSignal
+    from test_rhythm import interests
+    from test_rhythm_learning import watched
+    user = "user_5Saved"
+    rhythm = SimpleNamespace(base=live.base, url=live.base + "/rhythm/mcp")
+
+    def ui(method, path, **kwargs):
+        response = rest(live, method, path, user, **kwargs)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    ui("PUT", "/rhythm/interests", json=interests())
+    kick = watched("Karate front kick basics", 1, transcript="Chamber the knee, then snap the kick out and back.")
+    assert ui("POST", "/rhythm/reactions", json={**kick, "reaction": "more"})["status"] == "ok"
+    ui("POST", "/rhythm/reactions", json={**watched("Boxing slip drill tutorial", 2), "reaction": "less"})
+
+    # Without the permission, nothing is listed or stored.
+    interests_only = ui("POST", "/rhythm/agents/token", json={"label": "Interests only", "capabilities": ["interests"]})["token"]
+    assert ok(call(rhythm, interests_only, "list_saved_videos"))["status"] == "permission_required"
+    assert ok(call(rhythm, interests_only, "save_video_summary", {
+        "video_id": "vid00000001", "summary": "Not allowed."}))["status"] == "permission_required"
+
+    token = ui("POST", "/rhythm/agents/token", json={"label": "Summariser", "capabilities": ["interests", "saved"]})["token"]
+    listed = ok(call(rhythm, token, "list_saved_videos"))
+    # Only saves: the "Not interested" video isn't listed.
+    assert [v["videoId"] for v in listed["savedVideos"]] == ["vid00000001"]
+    assert listed["savedVideos"][0]["transcript"] == "Chamber the knee, then snap the kick out and back."
+    assert listed["savedVideos"][0]["summary"] is None
+    stored = ok(call(rhythm, token, "save_video_summary", {
+        "video_id": "vid00000001", "summary": "A beginner karate lesson on the front kick: chamber the knee, then snap it."}))
+    assert stored["status"] == "ok" and stored["savedVideos"][0]["summary"].startswith("A beginner karate lesson")
+    assert ok(call(rhythm, token, "list_saved_videos", {"unsummarized_only": True}))["savedVideos"] == []
+    assert ok(call(rhythm, token, "save_video_summary", {"video_id": "vid00000002", "summary": "x"}))["status"] == "not_found"
+    with app.state.session_factory() as db:
+        row = db.scalar(select(RhythmSignal).where(RhythmSignal.user_id == user, RhythmSignal.video_id == "vid00000001"))
+        assert row.summary.startswith("A beginner karate lesson") and row.summary_by == "Summariser"
+        assert row.summarized_at is not None and "karate" in row.topics
+
+    # Turning agent sharing off stops it.
+    profile = ui("GET", "/rhythm/interests")["profile"]
+    ui("PUT", "/rhythm/settings", json={"enabledSites": profile["enabledSites"], "consent": {**profile["consent"], "agent": False},
+                                        "expectedRevision": profile["profileRevision"]})
+    assert ok(call(rhythm, token, "list_saved_videos"))["status"] == "permission_required"
+
+
+def test_rhythm_assistants_approved_in_the_app_connect_without_a_second_step(live: SimpleNamespace) -> None:
+    """"Connect Claude / ChatGPT / Codex": approved in the app, then each signs in with its own OAuth identity."""
+    import jwt as pyjwt
+    from test_rhythm import interests
+    user = "user_6Assist"
+    rhythm = SimpleNamespace(base=live.base, url=live.base + "/rhythm/mcp")
+
+    def ui(method, path, **kwargs):
+        response = rest(live, method, path, user, **kwargs)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def oauth(client_id):
+        now = int(time.time())
+        return pyjwt.encode({
+            "sub": user, "iss": ISSUER, "iat": now, "exp": now + 600, "jti": f"assistant_{abs(hash(client_id))}",
+            "client_id": client_id, "scope": "email profile", "aud": rhythm.url,
+        }, SIGNING_KEY, algorithm="RS256", headers={"kid": "test-kid", "typ": "at+jwt"})
+
+    claude = oauth("https://claude.ai/oauth/mcp-oauth-client-metadata")
+    codex = oauth("https://chatgpt.com/oauth/codex/client.json")
+    chatgpt = oauth("https://chatgpt.com/oauth/client.json")
+    ui("PUT", "/rhythm/interests", json=interests())
+    assert ok(call(rhythm, claude, "get_interests"))["status"] == "permission_required"
+
+    approved = ui("PUT", "/rhythm/assistants/claude", json={"capabilities": ["interests", "saved"]})
+    assert approved["agents"][0]["label"] == "Claude" and approved["mcpUrl"] == rhythm.url
+    # Claude's first request works: no connect_rhythm and no second approval.
+    assert ok(call(rhythm, claude, "get_interests"))["status"] == "ok"
+    assert ok(call(rhythm, claude, "connect_rhythm"))["status"] == "ok"
+    assert ok(call(rhythm, claude, "list_saved_videos"))["status"] == "ok"
+
+    # Codex and ChatGPT both sign in from chatgpt.com, but each needs its own approval.
+    assert ok(call(rhythm, codex, "get_interests"))["status"] == "permission_required"
+    ui("PUT", "/rhythm/assistants/codex", json={"capabilities": ["interests"]})
+    assert ok(call(rhythm, codex, "get_interests"))["status"] == "ok"
+    assert ok(call(rhythm, codex, "list_saved_videos"))["status"] == "permission_required"
+    assert ok(call(rhythm, chatgpt, "get_interests"))["status"] == "permission_required"
+
+    # Disconnecting in the app stops it at once; connecting again restores it.
+    ui("DELETE", f"/rhythm/agents/{approved['agents'][0]['id']}")
+    assert ok(call(rhythm, claude, "get_interests"))["status"] == "permission_required"
+    ui("PUT", "/rhythm/assistants/claude", json={"capabilities": ["interests"]})
+    assert ok(call(rhythm, claude, "get_interests"))["status"] == "ok"
+    assert rest(live, "PUT", "/rhythm/assistants/gemini", user, json={"capabilities": ["interests"]}).status_code == 422

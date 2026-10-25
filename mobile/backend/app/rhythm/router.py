@@ -6,7 +6,7 @@ from app.deps import CurrentUser, Db, OptionalAI
 from app.rhythm import browser, data, grants, learn, memory, profile, recommendations, search, tasks, transcripts
 from app.rhythm.policy import Actor, Denied, Policy, run
 from app.rhythm.schemas import BrowserInput, BrowserProof, InterestsInput, RecordId, Result, ShortlistInput, TaskInput
-from app.rhythm.schemas import AgentApproval, ImportedTranscript, TranscriptInput, TranscriptUpload
+from app.rhythm.schemas import AgentApproval, Assistant, ImportedTranscript, TranscriptInput, TranscriptUpload
 from app.rhythm.schemas import FeedbackInput, RecommendationsInput, SearchInput, SettingsInput, SignalInput
 from app.rhythm.schemas import ChoicesInput, ForgetTopicInput, ReactionInput
 from app.schemas import InputModel, Text80
@@ -102,6 +102,11 @@ def connections(request: Request, user: CurrentUser):
 @router.post("/agents/{agent_id}/approve", response_model=Result)
 def approve_agent(agent_id: str, body: AgentApproval, request: Request, user: CurrentUser):
     return run(request.app, Actor(user.user_id), lambda p: grants.approve(p, agent_id, body))
+
+
+@router.put("/assistants/{assistant}", response_model=Result)
+def approve_assistant(assistant: Assistant, body: AgentApproval, request: Request, user: CurrentUser):
+    return run(request.app, Actor(user.user_id), lambda p: grants.approve_assistant(p, assistant, body))
 
 
 @router.delete("/agents/{agent_id}", response_model=Result)

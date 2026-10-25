@@ -12,7 +12,8 @@ from app.schemas import ApiModel, InputModel, Text80
 
 Topic = Literal["boxing", "karate", "gym", "home exercise", "food"]
 Purpose = Literal["learn technique", "follow a workout", "find recipes"]
-Capability = Literal["interests", "page", "search", "transcripts", "recommend", "memory", "feedback"]
+Assistant = Literal["claude", "chatgpt", "codex"]
+Capability = Literal["interests", "page", "search", "transcripts", "recommend", "memory", "feedback", "saved"]
 Status = Literal[
     "ok", "irrelevant", "uncertain", "profile_required", "permission_required", "browser_unavailable",
     "transcript_unavailable", "transcript_partial", "stale_context", "budget_exceeded", "provider_error",
@@ -119,7 +120,7 @@ class BrowserProof(InputModel):
 
 
 class AgentApproval(InputModel):
-    capabilities: list[Capability] = Field(min_length=1, max_length=7)
+    capabilities: list[Capability] = Field(min_length=1, max_length=8)
 
 
 class TaskInput(InputModel):
@@ -213,7 +214,8 @@ class SettingsInput(InputModel):
 
 
 class SignalTranscript(InputModel):
-    """Text from YouTube's transcript panel, sent only when the user had it open."""
+    """Text from YouTube's transcript panel: one the user already had open while learning, or the transcript
+    Save to Rhythm opens, reads and closes again."""
     segments: list[Segment] = Field(min_length=1, max_length=400)
 
     @model_validator(mode="after")
@@ -241,6 +243,7 @@ class ReactionInput(InputModel):
     metadata: VideoMetadata
     captured_at: datetime
     reaction: Literal["more", "less"]
+    transcript: SignalTranscript | None = None
 
 
 Level = Literal["beginner", "intermediate", "advanced"]
@@ -430,6 +433,21 @@ class FeedbackContext(ApiModel):
     updated_at: datetime
 
 
+class SavedVideoView(ApiModel):
+    """A video the user saved with Save to Rhythm, as their chosen agent sees it (list_saved_videos)."""
+    video_id: str
+    url: str
+    title: str | None
+    channel: str | None
+    duration_seconds: float | None
+    topics: list[str]
+    description: str | None
+    transcript: str | None
+    summary: str | None
+    summarized_at: datetime | None
+    saved_at: datetime
+
+
 class Result(ApiModel):
     status: Status = "ok"
     message: str = ""
@@ -453,6 +471,7 @@ class Result(ApiModel):
     limits: Limits | None = None
     delivery: Literal["saved_for_later", "displayed"] | None = None
     deleted_records: dict[str, int] | None = None
+    saved_videos: list[SavedVideoView] | None = None
     # What Rhythm learned and why (scores, evidence counts). Returned for access requests; not shown in the apps.
     learned: dict[str, Any] | None = None
     source_refs: list[str] = Field(default_factory=list)

@@ -387,3 +387,20 @@ def test_reaction_messages_say_what_changed_while_recommendations_are_off(client
     assert saved["message"] == "Saved to Rhythm. It counts toward your interest in boxing."
     passed = client.post("/rhythm/reactions", headers=auth(), json={**watched("Boxing slip drill tutorial", 2), "reaction": "less"}).json()
     assert passed["message"] == "Got it. It counts against boxing in what Rhythm learns."
+
+
+def test_saving_a_video_keeps_its_transcript(client):
+    client.put("/rhythm/settings", headers=auth(), json=settings(learning=False))
+    # The title alone doesn't place this video; its transcript does.
+    saved = client.post("/rhythm/reactions", headers=auth(), json={
+        **watched("Morning session", 1, transcript="Today we drill the karate front kick. Chamber the knee."), "reaction": "more"}).json()
+    assert saved["status"] == "ok"
+    with app.state.session_factory() as db:
+        row = db.scalar(select(RhythmSignal).where(RhythmSignal.user_id == ALICE, RhythmSignal.video_id == "vid00000001"))
+        assert row.topics == ["karate"] and row.reaction == "more"
+        assert row.transcript == "Today we drill the karate front kick. Chamber the knee."
+    # A later reaction without a transcript keeps the one already saved.
+    client.post("/rhythm/reactions", headers=auth(), json={**watched("Morning session karate", 1), "reaction": "less"})
+    with app.state.session_factory() as db:
+        row = db.scalar(select(RhythmSignal).where(RhythmSignal.video_id == "vid00000001"))
+        assert row.reaction == "less" and row.transcript.startswith("Today we drill")
