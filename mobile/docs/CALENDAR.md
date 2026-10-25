@@ -26,7 +26,7 @@ Coach requests carry a stable client key through retries. Journal entries use th
 
 Mac stays offline in demo mode. Its calendar uses locally persisted sample entries, with month navigation, category filters, editing and manual logging. Marking a local plan item done also adds a timestamped demo entry. No sign-in or network sync is added. Older local stores receive the calendar sample field without losing saved app data.
 
-The Watch gains a compact day timeline and previous/next-day navigation from Today. It reads the same authenticated backend and clears loaded entries on unlink.
+The Watch focuses on Sleep and Workout monitoring. Its uploaded workout summaries still appear in Calendar on the phone, web and Mac; the watch no longer displays a calendar timeline. The authenticated `/watch/calendar` API remains available for compatibility.
 
 ## Verification
 

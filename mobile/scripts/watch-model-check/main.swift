@@ -530,5 +530,46 @@ section("Calendar entries decode") {
   check(entries[1].timeEstimated && entries[0].localTime == "08:15", "time and precision")
 }
 
+section("Sleep patterns: missing nights, duplicate sources, clipped stages and awake time") {
+  let day = Date(timeIntervalSince1970: 1_700_000_000)
+  let window = DateInterval(start: day, duration: 600)
+  let missing = SleepSummary(day: day, samples: [], window: window)
+  check(missing.minutes == nil && missing.startedAt == nil && missing.endedAt == nil, "missing sleep stays missing")
+  let samples = [
+    SleepSample(stage: .core, start: day.addingTimeInterval(-60), end: day.addingTimeInterval(120)),
+    SleepSample(stage: .core, start: day, end: day.addingTimeInterval(120)),
+    SleepSample(stage: .awake, start: day.addingTimeInterval(120), end: day.addingTimeInterval(180)),
+    SleepSample(stage: .rem, start: day.addingTimeInterval(180), end: day.addingTimeInterval(300)),
+    SleepSample(stage: .unspecified, start: day, end: day.addingTimeInterval(300)),
+    SleepSample(stage: .deep, start: day.addingTimeInterval(540), end: day.addingTimeInterval(660)),
+  ]
+  let night = SleepSummary(day: day, samples: samples, window: window)
+  check(night.minutes == 6, "union of all asleep sources, clipped to window")
+  check(night.stages[.core] == 2, "duplicate core samples count once")
+  check(night.stages[.awake] == 1, "awake remains distinct")
+  check(night.stages[.deep] == 1, "stage duration clips to window")
+  check(night.startedAt == window.start && night.endedAt == window.end, "sleep times clip to window")
+  let awake = SleepSummary(day: day, samples: [samples[2]], window: window)
+  check(awake.minutes == nil, "awake-only night is not asleep")
+  check(SleepNight.display(minutes: 465) == "7 h 45 min", "sleep display")
+}
+
+section("Workout heart rate: stale readings, invalid samples, ordering and bounded history") {
+  let start = Date(timeIntervalSince1970: 1_700_000_000)
+  var series = HeartRateSeries()
+  check(series.current(at: start) == nil, "missing heart rate stays missing")
+  for value in [0.0, -2, Double.nan, Double.infinity] { series.append(bpm: value, at: start) }
+  check(series.points.isEmpty, "invalid samples excluded")
+  series.append(bpm: 120, at: start)
+  series.append(bpm: 125, at: start)
+  series.append(bpm: 125, at: start.addingTimeInterval(-1))
+  check(series.points.count == 1, "duplicate and old callbacks do not add points")
+  check(series.current(at: start.addingTimeInterval(30)) == 120, "fresh reading shown")
+  check(series.current(at: start.addingTimeInterval(31)) == nil, "stale reading hidden")
+  for n in 1...400 { series.append(bpm: 130, at: start.addingTimeInterval(Double(n))) }
+  check(series.points.count == 300, "chart history bounded")
+  check(series.points.first?.at == start.addingTimeInterval(101), "oldest samples dropped")
+}
+
 print(failures == 0 ? "OK: \(checks) checks passed" : "FAILED: \(failures) of \(checks) checks")
 exit(failures == 0 ? 0 : 1)

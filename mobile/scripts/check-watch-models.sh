@@ -15,6 +15,7 @@ sources=(
   "$watch/Models.swift"
   "$watch/LinkMessage.swift"
   "$watch/SleepNight.swift"
+  "$watch/HeartRateSeries.swift"
   "$watch/CheckInDraft.swift"
   "$watch/HealthBackfill.swift"
   "$watch/APIClient.swift"

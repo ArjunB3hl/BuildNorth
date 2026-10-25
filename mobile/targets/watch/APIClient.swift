@@ -67,6 +67,12 @@ struct APIClient: Sendable {
     try await send("GET", ["watch", "today"], query: [URLQueryItem(name: "date", value: date)])
   }
 
+  /// Validate the phone's token even when no HealthKit data is available to upload.
+  func validateLink() async throws {
+    struct History: Decodable { let days: [HealthDay] }
+    let _: History = try await send("GET", ["watch", "health"], query: [URLQueryItem(name: "days", value: "1")])
+  }
+
   func setStatus(itemID: String, status: PlanStatus) async throws -> PlanItem {
     try await send("PATCH", ["watch", "plan", itemID], body: Self.encode(PlanStatusPatch(status: status)))
   }

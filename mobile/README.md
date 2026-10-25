@@ -59,8 +59,8 @@ Apple Watch app (SwiftUI) ──────────────────
 - **Activity**: routines (sets, reps, duration, weight, rest), run a session, log sets, finish → saved history.
 - **Profile**: edit preferences & goals, progress from real sessions/check-ins/plan items, view/correct/delete remembered
   preferences, erase memory, delete all data (reports exactly what was deleted), sign out.
-- **Apple Watch** (iPhone development build): today's plan with done / skip, a quick check-in, and daily Apple Health
-  summaries that the Coach, AI assistants and long-term memory can use once you turn sharing on — see *Apple Watch*.
+- **Apple Watch** (iPhone development build): sleep patterns and live workout heart rate, with sign-in on the phone.
+  Daily summaries can reach the Coach and connected assistants when you enable sharing — see *Apple Watch*.
 
 The app never sends a user ID. The backend takes the user from the verified Clerk token and scopes every query and
 every Agent Memory read/write to that user. Nothing the coach says is medical advice; generated recipes aren't checked
@@ -322,15 +322,24 @@ can't include a watch app or the WatchConnectivity module (the Profile screen sa
 
 How this and the Mac app were built, what was checked and what is still open: [docs/work-log.md](docs/work-log.md).
 
-- **On the watch**: *Today* (plan items with Done / Skip / Undo, the check-in and last health sync), *Check-in*
-  (energy and mood 1–5 with the Digital Crown or buttons; sleep pre-filled from Apple Health while health sharing is
-  on and no sleep is saved for the day yet), *Health* (Apple Health
-  permission, *Sync now*, upload status, whether sharing is on) and *Not linked* (how to link from the phone).
-- **On the phone**: Profile → *Apple Watch* links the watch, turns health sharing on or off, lists linked watches
-  (revoke one, or *Unlink*) and shows the last 7 days of summaries the watch sent.
-- **Health sync**: on launch, on return to the app (at most every 10 minutes) and with *Sync now*, the watch reads
-  Apple Health for each day it sends: minutes asleep for the night ending that day (18:00 the evening before to
-  12:00), resting heart rate, average HRV (SDNN), steps, active energy and the day's workouts.
+- **On the watch**: exactly two home options, **Sleep** and **Workout**. Plans, check-ins and general health
+  settings are no longer part of the watch UI. Monitoring works locally after sign-in, including without internet.
+  - **Sleep** shows the last night's asleep duration, first/last sleep times, available Core/Deep/REM/Awake
+    durations, and a seven-night chart. Missing nights stay blank. Stage durations merge duplicates independently;
+    different sources can overlap, so these aren't shown as parts of a single stacked total. Sleep is read from
+    Apple Health after it is recorded; enable *Track Sleep with Apple Watch* on the phone and wear the watch to bed.
+  - **Workout** starts a general (*Other*) HealthKit workout, showing live BPM, recent trend, average, peak and
+    elapsed time. Pause/resume and end/save are inside this screen. It uses `workout-processing` background mode
+    and continues when the wrist is lowered or the user returns home. An ended workout is saved to Apple Health;
+    only its summary is uploaded. Stale readings show a dash after 30 seconds. Start a workout in BuildNorth to
+    use live monitoring; it doesn't attach to another app's active workout. Force-quitting isn't supported for
+    workout recovery. Signing out discards a workout still in progress.
+- **On the phone**: sign in to BuildNorth, then Profile → **Apple Watch** → **Sign in Apple Watch**. The watch
+  signs in when the hand-off arrives. Sharing, linked watches and uploaded summaries remain on the phone.
+- **Health sync**: launch, foreground (at most every 10 minutes), Sleep → *Refresh*, and workout completion upload
+  sleep minutes and workout summaries. The watch no longer requests resting HR, HRV, steps, distance or calories.
+  Existing backend fields stay compatible and missing values are null. Detailed sleep stages and live heart-rate
+  samples stay in Apple Health/on the watch; they aren't uploaded to BuildNorth.
   - Today is sent as `complete: false` (so far). The finished days since the last complete upload are sent as
     complete, capped at the newest 7, so recent days the app wasn't opened are filled in; older missed days are
     not sent. Yesterday is always sent again, so samples that reach Apple Health late still land. The first sync,
@@ -340,7 +349,7 @@ How this and the Mac app were built, what was checked and what is still open: [d
 
 ### Linking and the watch token
 
-1. Profile → *Apple Watch* → *Link Apple Watch*: the phone asks the backend for a **watch link token** (`bnw_…`,
+1. Sign in on iPhone → Profile → *Apple Watch* → *Sign in Apple Watch*: the phone asks the backend for a **watch link token** (`bnw_…`,
    `POST /watch/tokens`, Clerk session required) and hands it, with the API URL, to the watch over WatchConnectivity
    (`updateApplicationContext`, delivered even if the watch app isn't running). The plaintext is never cached or
    stored by the app; iOS keeps the last hand-off until the next link or unlink.
@@ -432,7 +441,7 @@ that is needed (see [docs/work-log.md](docs/work-log.md)).
    `xcrun simctl install <watch-udid> ~/Library/Developer/Xcode/DerivedData/BuildNorth-*/Build/Products/Debug-watchsimulator/watch.app`.
 3. In Debug builds, the watch can be linked without the phone. Launch it with
    `SIMCTL_CHILD_BN_API_URL=http://127.0.0.1:8000 SIMCTL_CHILD_BN_WATCH_TOKEN=<bnw_ token> xcrun simctl launch <watch-udid> com.arjun273773.buildnorth.watch`.
-4. The watch simulator has no sensors and no Health app. In Debug, *Health* can save a few sample values.
+4. The watch simulator has no sensors and no Health app. In Debug, *Sleep → Add sample sleep* can save sample nights. Live heart-rate sensors require a real watch.
 
 **A real watch and iPhone** need:
 - `ios.appleTeamId` in `app.json` (Expo picked team `TJ6V35S7GQ` automatically for the simulator build)
