@@ -1,3 +1,4 @@
+import { AIConnectionGate } from '@/components/ai-connection-gate';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
@@ -59,10 +60,10 @@ export default function CameraWorkout() {
   const focused = useIsFocused();
   // Web stack routes remain mounted after navigation. Release the frame and its Web Lock while off-screen;
   // the inner screen restores persisted counts on the next visit.
-  return focused ? <CameraWorkoutSession /> : null;
+  return focused ? <AIConnectionGate>{access => <CameraWorkoutSession elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
 }
 
-function CameraWorkoutSession() {
+function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
   const params = useLocalSearchParams<{ routineId?: string; routineName?: string; planItemId?: string }>();
   const api = useApi();
   // useApi gives a new client on every render (Clerk's getToken is new each time): effects read it from a ref
@@ -111,6 +112,7 @@ function CameraWorkoutSession() {
   const savingRef = useRef(false);
   const restoredRef = useRef(false);
   const mounted = useRef(true);
+  const authorizing = useRef(false);
   // start times of the workouts a save went out for without a success seen: marked `sent` on the device, and checked
   // with the server before they are saved again
   const sent = useRef(new Set<string>());
@@ -278,6 +280,18 @@ function CameraWorkoutSession() {
     const onMessage = (event: MessageEvent) => {
       const m = poseMessage(event, frame.current?.contentWindow, poseOrigin);
       if (!m) return;
+      if (event.data?.type === 'pose-coach/elevenlabs-session-request') {
+        const requestId = event.data.requestId;
+        if (!elevenlabs || authorizing.current || typeof requestId !== 'string' || !/^\d{1,8}$/.test(requestId)) return;
+        authorizing.current = true;
+        const requestingFrame = frame.current?.contentWindow;
+        void apiRef.current.connections.elevenLabsSession().then(session => {
+          if (mounted.current && requestingFrame === frame.current?.contentWindow) post('elevenlabs-session', { requestId, signedUrl: session.signedUrl });
+        }).catch(() => {
+          if (mounted.current && requestingFrame === frame.current?.contentWindow) post('elevenlabs-session', { requestId, error: 'Reconnect required' });
+        }).finally(() => { authorizing.current = false; });
+        return;
+      }
       if (m.type === 'pose-coach/resize') {
         if (Number.isFinite(m.height)) setFrameHeight(Math.max(320, Math.min(12000, Math.ceil(m.height))));
         return;
@@ -290,6 +304,7 @@ function CameraWorkoutSession() {
       update(next.counted);
       if (m.type === 'pose-coach/ready') {
         post('theme', { theme: scheme });
+        post('ai-connection', { elevenlabs });
         setReady(true);
         setUnreachable(false);
       } else if (m.type === 'pose-coach/error') {
@@ -304,11 +319,11 @@ function CameraWorkoutSession() {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [poseOrigin, update, finished, post, reset, scheme]);
+  }, [poseOrigin, update, finished, post, reset, scheme, elevenlabs]);
 
   useEffect(() => {
-    if (ready) post('theme', { theme: scheme });
-  }, [ready, scheme, post]);
+    if (ready) { post('theme', { theme: scheme }); post('ai-connection', { elevenlabs }); }
+  }, [ready, scheme, post, elevenlabs]);
 
   useEffect(() => {
     if (ready || !claimed || elsewhere || !src) return;

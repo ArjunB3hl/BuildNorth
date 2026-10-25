@@ -202,6 +202,9 @@ def merge_watch_checkin(day: str, body: WatchCheckInPatch, user: WatchUser, db: 
 
 def _fill(row: HealthDay, body: HealthDayIn) -> None:
     row.sleep_minutes, row.resting_heart_rate_bpm = body.sleep_minutes, body.resting_heart_rate_bpm
+    # Old Watch versions omit this field; do not erase a newer upload's stage details.
+    if "sleep_pattern" in body.model_fields_set:
+        row.sleep_pattern = body.sleep_pattern.model_dump(mode="json") if body.sleep_pattern else None
     row.hrv_sdnn_ms, row.steps, row.active_energy_kcal = body.hrv_sdnn_ms, body.steps, body.active_energy_kcal
     by_id = {w.external_id: w for w in body.workouts}  # a workout sent twice is kept once
     row.workouts = [w.model_dump(mode="json") for w in sorted(by_id.values(), key=lambda w: (w.started_at, w.external_id))]

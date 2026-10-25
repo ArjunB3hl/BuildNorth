@@ -10,8 +10,16 @@ from app.models import CalendarEntry
 router = APIRouter(tags=["calendar"])
 
 
+@router.get("/calendar/report")
+def monthly_report(user: CurrentUser, db: Db, response: Response, month: str, timezone: str = "UTC") -> dict:
+    from app.monthly_report import report
+    response.headers["Cache-Control"] = "no-store"
+    return report(db, user.user_id, month, timezone)
+
+
 @router.get("/calendar")
-def calendar(user: CurrentUser, db: Db, start: str, days: int = Query(42, ge=1, le=62), timezone: str = "UTC") -> list[EntryOut]:
+def calendar(user: CurrentUser, db: Db, response: Response, start: str, days: int = Query(42, ge=1, le=62), timezone: str = "UTC") -> list[EntryOut]:
+    response.headers["Cache-Control"] = "no-store"
     return feed(db, user.user_id, start, days, timezone)
 
 

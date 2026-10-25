@@ -36,7 +36,7 @@ function page(t, { textOnly = false } = {}) {
     elevenPending: new Map(), elevenFallback: new WeakMap(), elevenFinal: new WeakSet(),
     spoken: [], voiceOut: new Voice() };
   const noop = () => {};
-  const deps = { S, ElevenCoach: Agent, MacVoice: Voice, createVoice: async () => new Voice(),
+  const deps = { S, accountSession: null, ElevenCoach: Agent, MacVoice: Voice, createVoice: async () => new Voice(),
     voiceChoice: () => S.plan.voice, brain: () => 'eleven', elevenListen: () => !textOnly,
     brainLabel: () => 'Test coach', log: noop, renderMic: noop, armIdle: noop, armTalkIdle: noop,
     standIn: noop, failBrain: noop, endTalk: noop, chooseExercise: noop, answerSetEnd: noop,

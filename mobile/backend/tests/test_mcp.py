@@ -438,7 +438,7 @@ def test_calendar_mcp_is_owned_and_respects_health_sharing(live: SimpleNamespace
                              occurred_at=datetime(2026, 10, 20, 12, tzinfo=UTC), time_estimated=False))
         db.add(CalendarEntry(user_id=other, kind="meal", title="Another account meal", source="manual", source_key="manual:1",
                              occurred_at=datetime(2026, 10, 20, 12, tzinfo=UTC), time_estimated=False))
-        db.add(HealthDay(user_id=owner, date="2026-10-20", workouts=[{
+        db.add(HealthDay(user_id=owner, date="2026-10-20", sleep_minutes=420, sleep_pattern={"deep_minutes": 80}, workouts=[{
             "external_id": "calendar-watch-demo", "activity_type": "running",
             "started_at": "2026-10-20T21:00:00Z", "duration_minutes": 25.0}]))
         db.commit()
@@ -452,7 +452,8 @@ def test_calendar_mcp_is_owned_and_respects_health_sharing(live: SimpleNamespace
         db.get(Profile, owner).share_health = True
         db.commit()
     shared = ok(call(live, token, "get_calendar", args))["result"]
-    assert [r["source"] for r in shared] == ["demo", "watch"]
+    assert [r["source"] for r in shared] == ["watch", "demo", "watch"]
+    assert shared[0]["kind"] == "sleep" and shared[0]["sleepPattern"]["deepMinutes"] == 80
     assert "timezone" in err(call(live, token, "get_calendar", {**args, "timezone": "invalid-zone"})).lower()
 
 

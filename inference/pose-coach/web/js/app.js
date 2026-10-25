@@ -1,3 +1,4 @@
+import { hostAgent, accountConnections } from './host-agent.js';
 import { connectAppearance } from './embed-appearance.js';
 // Live coach page: camera (or a test clip in real time) -> MediaPipe pose -> exercise engines -> events.
 // web/js/auto.js counts sets per exercise: "Auto" lets it decide what is being done; an exercise named (in the picker,
@@ -43,10 +44,20 @@ $('exercise').value = 'auto';
 const QS = new URLSearchParams(location.search);
 const PARENT = embedded(location.search) ? parentOrigin(location.search) : null;
 const app = PARENT ? connect(window, PARENT) : null;
+const accountSession = app ? hostAgent(app) : null;
+let accountElevenLabs = false;
 if (embedded(location.search) && !PARENT) console.warn('pose coach: ?parent= must be a page on this machine (http://localhost:<port>); not embedded');
 if (app) {
   document.body.classList.add('embed');
   connectAppearance(window, app);
+  app.on('ai-connection', message => {
+    accountElevenLabs = message.elevenlabs === true;
+    void loadConnections();
+  });
+  for (const option of $('coachKind').options) {
+    if (['claude', 'chatgpt'].includes(option.value)) option.disabled = true;
+  }
+  $('coachKind').value = 'auto';
   app.on('start', m => {
     if (S.running || S.starting) return;
     if (m.exercise === 'auto' || EXERCISES[m.exercise]) $('exercise').value = m.exercise;
@@ -429,7 +440,7 @@ async function startEleven() {
   // voice the session is duplex: the user talks to it through the microphone (text only, the page speaks: no microphone).
   // Talk to coach is always duplex. The user's Mute stands for the next session: it starts without opening the microphone
   const listen = elevenListen();
-  const coach = new ElevenCoach({ agentId, textOnly: !listen, listen, muted: !!S.micMuted });
+  const coach = new ElevenCoach({ agentId, signedUrl: accountSession, textOnly: !listen, listen, muted: !!S.micMuted });
   // talking with the coach is activity too: the session is not ended for want of events in the middle of it
   const awake = () => { if (S.eleven === coach) { S.elevenLast = performance.now(); armIdle(); armTalkIdle(); } };
   if (S.elevenAsleep) log('ElevenLabs: reconnecting');
@@ -688,6 +699,7 @@ const SHORT = { eleven: 'ElevenLabs', claude: 'Claude', chatgpt: 'ChatGPT', none
  * timeout and keeps the answers about a minute; `fresh`, from Check again, asks it to check them again now).
  */
 async function readConnections(fresh = false) {
+  if (app) return accountConnections(accountElevenLabs);
   try {
     const r = await fetch(`/api/connections${fresh ? '?fresh=1' : ''}`, { cache: 'no-store' });
     return r.ok ? await r.json() : null;

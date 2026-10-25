@@ -20,7 +20,7 @@ from surrealdb.memory import MemoryAPIError
 from app.ai import AIError
 from app.assistant import COACH_SCHEMA, RECIPE_SCHEMA, ROUTINE_SCHEMA
 from app.auth import ClerkVerifier
-from app.deps import get_ai, get_ai_optional, get_memory, get_verifier
+from app.deps import get_coach_ai, get_ai, get_ai_optional, get_memory, get_verifier
 from app.main import app
 from app.memory import MemoryService
 from app.planner import CHANGE_SCHEMA, PROPOSAL_SCHEMA
@@ -203,6 +203,8 @@ def client(tmp_path, monkeypatch, memory_client, fake_ai):  # type: ignore[no-un
     app.dependency_overrides[get_memory] = lambda: service
     app.dependency_overrides[get_ai] = lambda: fake_ai
     app.dependency_overrides[get_ai_optional] = lambda: fake_ai
+    # Conversation/content tests use a stand-in connected provider. Connection tests remove this override.
+    app.dependency_overrides[get_coach_ai] = lambda: fake_ai
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

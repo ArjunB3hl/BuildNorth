@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { createRhythmApi } from '@/lib/rhythm';
 
 import type {
+  MonthlyReport, AIAccess, ElevenLabsConnection,
   CalendarEntry,
   CalendarInput,
   AcceptResult,
@@ -77,7 +78,7 @@ export class ApiError extends Error {
 }
 
 function friendlyHttpMessage(status: number, detail: string | undefined, path: string): string {
-  if (path === '/connections/claude' && detail && [400, 422, 429, 502, 503].includes(status)) return detail;
+  if (path.startsWith('/connections/') && detail && [400, 422, 429, 502, 503].includes(status)) return detail;
   const isAi = path.startsWith('/coach') || path.endsWith('/extract');
   // Planner errors carry a specific, user-facing explanation (what still works without AI, stale plans…).
   const isPlanner = path.startsWith('/planner') || path.startsWith('/plan/changes');
@@ -134,7 +135,7 @@ export function createApi(getToken: TokenGetter) {
       response = await fetch(`${API_URL}${path}`, {
         method,
         headers,
-        ...(path === '/connections/claude' ? { redirect: 'error' as const } : {}),
+        ...(path.startsWith('/connections/') ? { redirect: 'error' as const } : {}),
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
       });
@@ -235,6 +236,7 @@ export function createApi(getToken: TokenGetter) {
     },
 
     calendar: {
+      report: (month: string, timezone: string) => get<MonthlyReport>(`/calendar/report${q({ month, timezone })}`),
       list: (start: string, days: number, timezone: string) => get<CalendarEntry[]>(`/calendar${q({ start, days, timezone })}`),
       create: (body: CalendarInput & { clientKey: string }) => send<CalendarEntry>('POST', '/calendar', body),
       update: (id: string, body: CalendarInput) => send<CalendarEntry>('PUT', `/calendar/${id}`, body),
@@ -273,6 +275,11 @@ export function createApi(getToken: TokenGetter) {
       review: (end: string) => get<WeeklyReview>(`/review/week${q({ end })}`),
     },
     connections: {
+      access: () => get<AIAccess>('/connections/access'),
+      elevenlabs: () => get<ElevenLabsConnection>('/connections/elevenlabs'),
+      connectElevenLabs: (apiKey: string, agentId: string) => send<ElevenLabsConnection>('PUT', '/connections/elevenlabs', { apiKey, agentId }),
+      disconnectElevenLabs: () => send<void>('DELETE', '/connections/elevenlabs'),
+      elevenLabsSession: () => send<{ signedUrl: string }>('POST', '/connections/elevenlabs/session'),
       claude: () => get<ClaudeConnection>('/connections/claude'),
       connectClaude: (apiKey: string, model: string) => send<ClaudeConnection>('PUT', '/connections/claude', { apiKey, model }),
       disconnectClaude: () => send<void>('DELETE', '/connections/claude'),

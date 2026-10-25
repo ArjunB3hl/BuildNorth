@@ -5,6 +5,7 @@ import { Platform, Share } from 'react-native';
 
 import { Button, Notice, TextField } from '@/components/form';
 import { AssistantSetup } from '@/components/profile/assistant-setup';
+import { ElevenLabsKeyConnection } from '@/components/profile/elevenlabs-key';
 import { ClaudeKeyConnection } from '@/components/profile/claude-key';
 import { ActionRow, DestructiveButton, FormActions } from '@/components/profile/controls';
 import { Enter, SkeletonCard } from '@/components/motion';
@@ -57,6 +58,7 @@ export default function ConnectionsScreen() {
   return (
     <Screen aboveTabBar={false} refreshing={info.isRefetching} onRefresh={() => info.refetch()}>
       <ClaudeKeyConnection />
+      <ElevenLabsKeyConnection />
 
       {info.isPending ? <SkeletonCard lines={2} /> : null}
       {info.isError ? <ErrorState error={info.error} onRetry={() => info.refetch()} /> : null}

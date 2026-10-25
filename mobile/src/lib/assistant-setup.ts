@@ -18,6 +18,10 @@ export function secretTransportAllowed(value: string): boolean {
 
 export const ASSISTANT_SETUP = [
   {
+    name: 'ElevenLabs', url: 'https://elevenlabs.io/app/agents/integrations', action: 'Open ElevenLabs MCP setup',
+    steps: 'In ElevenLabs Agents, add an MCP server integration with your public Rhythm /mcp address. Use Streamable HTTP and an account connection token from Advanced below as the Authorization: Bearer header. Attach the server to your agent and review its allowed tools. Never put a shared token into a public agent: this connection grants access to the token owner’s data.',
+  },
+  {
     name: 'ChatGPT', url: 'https://chatgpt.com/plugins', action: 'Open ChatGPT setup',
     steps: 'Open Plugins → + → Add custom MCP server. Name it Rhythm, paste the address, and select OAuth. Create and install it, sign in with your Rhythm account, then select Rhythm in a new chat.',
   },

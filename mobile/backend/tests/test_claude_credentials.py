@@ -5,12 +5,18 @@ import pytest
 from fastapi import HTTPException
 
 from app.main import app
+from app.deps import get_coach_ai
 from app.models import ClaudeCredential
 from app.provider_credentials import personal_provider
 from conftest import ALICE, BOB, auth
 
 KEY = "sk-ant-api03-MADE-UP-DEMO-ONLY-0001"
 MODEL = "claude-opus-5-5"
+
+
+@pytest.fixture(autouse=True)
+def real_connection_dependencies(client):
+    app.dependency_overrides.pop(get_coach_ai, None)
 
 
 @pytest.fixture
@@ -76,7 +82,7 @@ def test_credential_owner_is_cryptographically_bound(client, verify):
         assert failure.value.status_code == 503
 
 
-def test_coach_uses_own_key_and_disconnect_restores_fallback(client, verify, monkeypatch, fake_ai):
+def test_coach_uses_own_key_and_disconnect_locks_coach(client, verify, monkeypatch, fake_ai):
     created = []
     def provider(key, model, timeout, *, base_url):
         assert base_url == "https://api.anthropic.com"
@@ -89,10 +95,10 @@ def test_coach_uses_own_key_and_disconnect_restores_fallback(client, verify, mon
     assert response.status_code == 200, response.text
     assert created == [(KEY, MODEL)]
     assert KEY not in response.text
-    assert client.post("/coach/messages", headers=auth(BOB), json={"content": "Suggest dinner."}).status_code == 200
+    assert client.post("/coach/messages", headers=auth(BOB), json={"content": "Suggest dinner."}).status_code == 403
     assert len(created) == 1
     client.delete("/connections/claude", headers=auth())
-    assert client.post("/coach/messages", headers=auth(), json={"content": "Suggest dinner."}).status_code == 200
+    assert client.post("/coach/messages", headers=auth(), json={"content": "Suggest dinner."}).status_code == 403
     assert len(created) == 1
 
 

@@ -12,8 +12,8 @@ export function AssistantSetup({ url }: { url: string }) {
   const [message, setMessage] = useState('');
   const publicAddress = isPublicConnectorUrl(url);
   return <>
-    <SectionCard title="Your assistants, your Rhythm" description="Use your own ChatGPT or Claude account to work with your profile, Calendar, meals and workouts. Review proposed changes in Rhythm before they are applied.">
-      {!publicAddress ? <Notice tone="info">This preview runs locally. ChatGPT and Claude can connect once Rhythm has a public HTTPS address. You can use the Claude API-key demo on this page now.</Notice> :
+    <SectionCard title="Your assistants, your Rhythm" description="Use your own ChatGPT, Claude or ElevenLabs account to work with your profile, Calendar, meals and workouts. Review proposed changes in Rhythm before they are applied.">
+      {!publicAddress ? <Notice tone="info">This preview runs locally. External assistants can connect once Rhythm has a public HTTPS address. You can use the Claude or ElevenLabs API-key demo on this page now.</Notice> :
         <Notice tone="info">A public address is configured. Complete the connection in your assistant to verify it works; opening settings alone does not connect it.</Notice>}
       <CodeBox value={url} accessibilityLabel="Rhythm connector address" />
       <ActionRow><Button title="Copy connector address" size="small" variant="secondary" onPress={() => {

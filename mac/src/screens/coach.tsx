@@ -61,6 +61,12 @@ export function CoachScreen() {
       ],
     );
 
+  if (!connected) return <View style={styles.connectionGate}>
+    <PageHeader title="Connect your coach first" />
+    <ThemedText>Verify a Claude API key in AI connections to unlock this Mac’s demo Coach. ElevenLabs and account assistants are available through the website.</ThemedText>
+    <Button title="Open AI connections" onPress={() => nav.go('profile', { name: 'connections' })} />
+  </View>;
+
   return (
     <View style={[styles.fill, { backgroundColor: theme.background }]}>
       <FlatList
@@ -275,6 +281,7 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 }
 
 const styles = StyleSheet.create({
+  connectionGate: { padding: 28, gap: 16 },
   fill: { flex: 1 },
   start: { alignItems: 'flex-start' },
   list: {

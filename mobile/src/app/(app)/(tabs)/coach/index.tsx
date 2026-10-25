@@ -1,9 +1,12 @@
+import { AIConnectionGate } from '@/components/ai-connection-gate';
+import { ElevenLabsChat } from '@/components/coach/elevenlabs-chat';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useIsFocused, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -34,6 +37,19 @@ import type { CoachMessage } from '@/lib/types';
 const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
+  const focused = useIsFocused();
+  return focused ? <AIConnectionGate>{access => <ConnectedCoach claude={access.claude} elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
+}
+
+function ConnectedCoach({ claude, elevenlabs }: { claude: boolean; elevenlabs: boolean }) {
+  const [voice, setVoice] = useState(!claude);
+  return <View style={{ flex: 1 }}>
+    {claude && elevenlabs ? <View style={{ padding: 12 }}><Button title={voice ? 'Switch to Claude chat' : 'Switch to ElevenLabs agent'} variant="secondary" onPress={() => setVoice(!voice)} /></View> : null}
+    {elevenlabs && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}><ElevenLabsChat /></ScrollView> : <ClaudeCoach />}
+  </View>;
+}
+
+function ClaudeCoach() {
   const router = useRouter();
   const api = useApi();
   const theme = useTheme();

@@ -33,7 +33,7 @@ Only `source` and `replay_speed` settings are retained from a configured coach U
 origin. Private recording IDs belong only in ignored local configuration.
 
 Identity comes from the host's existing verified Clerk session. No user ID, Clerk token, routine ID or plan-item ID
-is sent to the frame. Both sides check the other window and its exact origin. The frame never calls the backend.
+is sent to the frame. Both sides check the other window and its exact origin. The frame never calls the backend. The host can supply a short-lived ElevenLabs signed conversation URL over the exact-origin message channel after an authenticated server request; no API key or Clerk token is exposed.
 Pose live queries are excluded from persisted query caches; the recovery record contains counted sets, not video
 or landmark frames. Models, licensed clips, recordings, screenshots and connection credentials remain ignored.
 
@@ -81,3 +81,15 @@ test. No global system appearance setting is changed.
 Camera and microphone permissions, actual live speech, and production HTTPS hosting require separate live checks.
 The private development branch and its history must never be pushed. Ask the user before pushing or opening a PR;
 leave the merge to them.
+
+
+### Account connection gate
+
+The embedded page now uses the signed-in Rhythm account's verified ElevenLabs connection. It never borrows this
+computer's Claude/Codex CLI sign-in or standalone agent configuration. With a Claude key alone, the camera counts
+and uses engine cues; ElevenLabs is required for the embedded agent voice. The host sends `ai-connection` capability
+state. On Start, `elevenlabs-session-request {requestId}` requests a fresh authorization, and the matching
+`elevenlabs-session {requestId, signedUrl}` response stays in memory. Requests are single-flight, time out, and accept
+only ElevenLabs WSS URLs. Existing session/dialogue serialization remains in use. Standalone local mode is unchanged.
+The website's account gate mounts no iframe until a verified connection is available; revocation or failed rechecks
+unmount the frame. Camera and browser voice chat share the same Web Lock where supported.
