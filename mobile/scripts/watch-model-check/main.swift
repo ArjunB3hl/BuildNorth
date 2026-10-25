@@ -57,17 +57,17 @@ func same(_ a: [String: Any], _ b: [String: Any]) -> Bool {
 // MARK: - Request bodies (contract §2: input models are extra="forbid", missing metrics are null, never 0)
 
 let healthDayKeys: Set<String> = [
-  "sleepMinutes", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts", "complete",
+  "sleepMinutes", "sleepPattern", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal", "workouts", "complete",
 ]
 let workoutKeys: Set<String> = [
   "externalId", "activityType", "startedAt", "durationMinutes", "energyKcal", "distanceMeters",
-  "averageHeartRateBpm",
+  "averageHeartRateBpm", "minHeartRateBpm", "maxHeartRateBpm",
 ]
 
 section("HealthDayIn / HealthWorkout encode the exact contract keys with explicit nulls") {
   let empty = try object(HealthDayIn(workouts: [], complete: false))
   check(Set(empty.keys) == healthDayKeys, "HealthDayIn keys: \(empty.keys.sorted())")
-  for key in ["sleepMinutes", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal"] {
+  for key in ["sleepMinutes", "sleepPattern", "restingHeartRateBpm", "hrvSdnnMs", "steps", "activeEnergyKcal"] {
     check(isNull(empty[key]), "\(key) nil must encode as null, got \(String(describing: empty[key]))")
   }
   check((empty["workouts"] as? [Any])?.isEmpty == true, "no workouts must encode as []")
@@ -79,7 +79,7 @@ section("HealthDayIn / HealthWorkout encode the exact contract keys with explici
     averageHeartRateBpm: nil)
   let workout = try object(bare)
   check(Set(workout.keys) == workoutKeys, "HealthWorkout keys: \(workout.keys.sorted())")
-  for key in ["energyKcal", "distanceMeters", "averageHeartRateBpm"] {
+  for key in ["energyKcal", "distanceMeters", "averageHeartRateBpm", "minHeartRateBpm", "maxHeartRateBpm"] {
     check(isNull(workout[key]), "workout \(key) nil must encode as null")
   }
   check(workout["durationMinutes"] as? Double == 45, "durationMinutes")
@@ -87,9 +87,9 @@ section("HealthDayIn / HealthWorkout encode the exact contract keys with explici
   // The spec's example body, field for field.
   let spec = try parse(
     """
-    {"sleepMinutes": 412, "restingHeartRateBpm": 58, "hrvSdnnMs": 42.5, "steps": 8412, "activeEnergyKcal": 510.2,
+    {"sleepMinutes": 412, "sleepPattern": null, "restingHeartRateBpm": 58, "hrvSdnnMs": 42.5, "steps": 8412, "activeEnergyKcal": 510.2,
      "workouts": [{"externalId": "HK-UUID", "activityType": "running", "startedAt": "2026-10-20T07:12:00Z",
-                   "durationMinutes": 32.0, "energyKcal": 310.0, "distanceMeters": 5100.0, "averageHeartRateBpm": 148.0}],
+                   "durationMinutes": 32.0, "energyKcal": 310.0, "distanceMeters": 5100.0, "averageHeartRateBpm": 148.0, "minHeartRateBpm": null, "maxHeartRateBpm": null}],
      "complete": true}
     """)
   let day = HealthDayIn(

@@ -26,6 +26,7 @@ export function ClaudeKeyConnection() {
     try {
       await api.connections.connectClaude(secret, model.trim() || status.data?.model || 'claude-opus-5-5');
       await queries.invalidateQueries({ queryKey: ['claude-connection'] });
+      await queries.invalidateQueries({ queryKey: ['ai-access'] });
       setMessage('Key verified. Claude is ready for Coach and saved-video summaries.');
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
@@ -35,7 +36,8 @@ export function ClaudeKeyConnection() {
     try {
       await api.connections.disconnectClaude();
       await queries.invalidateQueries({ queryKey: ['claude-connection'] });
-      setMessage('Your key was removed. Coach and video summaries will use the server’s default provider, if available.');
+      await queries.invalidateQueries({ queryKey: ['ai-access'] });
+      setMessage('Your key was removed. Text Coach requires a new connection.');
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }

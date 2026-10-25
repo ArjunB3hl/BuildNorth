@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ActivitySession, CalendarEntry, HealthDay, PlanItem, utcnow
-from app.schemas import ApiModel, InputModel, LocalDate, Text120
+from app.schemas import ApiModel, InputModel, LocalDate, Text120, HealthWorkoutOut, SleepPattern
 
 
 class EntryIn(InputModel):
@@ -38,7 +38,7 @@ class EntryCreate(EntryIn):
 
 class EntryOut(ApiModel):
     id: str
-    kind: Literal["meal", "activity"]
+    kind: Literal["meal", "activity", "sleep"]
     title: str
     occurred_at: datetime
     local_date: str
@@ -49,6 +49,9 @@ class EntryOut(ApiModel):
     time_estimated: bool = False
     editable: bool = False
     session_id: str | None = None
+    workout: HealthWorkoutOut | None = None
+    sleep_pattern: SleepPattern | None = None
+    partial: bool = False
 
 
 class DemoIn(InputModel):
@@ -97,18 +100,32 @@ def feed(db: Session, user_id: str, start: str, days: int, timezone: str) -> lis
             local_date=at.date().isoformat(), local_time=at.strftime("%H:%M"), source="plan", time_estimated=True))
     # Watch uploads are already validated and user-scoped. Display their measured workout times.
     # Keep these separate from app sessions, just as HealthDay does in progress reporting.
+    seen_workouts: set[str] = set()
     for health in db.scalars(select(HealthDay).where(HealthDay.user_id == user_id,
                          HealthDay.date >= (day - timedelta(days=2)).isoformat(),
-                         HealthDay.date <= (day + timedelta(days=days + 2)).isoformat())):
+                         HealthDay.date <= (day + timedelta(days=days + 2)).isoformat()).order_by(HealthDay.updated_at.desc())):
+        if day.isoformat() <= health.date < (day + timedelta(days=days)).isoformat() and health.sleep_minutes is not None:
+            pattern = SleepPattern.model_validate(health.sleep_pattern) if health.sleep_pattern else None
+            # Sleep belongs to the Watch's night-ending date, even when viewing in another timezone.
+            at = pattern.ended_at if pattern and pattern.ended_at else datetime.combine(date.fromisoformat(health.date), time(), tz)
+            result.append(EntryOut(id=f"sleep:{health.date}", kind="sleep", title="Sleep · Apple Watch",
+                occurred_at=at, local_date=health.date, local_time=at.astimezone(tz).strftime("%H:%M") if pattern and pattern.ended_at else "",
+                duration_minutes=health.sleep_minutes, source="watch", sleep_pattern=pattern,
+                time_estimated=not bool(pattern and pattern.ended_at), partial=not health.complete))
         for workout in health.workouts:
             try:
                 at = datetime.fromisoformat(workout["started_at"].replace("Z", "+00:00")).astimezone(tz)
                 if not low <= at < high:
                     continue
+                if workout["external_id"] in seen_workouts:
+                    continue
+                seen_workouts.add(workout["external_id"])
                 result.append(EntryOut(id=f"watch:{workout['external_id']}", kind="activity",
                     title=workout["activity_type"].replace("_", " ").capitalize(), occurred_at=at,
                     local_date=at.date().isoformat(), local_time=at.strftime("%H:%M"), source="watch",
-                    duration_minutes=max(1, round(workout["duration_minutes"]))))
+                    duration_minutes=max(1, round(workout["duration_minutes"])), partial=not health.complete,
+                    workout=HealthWorkoutOut.model_validate({"energy_kcal": None, "distance_meters": None,
+                        "average_heart_rate_bpm": None, **workout})))
             except (KeyError, ValueError, TypeError):
                 continue
     return sorted(result, key=lambda r: (r.occurred_at, r.id))

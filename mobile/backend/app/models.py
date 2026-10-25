@@ -275,6 +275,7 @@ class HealthDay(Timestamped, Base):
     user_id: Mapped[str] = mapped_column(String(64), index=True)
     date: Mapped[str] = mapped_column(String(10))
     sleep_minutes: Mapped[int | None] = mapped_column(Integer)  # asleep, for the night that ended on this date
+    sleep_pattern: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     resting_heart_rate_bpm: Mapped[int | None] = mapped_column(Integer)
     hrv_sdnn_ms: Mapped[float | None] = mapped_column(Float)
     steps: Mapped[int | None] = mapped_column(Integer)
@@ -519,6 +520,15 @@ class ClaudeCredential(Timestamped, Base):
     model: Mapped[str] = mapped_column(String(100))
 
 
+class ElevenLabsCredential(Timestamped, Base):
+    __tablename__ = "elevenlabs_credentials"
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ciphertext: Mapped[str] = mapped_column(Text)
+    hint: Mapped[str] = mapped_column(String(4))
+    agent_id: Mapped[str] = mapped_column(String(100))
+    agent_name: Mapped[str] = mapped_column(String(120))
+
+
 class CalendarEntry(Timestamped, Base):
     """A completed meal or workout. Demo entries are explicitly labelled and user-owned."""
 
@@ -538,6 +548,7 @@ class CalendarEntry(Timestamped, Base):
 
 # Tables holding per-user rows, in a safe deletion order (children before parents).
 USER_TABLES: tuple[type[Base], ...] = (
+    ElevenLabsCredential,
     ClaudeCredential,
     RhythmSignal,
     RhythmBrowserRequest,

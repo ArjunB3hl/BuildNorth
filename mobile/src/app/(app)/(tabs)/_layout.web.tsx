@@ -1,3 +1,5 @@
+import { useDownloadDevice } from '@/hooks/use-download-device';
+import { deviceNames } from '@/lib/device-download';
 import { Link, Slot, usePathname, type Href } from 'expo-router';
 import { useState } from 'react';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
@@ -25,12 +27,15 @@ const rhythm: NavItem[] = [
   { href: '/profile/videos', label: 'Content library', icon: { ios: 'play.rectangle.on.rectangle', android: 'video_library', web: 'video_library' }, active: (p) => p.startsWith('/profile/videos') },
   { href: '/profile/interests', label: 'Interests & sharing', icon: { ios: 'slider.horizontal.3', android: 'tune', web: 'tune' }, active: (p) => p.startsWith('/profile/interests') },
 ];
+const download: NavItem = { href: '/profile/downloads', label: 'Get Rhythm', icon: { ios: 'arrow.down.circle', android: 'download', web: 'download' }, active: p => p === '/profile/downloads' };
 const profile: NavItem = {
   href: '/profile', label: 'Profile', icon: { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' },
   active: (p) => p === '/profile' || (p.startsWith('/profile/') && !rhythmPaths.some((r) => p.startsWith(r))),
 };
 
 export default function WebLayout() {
+  const device = useDownloadDevice();
+  const downloadItem = { ...download, label: device === 'other' ? 'Get Rhythm' : `Download for ${deviceNames[device]}` };
   const path = usePathname();
   const theme = useTheme();
   const wide = useWindowDimensions().width >= 900;
@@ -41,7 +46,7 @@ export default function WebLayout() {
         <View style={[styles.topBar, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
           <View style={styles.brandTop}><Wordmark /></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topNav}>
-            {[...main, ...rhythm, profile].map((item) => <NavLink key={item.label} item={item} active={item.active(path)} compact />)}
+            {[...main, ...rhythm, downloadItem, profile].map((item) => <NavLink key={item.label} item={item} active={item.active(path)} compact />)}
           </ScrollView>
         </View>
         <View style={styles.fill}><Slot /></View>
@@ -61,6 +66,7 @@ export default function WebLayout() {
           {rhythm.map((item) => <NavLink key={item.label} item={item} active={item.active(path)} />)}
         </View>
         <View style={[styles.group, styles.bottom]}>
+          <NavLink item={downloadItem} active={downloadItem.active(path)} />
           <NavLink item={profile} active={profile.active(path)} />
         </View>
       </View>

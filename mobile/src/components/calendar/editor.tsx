@@ -16,7 +16,7 @@ export function CalendarEditor({ entry, day, onClose }: { entry?: CalendarEntry;
   const cache = useQueryClient();
   const [key] = useState(newKey);
   const [title, setTitle] = useState(entry?.title ?? '');
-  const [kind, setKind] = useState<'meal' | 'activity'>(entry?.kind ?? 'meal');
+  const [kind, setKind] = useState<'meal' | 'activity'>(entry?.kind === 'activity' ? 'activity' : 'meal');
   const [date, setDate] = useState(entry?.localDate ?? day);
   const [time, setTime] = useState(
     entry?.localTime ??

@@ -123,7 +123,7 @@ AI = Annotated[AIProvider, Depends(get_ai)]
 OptionalAI = Annotated[AIProvider | None, Depends(get_ai_optional)]
 
 
-def get_coach_ai(request: Request, user: CurrentUser, db: Db, fallback: OptionalAI) -> Iterator[AIProvider]:
+def get_coach_ai(request: Request, user: CurrentUser, db: Db) -> Iterator[AIProvider]:
     row = db.get(ClaudeCredential, user.user_id)
     if row:
         provider = personal_provider(getattr(request.app.state, "credential_cipher", None), row,
@@ -132,10 +132,8 @@ def get_coach_ai(request: Request, user: CurrentUser, db: Db, fallback: Optional
             yield provider
         finally:
             provider._client.close()
-    elif fallback is not None:
-        yield fallback
     else:
-        raise HTTPException(503, "Connect a Claude API key in Profile → AI connections to use Coach.")
+        raise HTTPException(403, "Connect Claude in AI connections for text Coach, or use your linked ElevenLabs agent.")
 
 
 CoachAI = Annotated[AIProvider, Depends(get_coach_ai)]

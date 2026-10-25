@@ -124,7 +124,7 @@ API: `GET /plan`, `POST /planner/proposals`, `POST /planner/accept`, `POST /plan
 The backend also serves an MCP server at **`/mcp`** (Streamable HTTP, official Python MCP SDK `mcp==2.3.0`).
 Assistants bring their **own** models; no model runs in the app or the MCP server, and Ollama is not needed for
 any MCP tool. The mobile app keeps talking to the backend directly, and both work on the same records. Connecting
-ChatGPT or Claude here does **not** change the Coach tab, which still uses `AI_PROVIDER`.
+External MCP connections do **not** supply inference to the built-in Coach. Text Coach now requires a verified personal Claude key; a verified ElevenLabs agent enables browser voice/text conversations. Unlinked accounts cannot mount Coach or the camera view.
 
 | Tool | What it does |
 |---|---|
@@ -693,3 +693,42 @@ backend without changing core screens.
 
 Local hardware checked: Apple M3, 16 GB RAM. Local models available through Ollama: gemma3:4b (vision-capable),
 gemma3n, qwen3 (0.6b–4b), mistral. No paid GPU services are provisioned.
+
+
+## Device downloads, ElevenLabs and monthly health reports
+
+The website navigation detects Windows, macOS, Android and iPhone/iPad locally and opens **Download for …**.
+The download screen has a manual platform choice and browser shortcut instructions while builds are unavailable.
+Set `EXPO_PUBLIC_DOWNLOAD_WINDOWS_URL`, `EXPO_PUBLIC_DOWNLOAD_MAC_URL`, `EXPO_PUBLIC_DOWNLOAD_ANDROID_URL` and
+`EXPO_PUBLIC_DOWNLOAD_IPHONE_URL` to real HTTPS release/store links when ready. Blank or invalid URLs offer no
+fake download. `EXPO_PUBLIC_WEB_APP_URL` is the public HTTPS website used by phone voice-Coach handoff.
+
+**Profile → AI connections** accepts an ElevenLabs API key and agent ID. The backend checks agent access and
+signed-session permission without starting a paid conversation, then encrypts the account-owned key with the same
+storage used for Claude. Only `api.elevenlabs.io` receives that key. The client receives a short-lived signed URL
+on an authenticated POST; it is never cached or persisted. Voice sessions start only on an explicit Start action.
+ElevenLabs account limits, enabled client events, allowed domains and agent tool configuration still apply.
+The agent's Rhythm MCP connection is separate: use a private, single-account agent with a scoped connection token;
+never put a user's bearer token into a publicly shared agent. The app does not automatically provision or change
+an ElevenLabs workspace. Disconnect and account erasure remove stored keys.
+
+Coach and embedded camera check `/connections/access` before mounting and periodically thereafter. Text messages
+also require the caller's own Claude credential on the backend, with no server-provider fallback. A setup link or
+an unused MCP token does not unlock built-in inference. External ChatGPT/Claude usage remains inside those assistants.
+The website supports ElevenLabs text/voice; phone and Mac offer website handoff, with no native voice SDK in this demo.
+Mac remains a local demo and requires its own verified, memory-only Claude key for local Coach.
+
+Calendar projects Apple Watch workouts and sleep from `health_days` without writing duplicate journal records.
+Watch uploads now include optional sleep timing/stage durations and per-workout minimum/maximum heart rate alongside
+average heart rate. Deploy backend migration **0013** before installing the updated Watch build. Older Watch uploads
+remain accepted; old records cannot acquire stage/range data until a newer Watch sync supplies it. Sleep stays on the
+Watch's night-ending date. Stage totals can overlap across HealthKit sources and are displayed separately.
+
+The month-end calendar marker and **Monthly health report** summarize logged meals, app workouts/sets, Watch workouts
+by type, sleep, available daily health metrics, check-ins and plan completion. `/calendar/report?month=YYYY-MM&timezone=…`
+recomputes owned data on demand, so delayed uploads appear automatically. It is marked in progress until the month
+ends in that timezone; no external scheduler or AI call is involved. Watch averages exclude partial days. Demo journal
+entries are excluded, missing readings stay missing, and app/Watch workout totals stay separate because they may overlap.
+The web report downloads as JSON; web and phone can copy it. Health-rich calendar/report queries are excluded from
+device query persistence. Viewing your own report does not enable sharing health data with AI. Mac shows only its
+local demo report and explicitly marks Watch metrics unavailable.

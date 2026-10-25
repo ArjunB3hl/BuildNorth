@@ -38,6 +38,8 @@ struct HealthWorkout: Codable, Equatable, Sendable {
   let energyKcal: Double?
   let distanceMeters: Double?
   let averageHeartRateBpm: Double?
+  var minHeartRateBpm: Double? = nil
+  var maxHeartRateBpm: Double? = nil
 
   // Missing metrics are sent as null, never left out or replaced by 0.
   func encode(to encoder: Encoder) throws {
@@ -49,12 +51,25 @@ struct HealthWorkout: Codable, Equatable, Sendable {
     try c.encode(energyKcal, forKey: .energyKcal)
     try c.encode(distanceMeters, forKey: .distanceMeters)
     try c.encode(averageHeartRateBpm, forKey: .averageHeartRateBpm)
+    try c.encode(minHeartRateBpm, forKey: .minHeartRateBpm)
+    try c.encode(maxHeartRateBpm, forKey: .maxHeartRateBpm)
   }
+}
+
+struct SleepPattern: Codable, Equatable, Sendable {
+  var startedAt: String?
+  var endedAt: String?
+  var coreMinutes: Int?
+  var deepMinutes: Int?
+  var remMinutes: Int?
+  var awakeMinutes: Int?
+  var unspecifiedMinutes: Int?
 }
 
 /// Body of `PUT /watch/health/{date}`.
 struct HealthDayIn: Encodable, Equatable, Sendable {
   var sleepMinutes: Int?
+  var sleepPattern: SleepPattern? = nil
   var restingHeartRateBpm: Int?
   var hrvSdnnMs: Double?
   var steps: Int?
@@ -68,12 +83,13 @@ struct HealthDayIn: Encodable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case sleepMinutes, restingHeartRateBpm, hrvSdnnMs, steps, activeEnergyKcal, workouts, complete
+    case sleepMinutes, sleepPattern, restingHeartRateBpm, hrvSdnnMs, steps, activeEnergyKcal, workouts, complete
   }
 
   func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(sleepMinutes, forKey: .sleepMinutes)
+    try c.encode(sleepPattern, forKey: .sleepPattern)
     try c.encode(restingHeartRateBpm, forKey: .restingHeartRateBpm)
     try c.encode(hrvSdnnMs, forKey: .hrvSdnnMs)
     try c.encode(steps, forKey: .steps)

@@ -178,8 +178,9 @@ export function echoOf(transcript, cue) {
 }
 
 export class ElevenCoach {
-  constructor({ agentId, llm = null, textOnly = false, listen = false, muted = false }) {
+  constructor({ agentId, signedUrl = null, llm = null, textOnly = false, listen = false, muted = false }) {
     Object.assign(this, { agentId, llm, textOnly, listen: listen && !textOnly });
+    this.signedUrl = signedUrl;
     // a message: {marks, event, events, after (the last reply id seen when it went), replyId (its reply's, once one
     // came), late, text, done, user (the user's words its reply answers too)}; an answer to the user's words alone has
     // own: true (and no event)
@@ -219,13 +220,14 @@ export class ElevenCoach {
 
   async connect(onDisconnect, keepAlive) {
     const { Conversation } = await loadClient();
+    const credentials = this.signedUrl ? { signedUrl: await this.signedUrl() } : { agentId: this.agentId };
     if (this.stopped) return null;
     const clientTools = Object.fromEntries(Object.entries(this.tools).map(([name, run]) => [name, params => this.tool(name, run, params)]));
     // muted by the user: the session starts with a silent input, so the microphone is not even opened and nothing of it
     // goes out (the client streams its input from the moment it is set up, before a mute could be applied)
     const hear = this.listen && !this.userMuted;
     const { result: conversation, refused } = await withMic(hear, () => Conversation.startSession({
-      agentId: this.agentId,
+      ...credentials,
       textOnly: this.textOnly,
       // WebSocket, voice too: a WebRTC connection carries no Origin header, and the agent only answers this machine's pages
       connectionType: 'websocket',

@@ -1,3 +1,5 @@
+import { MonthlyHealthReport } from '@/components/calendar/monthly-report';
+import { WatchEntryDetail } from '@/components/calendar/health-detail';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -15,6 +17,8 @@ import type { CalendarEntry } from '@/lib/types';
 
 const mealColor = '#33B994';
 const movementColor = '#629EFF';
+const sleepColor = '#A68BFA';
+const eventColor = (kind: string) => kind === 'meal' ? mealColor : kind === 'sleep' ? sleepColor : movementColor;
 const sourceName = {
   manual: 'You logged',
   coach: 'Coach chat',
@@ -37,7 +41,7 @@ export default function CalendarScreen() {
   const [selected, setSelected] = useState(today);
   const [month, setMonth] = useState(today);
   const [view, setView] = useState<'month' | 'week'>(() => (width < 680 ? 'week' : 'month'));
-  const [filter, setFilter] = useState<'all' | 'meal' | 'activity'>('all');
+  const [filter, setFilter] = useState<'all' | 'meal' | 'activity' | 'sleep'>('all');
   const [editor, setEditor] = useState<CalendarEntry | 'new' | null>(null);
   const timezone = calendarTimezone();
   const dates =
@@ -89,7 +93,7 @@ export default function CalendarScreen() {
             YOUR CALENDAR
           </Text>
           <Text style={[s.title, !roomy && { fontSize: 30, lineHeight: 37 }]}>Your days, in rhythm.</Text>
-          <Text themeColor="textSecondary">Everything you eat. Every way you move. One place.</Text>
+          <Text themeColor="textSecondary">Meals, movement, sleep. Your day, all together.</Text>
         </View>
         <Button title="＋ Log an entry" onPress={() => setEditor('new')} />
       </View>
@@ -111,7 +115,7 @@ export default function CalendarScreen() {
           <Summary
             label="CONNECTED TO YOU"
             value="Auto-saved"
-            detail="from Coach & recorded workouts"
+            detail="from Coach, camera & Apple Watch"
             color="#B49AED"
           />
         ) : null}
@@ -142,7 +146,7 @@ export default function CalendarScreen() {
           </View>
           <View style={s.toolbar}>
             <View style={s.filters}>
-              {(['all', 'meal', 'activity'] as const).map((f) => (
+              {(['all', 'meal', 'activity', 'sleep'] as const).map((f) => (
                 <Pressable
                   key={f}
                   accessibilityRole="button"
@@ -159,10 +163,10 @@ export default function CalendarScreen() {
                   <View
                     style={[
                       s.dot,
-                      { backgroundColor: f === 'all' ? Accent : f === 'meal' ? mealColor : movementColor },
+                      { backgroundColor: f === 'all' ? Accent : eventColor(f) },
                     ]}
                   />
-                  <Text type="small">{f === 'all' ? 'All' : f === 'meal' ? 'Meals' : 'Movement'}</Text>
+                  <Text type="small">{f === 'all' ? 'All' : f === 'meal' ? 'Meals' : f === 'sleep' ? 'Sleep' : 'Move'}</Text>
                 </Pressable>
               ))}
             </View>
@@ -195,6 +199,7 @@ export default function CalendarScreen() {
             {dates.map((day) => {
               const items = entries.filter((e) => e.localDate === day);
               const active = day === selected;
+              const monthEnd = addDays(day, 1).slice(0, 7) !== day.slice(0, 7);
               const inMonth = day.slice(0, 7) === month.slice(0, 7);
               return (
                 <Pressable
@@ -225,9 +230,9 @@ export default function CalendarScreen() {
                     items.slice(0, 2).map((e) => (
                       <View
                         key={e.id}
-                        style={[s.miniEntry, { backgroundColor: `${e.kind === 'meal' ? mealColor : movementColor}18` }]}
+                        style={[s.miniEntry, { backgroundColor: `${eventColor(e.kind)}18` }]}
                       >
-                        <View style={[s.miniDot, { backgroundColor: e.kind === 'meal' ? mealColor : movementColor }]} />
+                        <View style={[s.miniDot, { backgroundColor: eventColor(e.kind) }]} />
                         <Text numberOfLines={1} style={s.miniText}>
                           {e.title}
                         </Text>
@@ -238,11 +243,12 @@ export default function CalendarScreen() {
                       {items.slice(0, 4).map((e) => (
                         <View
                           key={e.id}
-                          style={[s.miniDot, { backgroundColor: e.kind === 'meal' ? mealColor : movementColor }]}
+                          style={[s.miniDot, { backgroundColor: eventColor(e.kind) }]}
                         />
                       ))}
                     </View>
                   )}
+                  {monthEnd ? <Text style={[s.miniText, { color: sleepColor }]}>{roomy ? '◈ Report' : '◈'}</Text> : null}
                   {roomy && items.length > 2 ? <Text style={s.more}>+{items.length - 2} more</Text> : null}
                 </Pressable>
               );
@@ -283,7 +289,7 @@ export default function CalendarScreen() {
                   <Pressable
                     key={entry.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${entry.timeEstimated && entry.source === 'coach' ? 'Time not specified' : clockLabel(entry.localTime)}, ${entry.title}${
+                    accessibilityLabel={`${entry.timeEstimated && entry.source === 'coach' ? 'Time not specified' : (entry.localTime ? clockLabel(entry.localTime) : 'Night ending today')}, ${entry.title}${
                       entry.source === 'demo' ? ', demo' : ''
                     }`}
                     onPress={() =>
@@ -291,29 +297,30 @@ export default function CalendarScreen() {
                         ? setEditor(entry)
                         : entry.sessionId
                         ? router.push(`/activity/session/${entry.sessionId}`)
-                        : setEditor(entry)
+                        : undefined
                     }
                     style={s.event}
                   >
                     <View style={s.rail}>
                       <View
-                        style={[s.eventDot, { backgroundColor: entry.kind === 'meal' ? mealColor : movementColor }]}
+                        style={[s.eventDot, { backgroundColor: eventColor(entry.kind) }]}
                       />
                       {i < dayEntries.length - 1 ? <View style={[s.line, { backgroundColor: theme.border }]} /> : null}
                     </View>
                     <View style={{ flex: 1, gap: 5, paddingBottom: 18 }}>
                       <View style={s.eventMeta}>
                         <Text type="smallBold" themeColor="textSecondary">
-                          {entry.timeEstimated && entry.source === 'coach' ? 'Time not specified' : clockLabel(entry.localTime)}
-                          {entry.timeEstimated && entry.source !== 'coach' ? ' · logged' : ''}
+                          {entry.timeEstimated && entry.source === 'coach' ? 'Time not specified' : (entry.localTime ? clockLabel(entry.localTime) : 'Night ending today')}
+                          {entry.timeEstimated && entry.source !== 'coach' && entry.kind !== 'sleep' ? ' · logged' : ''}
                         </Text>
                         {entry.source === 'demo' ? <Text style={s.demoBadge}>DEMO</Text> : null}
                       </View>
                       <Text style={{ fontSize: 17, fontWeight: '600', lineHeight: 24 }}>{entry.title}</Text>
                       <Text type="small" themeColor="textSecondary">
-                        {entry.kind === 'meal' ? 'Meal' : 'Movement'}
+                        {entry.kind === 'meal' ? 'Meal' : entry.kind === 'sleep' ? 'Sleep' : 'Movement'}
                         {entry.durationMinutes ? ` · ${entry.durationMinutes} min` : ''} · {sourceName[entry.source]}
                       </Text>
+                      {entry.source === 'watch' ? <WatchEntryDetail entry={entry} /> : null}
                       {entry.notes && entry.source !== 'demo' ? (
                         <Text type="small" themeColor="textSecondary" numberOfLines={2}>
                           {entry.notes}
@@ -364,6 +371,7 @@ export default function CalendarScreen() {
           </View>
         </View>
       </View>
+      <MonthlyHealthReport month={month} selected={selected} />
       <View style={s.bottom}>
         <View style={{ gap: 4 }}>
           <Text type="smallBold">Your kitchen & your training</Text>
@@ -431,7 +439,7 @@ const s = StyleSheet.create({
   monthTitle: { fontSize: 23, fontWeight: '600', lineHeight: 30, letterSpacing: -0.4 },
   toggle: { flexDirection: 'row', borderRadius: 10, padding: 3 },
   toggleItem: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
-  filters: { flexDirection: 'row', gap: 6 },
+  filters: { flexWrap: 'wrap', flexDirection: 'row', gap: 6 },
   filter: {
     flexDirection: 'row',
     gap: 6,

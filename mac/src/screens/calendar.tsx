@@ -34,6 +34,7 @@ export function CalendarScreen() {
   const selectedEntries = entries
     .filter(e => e.date === selected)
     .sort((a, b) => a.time.localeCompare(b.time));
+  const reportEntries = state.calendarEntries.filter(e => e.date.slice(0, 7) === month.slice(0, 7));
   const move = (by: number) => {
     const [y, m] = month.split('-').map(Number);
     const d = localDate(new Date(y, m - 1 + by, 1));
@@ -236,6 +237,13 @@ export function CalendarScreen() {
             A little space for your day. Add a meal or a workout.
           </Text>
         )}
+      </Card>
+      <Card style={s.cardGap}>
+        <Text type="subtitle">Monthly report · {month.slice(0, 7)}</Text>
+        <Notice tone="info">Local demo records only. This is not your measured health report.</Notice>
+        <Text>{reportEntries.filter(e => e.kind === 'meal').length} meals · {reportEntries.filter(e => e.kind === 'activity').length} activities · {reportEntries.filter(e => e.kind === 'activity').reduce((n, e) => n + (e.minutes || 0), 0)} activity minutes.</Text>
+        <Text type="small" themeColor="textSecondary">Sleep patterns and workout heart rate sync from Apple Watch to your signed-in website and phone Calendar. This Mac demo has no live Watch data.</Text>
+        <Button title="Open website connection settings" variant="secondary" onPress={() => nav.go('profile', { name: 'connections' })} />
       </Card>
       {edit ? (
         <Card>

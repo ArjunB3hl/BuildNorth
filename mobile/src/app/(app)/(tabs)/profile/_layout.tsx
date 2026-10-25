@@ -11,6 +11,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="memory" options={{ title: 'What Rhythm remembers' }} />
       <Stack.Screen name="data" options={{ title: 'Your data' }} />
       <Stack.Screen name="connections" options={{ title: 'AI connections' }} />
+      <Stack.Screen name="downloads" options={{ title: 'Get Rhythm' }} />
       <Stack.Screen name="watch" options={{ title: 'Apple Watch' }} />
       <Stack.Screen name="interests" options={{ title: 'Interests & sharing' }} />
       <Stack.Screen name="videos" options={{ title: 'Content library' }} />

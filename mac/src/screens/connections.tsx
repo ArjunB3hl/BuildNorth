@@ -45,7 +45,7 @@ export function ConnectionsScreen() {
       </Row>
       <Button title="Get an API key" variant="quiet" onPress={() => open('https://platform.claude.com/settings/keys')} />
     </Card>
-    <SectionHeader title="Connect your ChatGPT or Claude account" />
+    <SectionHeader title="Connect ChatGPT, Claude or ElevenLabs" />
     <Card>
       <ThemedText>Set up Rhythm in your assistant to use your signed-in web and phone data. Complete setup in your browser, then use that account in the assistant’s supported apps.</ThemedText>
       <Notice tone="info">This Mac keeps its Calendar in local demo mode. Account connectors read your web account’s data, not this Mac’s sample data. The Claude demo Coach above uses this Mac’s data directly.</Notice>
@@ -62,6 +62,13 @@ export function ConnectionsScreen() {
       <ThemedText type="subtitle">Claude</ThemedText>
       <ThemedText>Open Customize → Connectors → Add → Custom → Web. Paste Rhythm’s public connector address, choose Sign in now and Claude’s published identity, then sign in with Rhythm.</ThemedText>
       <Button title="Open Claude connectors" variant="secondary" onPress={() => open('https://claude.ai/customize/connectors')} />
+    </Card>
+    <Card>
+      <ThemedText type="subtitle">ElevenLabs</ThemedText>
+      <ThemedText>On the Rhythm website, verify your ElevenLabs API key and agent ID to use voice or text Coach. The key is encrypted on the server. Native voice is not included in this Mac demo.</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">For Calendar access, add Rhythm’s public MCP address to your agent using a private account connection token. This accesses your web account, not the Mac’s demo records.</ThemedText>
+      <Button title="Connect ElevenLabs on the website" onPress={setupAccount} />
+      <Button title="Open ElevenLabs agents" variant="secondary" onPress={() => open('https://elevenlabs.io/app/agents')} />
     </Card>
   </Screen>;
 }

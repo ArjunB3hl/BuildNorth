@@ -65,11 +65,17 @@ struct HealthSync: Sendable {
     }
     let inDay = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
 
-    async let sleep = sleepMinutes(nightEndingOn: start)
+    async let sleep = sleepSummary(nightEndingOn: start)
     async let workouts = workouts(matching: inDay)
 
+    let night = try await sleep
+    let iso = ISO8601DateFormatter()
     return HealthDayIn(
-      sleepMinutes: try await sleep,
+      sleepMinutes: night?.minutes,
+      sleepPattern: night.map { SleepPattern(
+        startedAt: $0.startedAt.map { iso.string(from: $0) }, endedAt: $0.endedAt.map { iso.string(from: $0) },
+        coreMinutes: $0.stages[.core], deepMinutes: $0.stages[.deep], remMinutes: $0.stages[.rem],
+        awakeMinutes: $0.stages[.awake], unspecifiedMinutes: $0.stages[.unspecified]) },
       workouts: try await workouts,
       complete: complete
     )
@@ -89,6 +95,28 @@ struct HealthSync: Sendable {
     let asleep = Set(HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue))
     let samples = try await descriptor.result(for: store).filter { asleep.contains($0.value) }
     return SleepNight.asleepMinutes(samples.map { (start: $0.startDate, end: $0.endDate) }, in: window)
+  }
+
+  func sleepSummary(nightEndingOn day: Date, now: Date = Date()) async throws -> SleepSummary? {
+    guard let window = SleepNight.window(endingOn: day), window.start < now else { return nil }
+    let predicate = HKQuery.predicateForSamples(withStart: window.start, end: min(window.end, now), options: [])
+    let descriptor = HKSampleQueryDescriptor(
+      predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
+      sortDescriptors: [SortDescriptor(\.startDate)])
+    let samples = try await descriptor.result(for: store).compactMap { sample -> SleepSample? in
+      let stage: SleepStage
+      switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
+      case .asleepCore: stage = .core
+      case .asleepDeep: stage = .deep
+      case .asleepREM: stage = .rem
+      case .asleepUnspecified: stage = .unspecified
+      case .awake: stage = .awake
+      default: return nil
+      }
+      return SleepSample(stage: stage, start: sample.startDate, end: min(sample.endDate, now))
+    }
+    guard !samples.isEmpty else { return nil }
+    return SleepSummary(day: day, samples: samples, window: window)
   }
 
   /// Seven local nights, including missing nights, for an honest trend with gaps.
@@ -128,7 +156,8 @@ struct HealthSync: Sendable {
     let iso = ISO8601DateFormatter()
     iso.formatOptions = [.withInternetDateTime]
     return try await descriptor.result(for: store).map { workout in
-      let heartRate = workout.statistics(for: HKQuantityType(.heartRate))?.averageQuantity()
+      let stats = workout.statistics(for: HKQuantityType(.heartRate))
+      let heartRate = stats?.averageQuantity()
       return HealthWorkout(
         externalId: workout.uuid.uuidString,
         activityType: Self.activityName(workout.workoutActivityType),
@@ -136,7 +165,9 @@ struct HealthSync: Sendable {
         durationMinutes: Self.rounded(min(max(workout.duration / 60, 0), 1440)),
         energyKcal: nil,
         distanceMeters: nil,
-        averageHeartRateBpm: heartRate.map { Self.rounded($0.doubleValue(for: Self.bpm)) }.flatMap(Self.nonNegative)
+        averageHeartRateBpm: heartRate.map { Self.rounded($0.doubleValue(for: Self.bpm)) }.flatMap(Self.nonNegative),
+        minHeartRateBpm: stats?.minimumQuantity().map { Self.rounded($0.doubleValue(for: Self.bpm)) }.flatMap(Self.nonNegative),
+        maxHeartRateBpm: stats?.maximumQuantity().map { Self.rounded($0.doubleValue(for: Self.bpm)) }.flatMap(Self.nonNegative)
       )
     }
   }
