@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Query, Request, Response, status
 from sqlalchemy import delete, select
 
 from app import health
@@ -24,6 +24,7 @@ from app.ai import AIError
 from app.assistant import coach_reply
 from app.deps import AI, CurrentUser, Db, Memory, ai_failure
 from app.models import CheckIn, CoachMessage, PlanItem, Profile
+from app.rhythm import learn as rhythm_learn
 from app.schemas import CoachHistoryOut, CoachMessageIn, CoachMessageOut, CoachReplyOut, Suggestion
 
 log = logging.getLogger(__name__)
@@ -105,7 +106,9 @@ def _keep(suggestion: Suggestion, message: str) -> bool:
 
 
 @router.post("/coach/messages")
-def send(body: CoachMessageIn, user: CurrentUser, db: Db, memory: Memory, ai: AI) -> CoachReplyOut:
+def send(
+    body: CoachMessageIn, request: Request, background: BackgroundTasks, user: CurrentUser, db: Db, memory: Memory, ai: AI,
+) -> CoachReplyOut:
     if prefs.sync_pending(db, memory, user.user_id):
         health.sync_pending_health(db, memory, user.user_id)
     on = date.fromisoformat(body.local_date) if body.local_date else None
@@ -153,6 +156,8 @@ def send(body: CoachMessageIn, user: CurrentUser, db: Db, memory: Memory, ai: AI
     )
     db.add(assistant)
     db.commit()
+    # With learning on, what the user asks about shapes their Rhythm interests (in the background, throttled).
+    background.add_task(rhythm_learn.refresh, request.app, user.user_id, ai)
     return CoachReplyOut(
         user_message=CoachMessageOut.model_validate(user_message),
         reply=CoachMessageOut.model_validate(assistant),

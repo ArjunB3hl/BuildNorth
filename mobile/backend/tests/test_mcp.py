@@ -47,6 +47,10 @@ def live(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SimpleNamespace]:
         "CLERK_PUBLISHABLE_KEY": PUBLISHABLE_KEY,
         "AI_PROVIDER": "none",
         "SPECTRON_API_KEY": "",  # memory replaced by a fake below
+        "SPECTRON_OWNER_USER_ID": "",
+        "RHYTHM_MEMORY_CONTEXTS_JSON": "",
+        "YOUTUBE_API_KEY": "",
+        "RHYTHM_RECOMMENDATIONS": "on",
         "MCP_PUBLIC_URL": f"http://127.0.0.1:{port}/mcp",
         "MCP_CLIENT_APPROVAL": "true",
     }
@@ -571,3 +575,119 @@ def test_health_summary_rejects_bad_windows(live: SimpleNamespace, alice: str) -
     for end_date in ("2026-13-01", "21/10/2026", "not-a-date"):
         assert "isn't a YYYY-MM-DD date" in err(call(live, alice, "get_health_summary", {"end_date": end_date})), end_date
         assert "isn't a YYYY-MM-DD date" in err(call(live, alice, "get_user_context", {"request": "Plan", "local_date": end_date}))
+
+
+def test_rhythm_phone_to_mcp_flow_obeys_grants_tasks_and_source_claims(live: SimpleNamespace) -> None:
+    """Real Streamable HTTP + MCP client; Clerk signing keys and displayed video metadata are test fixtures."""
+    import uuid
+    from app.models import utcnow
+    from test_rhythm import interests, video
+    user = "user_4Rhythm"
+    rhythm = SimpleNamespace(base=live.base, url=live.base + "/rhythm/mcp")
+
+    def tool(name, arguments=None):
+        return call(rhythm, token, name, arguments)
+
+    def ui(method, path, **kwargs):
+        response = rest(live, method, path, user, **kwargs)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    ui("PUT", "/rhythm/interests", json=interests())
+    metadata = httpx.get(live.base + "/.well-known/oauth-protected-resource/rhythm/mcp").json()
+    assert metadata["resource"] == rhythm.url
+    # The OAuth audience is separate as well as the bearer-token family.
+    import jwt as pyjwt
+    def oauth(resource):
+        now = int(time.time())
+        return pyjwt.encode({
+            "sub": user, "iss": ISSUER, "iat": now, "exp": now + 600, "jti": "rhythm_oauth_test",
+            "client_id": "https://claude.ai/oauth/mcp-oauth-client-metadata",
+            "scope": "email profile", "aud": resource,
+        }, SIGNING_KEY, algorithm="RS256", headers={"kid": "test-kid", "typ": "at+jwt"})
+    oauth_token = oauth(rhythm.url)
+    with pytest.raises(Exception):
+        call(live, oauth_token, "get_profile")
+    with pytest.raises(Exception):
+        call(rhythm, oauth(live.url), "get_interests")
+    assert ok(call(rhythm, oauth_token, "get_interests"))["status"] == "permission_required"
+    oauth_grant = ok(call(rhythm, oauth_token, "connect_rhythm"))["agents"][0]
+    ui("POST", f"/rhythm/agents/{oauth_grant['id']}/approve", json={"capabilities": ["interests"]})
+    assert ok(call(rhythm, oauth_token, "get_interests"))["status"] == "ok"
+    ui("DELETE", f"/rhythm/agents/{oauth_grant['id']}")
+    assert ok(call(rhythm, oauth_token, "get_interests"))["status"] == "permission_required"
+
+    created = ui("POST", "/rhythm/agents/token", json={
+        "label": "MCP protocol test", "capabilities": ["interests", "page", "search", "transcripts", "recommend", "memory", "feedback"],
+    })
+    token, agent = created["token"], created["agent"]
+    assert token.startswith("bnr_")
+    # Separate resources: a Rhythm token cannot authenticate to the older app MCP endpoint.
+    with pytest.raises(Exception):
+        call(live, token, "get_profile")
+    tool_names = {item.name for item in call(rhythm, token, "__list__").tools}
+    assert "get_profile" not in tool_names and len(tool_names) == 14
+    # It is not an app session and cannot self-approve a task.
+    assert httpx.put(live.base + "/rhythm/interests", headers={"Authorization": f"Bearer {token}"},
+                     json=interests(), timeout=10).status_code == 401
+    context = ok(tool("get_interests"))
+    assert context["profile"]["profileRevision"] == 1
+    assert context["profile"]["ownerUserId"] == user
+    page = ui("POST", "/rhythm/browsers", json={
+        "metadata": video(), "capturedAt": utcnow().isoformat(), "allowTranscripts": True, "expectedRevision": 1,
+    })["browser"]
+    task = ok(tool("create_video_task", {"task": {
+        "action": "evaluate", "request": "Evaluate my selected tutorial", "analyzeTranscripts": True,
+        "browserSessionId": page["id"], "idempotencyKey": uuid.uuid4().hex,
+    }}))["task"]
+    assert task["status"] == "pending"
+    denied = ok(tool("get_video_transcript", {"task_id": task["id"], "candidate_id": uuid.uuid4().hex}))
+    assert denied["status"] == "permission_required"
+    ui("POST", f"/rhythm/tasks/{task['id']}/approve")
+    candidate = ok(tool("add_selected_video", {
+        "task_id": task["id"], "browser_session_id": page["id"],
+    }))["candidates"][0]
+    from app.models import RhythmCandidate
+    from app.rhythm.schemas import VideoMetadata
+    with app.state.session_factory() as db:
+        excluded = RhythmCandidate(user_id=user, task_id=task["id"], video_id="xxxxxxxxxxx",
+                                    page_metadata=VideoMetadata.model_validate(video("BJJ guard passing", "xxxxxxxxxxx")).model_dump(),
+                                    relevance={"status": "relevant", "reasons": ["Untrusted old decision"]},
+                                    shortlisted=True, source="youtube_api")
+        db.add(excluded); db.commit(); excluded_id = excluded.id
+    assert ok(tool("get_video_transcript", {"task_id": task["id"], "candidate_id": excluded_id}))["status"] == "irrelevant"
+    assert ui("GET", "/rhythm/metrics")["metrics"]["transcriptAttempts"] == 0
+    assert ok(tool("get_video_transcript", {
+        "task_id": task["id"], "candidate_id": candidate["id"],
+    }))["status"] == "permission_required"
+    ok(tool("shortlist_videos", {"task_id": task["id"], "candidate_ids": [candidate["id"]]}))
+    assert ok(tool("get_video_transcript", {
+        "task_id": task["id"], "candidate_id": candidate["id"],
+    }))["status"] == "pending"
+    # Supported alternative: text the user supplies, explicitly labelled. It cancels the queued page request.
+    ui("POST", f"/rhythm/tasks/{task['id']}/candidates/{candidate['id']}/import", json={
+        "segments": [{"startSeconds": 3, "text": "Keep your hands up."}], "language": "en", "completeness": "partial",
+    })
+    transcript = ok(tool("get_video_transcript", {"task_id": task["id"], "candidate_id": candidate["id"]}))
+    assert transcript["status"] == "transcript_partial"
+    assert transcript["transcript"]["source"] == "user_supplied"
+    result = ok(tool("show_recommendations", {"task_id": task["id"], "items": [{
+        "candidateId": candidate["id"], "analysisBasis": "user_text", "citations": [{"segmentIndex": 0, "quote": "Keep your hands up."}],
+    }]}))
+    assert result["delivery"] == "saved_for_later"
+    rec = result["recommendations"][0]
+    assert rec["analysisBasis"] == "user_text_partial"
+    feedback = ok(tool("record_feedback", {"recommendation_id": rec["id"], "feedback": {"feedback": "saved"}}))
+    assert feedback["status"] == "pending"
+    assert ui("GET", "/rhythm/recommendations")["recommendations"][0]["feedback"] is None
+    proposal = next(m for m in ui("GET", "/rhythm/memories")["memories"] if m["status"] == "feedback_saved")
+    ui("POST", f"/rhythm/memories/{proposal['id']}/approve")
+    assert ui("GET", "/rhythm/recommendations")["recommendations"][0]["feedback"] == "saved"
+    ui("PUT", "/rhythm/interests", json=interests(expectedRevision=1, topics=["food"]))
+    assert ok(tool("get_video_transcript", {
+        "task_id": task["id"], "candidate_id": candidate["id"],
+    }))["status"] == "stale_context"
+    assert ui("GET", "/rhythm/metrics")["metrics"]["transcriptAttempts"] == 1
+    ui("DELETE", f"/rhythm/agents/{agent['id']}")
+    with pytest.raises(Exception):
+        tool("get_interests")

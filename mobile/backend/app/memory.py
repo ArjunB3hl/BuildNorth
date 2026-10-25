@@ -1,5 +1,8 @@
 """Per-user memory on SurrealDB Agent Memory.
 
+When a Context has an explicit owner, every operation checks that owner before
+SDK access. Additional configured accounts route to their own bound services.
+
 Isolation: every Clerk user gets their own scope subtree, built here from the
 verified user ID. Each confirmed preference is written under its own child path
 (`<user>/pref/<id>`), and each shared Apple Watch day summary under
@@ -43,7 +46,7 @@ class MemoryClient(Protocol):
     def recall(self, query: str, **kwargs: Any) -> Any: ...
 
 
-def user_scope(user_id: str) -> str:
+def user_scope(user_id: str, *, root: str = SCOPE_ROOT) -> str:
     """Base scope path for one Clerk user.
 
     Agent Memory rejects uppercase in scope paths, and plain lowercasing would
@@ -54,36 +57,59 @@ def user_scope(user_id: str) -> str:
     if not CLERK_USER_ID.fullmatch(user_id):
         raise ValueError("refusing to build a scope from an unverified user ID")
     segment = "".join(f"-{c.lower()}" if c.isupper() else c for c in user_id)
-    return f"{SCOPE_ROOT}/user/{segment}"
+    return f"{root}/user/{segment}"
 
 
-def preference_scope(user_id: str, preference_id: str) -> str:
+def preference_scope(user_id: str, preference_id: str, *, root: str = SCOPE_ROOT) -> str:
     if not preference_id.isalnum():
         raise ValueError("invalid preference id")
-    return f"{user_scope(user_id)}/pref/{preference_id.lower()}"
+    return f"{user_scope(user_id, root=root)}/pref/{preference_id.lower()}"
 
 
-def health_root(user_id: str) -> str:
+def health_root(user_id: str, *, root: str = SCOPE_ROOT) -> str:
     """The subtree holding every health summary revision of one user (erased in one call when sharing is turned off)."""
-    return f"{user_scope(user_id)}/health"
+    return f"{user_scope(user_id, root=root)}/health"
 
 
-def health_scope(user_id: str, revision: str) -> str:
+def health_scope(user_id: str, revision: str, *, root: str = SCOPE_ROOT) -> str:
     """One revision of one day's health summary. A changed summary gets a new revision, never a reused scope."""
     if not revision.isalnum():
         raise ValueError("invalid health revision")
-    return f"{health_root(user_id)}/{revision.lower()}"
+    return f"{health_root(user_id, root=root)}/{revision.lower()}"
 
 
-def user_lens(user_id: str) -> list[list[str]]:
-    return [[f"{user_scope(user_id)}/*"]]
+def user_lens(user_id: str, *, root: str = SCOPE_ROOT) -> list[list[str]]:
+    return [[f"{user_scope(user_id, root=root)}/*"]]
 
 
 class MemoryService:
-    def __init__(self, client: MemoryClient) -> None:
+    scope_root = SCOPE_ROOT
+
+    def __init__(
+        self, client: MemoryClient | None, *, owner_user_id: str = "",
+        user_services: dict[str, MemoryService] | None = None,
+    ) -> None:
+        if owner_user_id and not CLERK_USER_ID.fullmatch(owner_user_id):
+            raise ValueError("Memory owner must be a valid Clerk user ID.")
         self._client = client
+        self.owner_user_id = owner_user_id
+        self._user_services = user_services or {}
         self._registered: set[str] = set()
         self._lock = threading.Lock()
+
+    def _check_owner(self, user_id: str) -> None:
+        if self.owner_user_id and user_id != self.owner_user_id:
+            raise MemoryAPIError(403, "No memory Context is assigned to this account.")
+        if self._client is None:
+            raise MemoryAPIError(503, "Memory is not configured for this account.")
+
+    def _for_user(self, user_id: str) -> MemoryService:
+        service = self._user_services.get(user_id)
+        if service is not None:
+            service._check_owner(user_id)
+            return service
+        self._check_owner(user_id)
+        return self
 
     def _ensure_registered(self, scope: str) -> None:
         """Register the path and its ancestors (Agent Memory requires registration before first write)."""
@@ -101,20 +127,29 @@ class MemoryService:
                 self._registered.add(path)
 
     def remember_preference(self, user_id: str, preference_id: str, text: str) -> str:
-        scope = preference_scope(user_id, preference_id)
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.remember_preference(user_id, preference_id, text)
+        scope = preference_scope(user_id, preference_id, root=self.scope_root)
         self._ensure_registered(scope)
         self._client.remember(text, scopes=[[scope]])
         return scope
 
     def remember_health(self, user_id: str, revision: str, text: str) -> str:
-        scope = health_scope(user_id, revision)
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.remember_health(user_id, revision, text)
+        scope = health_scope(user_id, revision, root=self.scope_root)
         self._ensure_registered(scope)
         self._client.remember(text, scopes=[[scope]])
         return scope
 
     def forget_scope(self, user_id: str, scope: str) -> int:
         """Permanently erase one scope subtree belonging to this user."""
-        base = user_scope(user_id)
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.forget_scope(user_id, scope)
+        base = user_scope(user_id, root=self.scope_root)
         if not scope or not (scope == base or scope.startswith(base + "/")):
             raise ValueError("refusing to forget a scope outside the user's subtree")
         try:
@@ -128,15 +163,24 @@ class MemoryService:
     def forget_health(self, user_id: str) -> int:
         """Erase every health summary revision of this user (and nothing outside their subtree) in one call.
         The path is registered first (a no-op once it exists), so the erase never targets an unknown scope."""
-        root = health_root(user_id)
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.forget_health(user_id)
+        root = health_root(user_id, root=self.scope_root)
         self._ensure_registered(root)
         return self.forget_scope(user_id, root)
 
     def erase_user(self, user_id: str) -> int:
-        return self.forget_scope(user_id, user_scope(user_id))
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.erase_user(user_id)
+        return self.forget_scope(user_id, user_scope(user_id, root=self.scope_root))
 
     def recall(self, user_id: str, query: str, k: int = 5) -> list[RecalledFact]:
-        result = self._client.recall(query, lens=user_lens(user_id), k=k)
+        service = self._for_user(user_id)
+        if service is not self:
+            return service.recall(user_id, query, k=k)
+        result = self._client.recall(query, lens=user_lens(user_id, root=self.scope_root), k=k)
         facts: list[RecalledFact] = []
         seen: set[str] = set()
         for hit in result.hits:

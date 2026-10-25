@@ -35,6 +35,7 @@ from app.models import ConnectionToken
 log = logging.getLogger(__name__)
 
 TOKEN_PREFIX = "bnc_"
+RHYTHM_TOKEN_PREFIX = "bnr_"
 TOKEN_SCOPES = ["email", "profile"]
 TOKEN_LIFETIME = timedelta(days=90)
 # Apple Watch link tokens: accepted only by the watch's REST data routes (deps.watch_user), never here.
@@ -81,6 +82,7 @@ class AssistantTokenVerifier:
         client_hosts: tuple[str, ...] = DEFAULT_OAUTH_CLIENT_HOSTS,
         client_ids: tuple[str, ...] = (),
         require_resource_audience: bool = True,
+        connection_prefixes: tuple[str, ...] = (TOKEN_PREFIX,),
     ) -> None:
         self.session_factory = session_factory
         self.clerk = clerk
@@ -89,6 +91,7 @@ class AssistantTokenVerifier:
         self.client_hosts = {h.lower() for h in client_hosts}
         self.client_ids = {_norm(c) for c in client_ids}
         self.require_resource_audience = require_resource_audience
+        self.connection_prefixes = connection_prefixes
         self._opaque_cache: dict[str, tuple[float, AccessToken | None]] = {}
 
     async def verify_token(self, token: str) -> AccessToken | None:
@@ -100,7 +103,9 @@ class AssistantTokenVerifier:
         if token.startswith(WATCH_TOKEN_PREFIX):
             log.info("Rejected an Apple Watch link token at /mcp: it only works on the watch's app routes.")
             return None
-        if token.startswith(TOKEN_PREFIX):
+        if token.startswith((TOKEN_PREFIX, RHYTHM_TOKEN_PREFIX)):
+            if not token.startswith(self.connection_prefixes):
+                return None
             return self._connection_token(token)
         if token.count(".") == 2:
             return self._clerk_jwt(token)
@@ -113,6 +118,8 @@ class AssistantTokenVerifier:
             row = db.scalar(select(ConnectionToken).where(ConnectionToken.token_hash == hash_token(token)))
             if row is None or row.revoked_at is not None or row.expires_at <= datetime.now(UTC):
                 return None
+            if (token.startswith(RHYTHM_TOKEN_PREFIX)) != (row.purpose == "rhythm"):
+                return None
             return AccessToken(
                 token=token,
                 client_id=f"connection-token:{row.id}",
@@ -120,7 +127,7 @@ class AssistantTokenVerifier:
                 expires_at=int(row.expires_at.timestamp()),
                 resource=self.resource_url,
                 subject=row.user_id,
-                claims={"via": "connection_token", "label": row.label},
+                claims={"via": "rhythm_token" if token.startswith(RHYTHM_TOKEN_PREFIX) else "connection_token", "label": row.label},
             )
 
     # --- Clerk OAuth access tokens ----------------------------------------------------------

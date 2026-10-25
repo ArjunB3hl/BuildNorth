@@ -236,6 +236,7 @@ class ConnectionToken(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    purpose: Mapped[str] = mapped_column(String(20), default="buildnorth", server_default="buildnorth")
 
 
 class WatchToken(Base):
@@ -315,8 +316,207 @@ class AssistantProposal(Base):
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class RhythmProfile(Timestamped, Base):
+    __tablename__ = "rhythm_profiles"
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Interests learned from activity (app.rhythm.learn): the evidence behind them, and when they were last worked out.
+    learned: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    learned_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class RhythmSignal(Base):
+    """A fitness, health or food video the user watched, observed by the extension with consent.
+
+    Only videos that match Rhythm's vocabulary are stored; everything else never leaves the browser.
+    One row per video: re-watching updates `observed_at` and `views`. Kept for 60 days.
+    """
+
+    __tablename__ = "rhythm_signals"
+    __table_args__ = (UniqueConstraint("user_id", "video_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    video_id: Mapped[str] = mapped_column(String(11))
+    title: Mapped[str | None] = mapped_column(String(300))
+    channel: Mapped[str | None] = mapped_column(String(150))
+    description: Mapped[str | None] = mapped_column(String(1200))
+    transcript: Mapped[str | None] = mapped_column(Text)
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+    topics: Mapped[list[str]] = mapped_column(JSON, default=list)
+    views: Mapped[int] = mapped_column(Integer, default=1)
+    # Seconds actually played while the tab was visible (the most seen in one visit); None from older clients.
+    played_seconds: Mapped[float | None] = mapped_column(Float)
+    # The user's own reaction from the side panel: "more" (Save to Rhythm / more like this) or "less" (not interested).
+    reaction: Mapped[str | None] = mapped_column(String(10))
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class RhythmAgent(Timestamped, Base):
+    __tablename__ = "rhythm_agents"
+    __table_args__ = (UniqueConstraint("user_id", "client_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    client_id: Mapped[str] = mapped_column(String(500))
+    label: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    capabilities: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class RhythmBrowser(Timestamped, Base):
+    __tablename__ = "rhythm_browsers"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    label: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    page_ref: Mapped[str] = mapped_column(String(32), default=new_id)
+    video_id: Mapped[str] = mapped_column(String(11))
+    page_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    allow_transcripts: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class RhythmTask(Timestamped, Base):
+    __tablename__ = "rhythm_tasks"
+    __table_args__ = (UniqueConstraint("user_id", "idempotency_key"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(32))
+    browser_session_id: Mapped[str | None] = mapped_column(String(32))
+    action: Mapped[str] = mapped_column(String(20))
+    request: Mapped[str] = mapped_column(String(600))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    profile_revision: Mapped[int] = mapped_column(Integer)
+    analyze_transcripts: Mapped[bool] = mapped_column(Boolean, default=False)
+    idempotency_key: Mapped[str] = mapped_column(String(100))
+    candidate_checks: Mapped[int] = mapped_column(Integer, default=0)
+    transcript_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    cache_hits: Mapped[int] = mapped_column(Integer, default=0)
+    search_requests: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_reservations: Mapped[int] = mapped_column(Integer, default=0)
+    search_state: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+
+
+class RhythmCandidate(Base):
+    __tablename__ = "rhythm_candidates"
+    __table_args__ = (UniqueConstraint("task_id", "video_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    task_id: Mapped[str] = mapped_column(String(32), index=True)
+    video_id: Mapped[str] = mapped_column(String(11))
+    page_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    relevance: Mapped[dict[str, Any]] = mapped_column(JSON)
+    source: Mapped[str] = mapped_column(String(20))
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    shortlisted: Mapped[bool] = mapped_column(Boolean, default=False)
+    transcript_id: Mapped[str | None] = mapped_column(String(32))
+    # A citation can only reference a segment actually returned by get_video_transcript.
+    delivered_segments: Mapped[list[int]] = mapped_column(JSON, default=list)
+
+
+class RhythmTranscript(Base):
+    __tablename__ = "rhythm_transcripts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    video_id: Mapped[str] = mapped_column(String(11), index=True)
+    language: Mapped[str | None] = mapped_column(String(30))
+    source: Mapped[str] = mapped_column(String(30))
+    completeness: Mapped[str] = mapped_column(String(20))
+    browser_session_id: Mapped[str | None] = mapped_column(String(32))
+    page_ref: Mapped[str | None] = mapped_column(String(32))
+    segments: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    limitation: Mapped[str] = mapped_column(String(300), default="")
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+
+
+class RhythmBrowserRequest(Base):
+    __tablename__ = "rhythm_browser_requests"
+    __table_args__ = (UniqueConstraint("task_id", "candidate_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    task_id: Mapped[str] = mapped_column(String(32))
+    candidate_id: Mapped[str] = mapped_column(String(32))
+    browser_session_id: Mapped[str] = mapped_column(String(32))
+    page_ref: Mapped[str] = mapped_column(String(32))
+    video_id: Mapped[str] = mapped_column(String(11))
+    language: Mapped[str | None] = mapped_column(String(30))
+    profile_revision: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+
+
+class RhythmRecommendation(Base):
+    __tablename__ = "rhythm_recommendations"
+    __table_args__ = (UniqueConstraint("task_id", "video_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    task_id: Mapped[str] = mapped_column(String(32))
+    video_id: Mapped[str] = mapped_column(String(11))
+    profile_revision: Mapped[int] = mapped_column(Integer)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    feedback: Mapped[str | None] = mapped_column(String(20))
+    feedback_reason: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    displayed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    displayed_browser_id: Mapped[str | None] = mapped_column(String(32))
+
+
+class RhythmMemory(Timestamped, Base):
+    __tablename__ = "rhythm_memories"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    text: Mapped[str] = mapped_column(String(500))
+    evidence_ref: Mapped[str | None] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    memory_status: Mapped[str] = mapped_column(String(20), default="not_configured")
+    # Deletion markers survive until the private Context confirms its scoped erase.
+    scope: Mapped[str | None] = mapped_column(String(255))
+    context_id: Mapped[str | None] = mapped_column(String(200))
+
+
+class RhythmUsage(Base):
+    __tablename__ = "rhythm_usage"
+    __table_args__ = (UniqueConstraint("user_id", "day"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    day: Mapped[str] = mapped_column(String(10))
+    candidate_checks: Mapped[int] = mapped_column(Integer, default=0)
+    transcript_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    cache_hits: Mapped[int] = mapped_column(Integer, default=0)
+    blocked_requests: Mapped[int] = mapped_column(Integer, default=0)
+    provider_failures: Mapped[int] = mapped_column(Integer, default=0)
+    search_requests: Mapped[int] = mapped_column(Integer, default=0)
+
+
 # Tables holding per-user rows, in a safe deletion order (children before parents).
 USER_TABLES: tuple[type[Base], ...] = (
+    RhythmSignal,
+    RhythmBrowserRequest,
+    RhythmCandidate,
+    RhythmTranscript,
+    RhythmRecommendation,
+    RhythmTask,
+    RhythmBrowser,
+    RhythmAgent,
+    RhythmMemory,
+    RhythmUsage,
+    RhythmProfile,
     AssistantProposal,
     ConnectionToken,
     WatchToken,
