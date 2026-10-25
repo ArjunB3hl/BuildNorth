@@ -220,7 +220,7 @@ class CoachMessage(Base):
 
 
 class ConnectionToken(Base):
-    """A token the signed-in user created in the app to connect an AI assistant (e.g. OpenCode) over MCP.
+    """A token the signed-in user created in the app to connect an AI assistant (e.g. ElevenLabs) over MCP.
 
     Only a SHA-256 hash is stored; the token itself is shown once. It identifies the user it was
     created for and nothing else: the user ID is never taken from what an assistant sends.

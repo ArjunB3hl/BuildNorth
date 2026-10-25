@@ -1,6 +1,6 @@
 """Who is calling /mcp. Two kinds of credentials resolve to a Clerk user ID; nothing else does.
 
-1. Clerk OAuth access tokens (ChatGPT, Claude, OpenCode's OAuth flow). The protected-resource
+1. Clerk OAuth access tokens (ChatGPT and Claude). The protected-resource
    metadata at /.well-known/oauth-protected-resource/mcp names this app's Clerk instance as the
    authorization server, so clients sign the user in with Clerk. JWT access tokens are verified
    with the instance's public JWKS (no secret needed); opaque ones need CLERK_SECRET_KEY.

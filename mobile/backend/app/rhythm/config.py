@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit, urlunsplit
+from app.config import public_mcp_url
 
 
 def bounded(name: str, default: int, maximum: int) -> int:
@@ -36,7 +37,7 @@ class RhythmSettings:
     def load(cls) -> "RhythmSettings":
         timezone = os.getenv("RHYTHM_BUDGET_TIMEZONE", "America/Toronto")
         ZoneInfo(timezone)  # Invalid deployment configuration should fail at startup.
-        base = urlsplit(os.getenv("MCP_PUBLIC_URL") or "http://localhost:8000/mcp")
+        base = urlsplit(public_mcp_url())
         resource = (os.getenv("RHYTHM_MCP_PUBLIC_URL") or urlunsplit((base.scheme, base.netloc, "/rhythm/mcp", "", ""))).rstrip("/")
         if urlsplit(resource).path != "/rhythm/mcp":
             raise ValueError("RHYTHM_MCP_PUBLIC_URL must end with /rhythm/mcp at the API origin.")

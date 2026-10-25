@@ -38,7 +38,7 @@ const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
   const focused = useIsFocused();
-  return focused ? <AIConnectionGate>{access => <ConnectedCoach claude={access.claude} elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
+  return focused ? <AIConnectionGate>{access => <ConnectedCoach claude={access.textChat} elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
 }
 
 function ConnectedCoach({ claude, elevenlabs }: { claude: boolean; elevenlabs: boolean }) {
@@ -187,7 +187,7 @@ function ClaudeCoach() {
           ListHeaderComponent={
             showHeader ? (
               <View style={styles.headerBlock}>
-                <Button title={claude.data?.usable ? 'Claude connected · AI settings' : 'Connect Claude or ChatGPT'} size="small" variant="quiet" onPress={() => router.push('/profile/connections')} />
+                <Button title={claude.data?.usable ? 'Your Claude key · AI settings' : claude.data?.sharedAvailable ? 'Demo Claude included · AI settings' : 'Connect Claude or ChatGPT'} size="small" variant="quiet" onPress={() => router.push('/profile/connections')} />
                 {aiUnavailable ? (
                   <Notice tone="error">
                     Connect a Claude API key in AI settings to use Coach. Your Calendar and saved content still work.

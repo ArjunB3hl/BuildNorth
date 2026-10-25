@@ -50,7 +50,7 @@ YouTube watch page (read in Chrome's isolated world)
    │ optional YouTube permission + alarms: a playback check every 30 s while a video is open, with learning on
 Service worker ── matching videos only, after a minute played in view ─▶ backend /rhythm/signals
 
-Your agent (Claude Code, OpenCode, …) ── bnr_ token or OAuth ──▶ backend /rhythm/mcp
+Your agent (Claude Code, ChatGPT, …) ── bnr_ token or OAuth ──▶ backend /rhythm/mcp
 ```
 
 - **Your account is in charge, and learns.** The backend learns your interests from the activity you allow and applies
@@ -809,9 +809,6 @@ account. The backend must have its public HTTPS address running (`mobile/scripts
      claude --mcp-config extension/clients/claude.mcp.json --strict-mcp-config
      ```
 
-   - **OpenCode:** merge the `rhythm` entry from `clients/opencode.json` into your OpenCode config, or point
-     `OPENCODE_CONFIG` at that file. This template has no default address, so set `RHYTHM_MCP_URL`.
-
 Once an agent is active, it appears in the panel's **Who will help?** list.
 
 | Phone label | Permission | Allows the agent to |
@@ -864,7 +861,7 @@ lib/
   worker-session.ts         Clerk's background client: the signed-in user and session tokens in the service worker
   website-sign-in.ts        the sync host, and noticing when the website's sign-in changes
   use-browser-bridge.ts     polls for transcript reads, claims, reads and uploads them
-clients/                    MCP config templates for Claude Code and OpenCode
+clients/                    MCP config template for Claude Code
 scripts/build-local.mjs     build with the phone's public Clerk key
 tests/youtube.test.ts       Playwright checks
 wxt.config.ts               manifest, permissions, content security policy, access to the shared files, worker bundle

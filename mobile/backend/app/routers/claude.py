@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from app.ai import DEFAULT_MODELS
 from app.deps import CurrentUser, Db
 from app.models import ClaudeCredential
-from app.provider_credentials import seal, verify_key
+from app.provider_credentials import seal, shared_claude, unlock_key, verify_key
 
 router = APIRouter(tags=["connections"])
 
@@ -20,9 +20,11 @@ def connection(request: Request, response: Response, user: CurrentUser, db: Db) 
     response.headers["Cache-Control"] = "no-store"
     row = db.get(ClaudeCredential, user.user_id)
     available = getattr(request.app.state, "credential_cipher", None) is not None
+    shared = shared_claude(request.app.state)
     return {"configured": row is not None, "storageAvailable": available,
             "hint": row.hint if row else None, "model": row.model if row else DEFAULT_MODELS["anthropic"],
-            "scope": "coach", "usable": row is not None and available}
+            "scope": "coach", "usable": bool(unlock_key(getattr(request.app.state, "credential_cipher", None), row)),
+            "sharedAvailable": shared is not None, "sharedModel": shared.model if shared else None}
 
 
 @router.put("/connections/claude")

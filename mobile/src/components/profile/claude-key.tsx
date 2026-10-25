@@ -37,11 +37,14 @@ export function ClaudeKeyConnection() {
       await api.connections.disconnectClaude();
       await queries.invalidateQueries({ queryKey: ['claude-connection'] });
       await queries.invalidateQueries({ queryKey: ['ai-access'] });
-      setMessage('Your key was removed. Text Coach requires a new connection.');
+      setMessage(status.data?.sharedAvailable ? 'Your key was removed. Coach will use the shared demo Claude again.' : 'Your key was removed. Text Coach requires a new connection.');
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
-  return <SectionCard title="Claude for Coach & video notes" description="For the demo, bring an Anthropic API key. This powers Coach and turns transcripts you save into useful Content library notes. It does not connect a Claude subscription. API usage is billed to the key’s account.">
+  return <SectionCard title="Claude for Coach & video notes" description={status.data?.sharedAvailable
+    ? 'Claude is included in this demo for Coach and useful saved-video notes. Add your own Anthropic API key to use it instead; usage on that key is billed to your account. ChatGPT and Claude account connections are available below through MCP.'
+    : 'Bring an Anthropic API key to power Coach and useful saved-video notes. This does not connect a Claude subscription. API usage is billed to the key’s account.'}>
+    {status.data?.sharedAvailable ? <Notice tone="info">{status.data.configured ? 'Your personal key takes priority over the shared demo Claude.' : `Demo Claude is ready · ${status.data.sharedModel}. No personal API key is needed.`}</Notice> : null}
     <ThemedText type="small" themeColor="textSecondary">The key is verified without generating a message, encrypted on the Rhythm server, and shared only across your signed-in web and phone sessions. Remove it when you finish the demo.</ThemedText>
     {status.data?.configured ? <Notice tone={status.data.usable ? 'success' : 'warning'}>Claude key ending in {status.data.hint} · {status.data.model}{status.data.usable ? ' · Ready for Coach & video notes' : ' · Reconnect required'}</Notice> : null}
     {!transport ? <Notice tone="warning">Use an HTTPS backend before entering an API key on this device. Localhost on this computer is also supported.</Notice> : null}

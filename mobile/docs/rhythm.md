@@ -555,11 +555,6 @@ Templates are in `extension/clients/`:
 claude --mcp-config extension/clients/claude.mcp.json --strict-mcp-config
 ```
 
-OpenCode uses `extension/clients/opencode.json`; merge that server entry into its
-project configuration, or select the file with `OPENCODE_CONFIG`. Choose a working
-model separately. A CLI already running as a service may need its environment
-refreshed; use a private `opencode run --standalone` for an isolated check.
-
 For OAuth clients, connect the public `/rhythm/mcp` URL without a bearer header.
 The existing Clerk issuer verifies JWT access tokens, scopes `email profile`,
 allowed client identity, and the **Rhythm resource audience**. Clerk session

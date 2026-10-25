@@ -4,26 +4,18 @@ import re
 from urllib.parse import urlparse
 
 import httpx
-from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from app.deps import CurrentUser, Db
 from app.models import ClaudeCredential, ElevenLabsCredential
-from app.provider_credentials import seal
+from app.provider_credentials import seal, shared_claude, unlock_key
 
 router = APIRouter(tags=["connections"])
 
 
 def unlock(request: Request, row) -> str | None:
-    cipher = getattr(request.app.state, "credential_cipher", None)
-    if row is None or cipher is None:
-        return None
-    try:
-        payload = json.loads(cipher.decrypt(row.ciphertext.encode()))
-        return payload["key"] if payload["owner"] == row.user_id else None
-    except (InvalidToken, ValueError, KeyError, TypeError):
-        return None
+    return unlock_key(getattr(request.app.state, "credential_cipher", None), row)
 
 
 def eleven_get(key: str, path: str, params: dict | None = None) -> dict:
@@ -51,10 +43,14 @@ def signed_session(key: str, agent_id: str) -> str:
 @router.get("/connections/access")
 def access(request: Request, response: Response, user: CurrentUser, db: Db) -> dict:
     response.headers["Cache-Control"] = "no-store"
-    claude = bool(unlock(request, db.get(ClaudeCredential, user.user_id)))
+    personal = db.get(ClaudeCredential, user.user_id)
+    claude = bool(unlock(request, personal))
+    shared = shared_claude(request.app.state) is not None
+    # A broken personal credential must be repaired/removed, never silently billed to another key.
+    text_chat = claude or (personal is None and shared)
     eleven = bool(unlock(request, db.get(ElevenLabsCredential, user.user_id)))
-    return {"linked": claude or eleven, "claude": claude, "elevenlabs": eleven,
-            "textChat": claude, "camera": claude or eleven}
+    return {"linked": text_chat or eleven, "claude": claude, "sharedClaude": shared, "elevenlabs": eleven,
+            "textChat": text_chat, "camera": text_chat or eleven}
 
 
 @router.get("/connections/elevenlabs")
