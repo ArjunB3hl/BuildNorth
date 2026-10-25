@@ -418,7 +418,10 @@ function fakeRhythm({ metadata = true, youtube = true,
       return result({ profile: { ...EMPTY_INTERESTS, ownerUserId: 'user_1', profileRevision: server.revision, updatedAt: '',
         confirmed: true, enabledSites: youtube ? ['youtube'] : [], consent: { ...EMPTY_INTERESTS.consent, metadata } } });
     },
-    react: async (md, _capturedAt, how) => { calls.push(['react', md.videoId, how]); return result(reaction); },
+    react: async (md, _capturedAt, how, transcript) => {
+      calls.push(['react', md.videoId, how, ...(transcript ? [transcript.segments.map((s) => s.text)] : [])]);
+      return result(reaction);
+    },
     learned: async () => { calls.push(['learned']); return result({ profileRevision: server.revision, learned: view() }); },
     saveChoices: async (choices, expectedRevision) => {
       calls.push(['saveChoices', structuredClone(choices), expectedRevision]);
@@ -441,11 +444,13 @@ function fakeRhythm({ metadata = true, youtube = true,
 
 test('Save to Rhythm and Not interested: page details off reads nothing, other videos aren’t sent, the server’s message is shown', async () => {
   let captures = 0;
-  const capture = (title: string) => async () => {
-    captures++;
+  const asked: boolean[] = [];
+  const capture = (title: string, transcript?: string[]) => async (withTranscript: boolean) => {
+    captures++; asked.push(withTranscript);
     const metadata: VideoMetadata = { videoId: 'abcdefghijk', canonicalUrl: 'https://www.youtube.com/watch?v=abcdefghijk',
       title, channelName: 'Example channel', descriptionExcerpt: null, durationSeconds: 300 };
-    return { metadata, capturedAt: new Date().toISOString() };
+    return { metadata, capturedAt: new Date().toISOString(),
+      transcript: withTranscript && transcript ? transcript.map((text, i) => ({ startSeconds: i * 4, text })) : undefined };
   };
   // Page details (or YouTube) off for the account: the video isn't even read, and the panel links to the settings.
   for (const setup of [{ metadata: false }, { youtube: false }]) {
@@ -460,12 +465,23 @@ test('Save to Rhythm and Not interested: page details off reads nothing, other v
   expect(await reactToVideo(rhythm.api, capture('Top 10 movie trailers'), 'more'))
     .toEqual({ status: 'irrelevant', message: CANT_TELL, title: 'Top 10 movie trailers', needsSettings: false });
   expect(rhythm.calls).toEqual([['interests']]);
-  // With learning off (as in this stand-in profile): sent with the reaction, and the server's message comes back.
+  // With learning off (as in this stand-in profile): sent with the reaction, and the server's message comes back,
+  // with whether a transcript went along.
   expect(await reactToVideo(rhythm.api, capture('Beginner boxing footwork drill'), 'more')).toEqual({
-    status: 'ok', message: 'Saved to Rhythm. You’ll see more like this.', title: 'Beginner boxing footwork drill', needsSettings: false,
+    status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. YouTube had no transcript for it, so only its details were saved.',
+    title: 'Beginner boxing footwork drill', needsSettings: false,
   });
-  await reactToVideo(rhythm.api, capture('Easy vegetarian meal prep'), 'less');
-  expect(rhythm.calls.filter(([name]) => name === 'react')).toEqual([['react', 'abcdefghijk', 'more'], ['react', 'abcdefghijk', 'less']]);
+  // Save to Rhythm reads the transcript and sends it; the transcript can place a video its title doesn't.
+  expect(await reactToVideo(rhythm.api, capture('Morning session', ['Today we drill the karate front kick.', 'Chamber the knee.']), 'more'))
+    .toMatchObject({ status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. Its transcript was saved too.' });
+  // Not interested doesn't read the transcript.
+  await reactToVideo(rhythm.api, capture('Easy vegetarian meal prep', ['Chop the onions.']), 'less');
+  expect(rhythm.calls.filter(([name]) => name === 'react')).toEqual([
+    ['react', 'abcdefghijk', 'more'],
+    ['react', 'abcdefghijk', 'more', ['Today we drill the karate front kick.', 'Chamber the knee.']],
+    ['react', 'abcdefghijk', 'less'],
+  ]);
+  expect(asked.slice(-3)).toEqual([true, true, false]);
   // The server's own refusals are shown as they are; permission_required links to the settings.
   const refused = fakeRhythm({ reaction: { status: 'permission_required', message: 'Allow YouTube page details in your Rhythm settings first.' } });
   expect(await reactToVideo(refused.api, capture('Boxing drill'), 'more')).toMatchObject({

@@ -602,4 +602,5 @@ def test_video_routes_and_tools_are_gone_while_recommendations_are_off(client):
     assert client.get("/rhythm/interests", headers=auth()).status_code == 200
     assert client.get("/rhythm/learned", headers=auth()).status_code == 200
     server, _ = rhythm_mcp.build(app, app.state.settings, None, app.state.rhythm_settings)
-    assert {tool.name for tool in anyio.run(server.list_tools)} == {"connect_rhythm", "get_interests", "request_forget"}
+    assert {tool.name for tool in anyio.run(server.list_tools)} == {
+        "connect_rhythm", "get_interests", "request_forget", "list_saved_videos", "save_video_summary"}

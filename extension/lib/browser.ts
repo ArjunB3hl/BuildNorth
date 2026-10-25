@@ -1,5 +1,5 @@
 import { closeTranscriptPanel, openTranscriptPanel, readDisplayedTranscript, readMetadata } from './youtube';
-import type { BrowserRequest, TranscriptUpload, VideoMetadata } from '../../mobile/src/lib/rhythm';
+import type { BrowserRequest, TranscriptSegment, TranscriptUpload, VideoMetadata } from '../../mobile/src/lib/rhythm';
 
 export type Invocation = { tabId: number; url: string; invokedAt: number; nonce: string };
 export type PageCapture = {
@@ -47,16 +47,41 @@ export async function captureMetadata(): Promise<PageCapture> {
   return page;
 }
 
+export type VideoCapture = { metadata: VideoMetadata; capturedAt: string; transcript?: TranscriptSegment[] };
+
+/**
+ * YouTube's transcript for the video in this document: opens the panel if it's closed (the Show transcript button a
+ * person would press), reads the displayed rows, and closes it again if it opened it. Empty when there is none.
+ */
+async function readTranscriptOf(tabId: number, documentId: string, id: string): Promise<TranscriptSegment[]> {
+  const target = { tabId, documentIds: [documentId] };
+  const [opened] = await chrome.scripting.executeScript({ target, world: 'ISOLATED', func: openTranscriptPanel, args: [id] });
+  try {
+    const [read] = await chrome.scripting.executeScript({
+      target, world: 'ISOLATED', func: readDisplayedTranscript,
+      args: [{ videoId: id, pageRef: 'reaction', expiresAt: new Date(Date.now() + 15_000).toISOString() }],
+    });
+    return read?.documentId === documentId ? read.result?.segments ?? [] : [];
+  } finally {
+    if (opened?.result?.opened) await chrome.scripting.executeScript({ target, world: 'ISOLATED', func: closeTranscriptPanel }).catch(() => undefined);
+  }
+}
+
 /**
  * The video in the active tab, for "Save to Rhythm" and "Not interested". It uses the access the panel already has:
  * the toolbar click's activeTab grant (as "Use this page" does) or, when learning holds it, the optional YouTube
- * permission. It reads the same visible details as "Use this page" and nothing else.
+ * permission. It reads the same visible details as "Use this page", and with `withTranscript` (Save to Rhythm) also
+ * the video's transcript.
  */
-export async function captureCurrentVideo(): Promise<{ metadata: VideoMetadata; capturedAt: string }> {
+export async function captureCurrentVideo(withTranscript = false): Promise<VideoCapture> {
   const invoked = await currentInvocation().then(() => true, () => false);
   if (invoked) {
-    const { metadata, capturedAt } = await captureMetadata();
-    return { metadata, capturedAt };
+    const { metadata, capturedAt, invocation, documentId } = await captureMetadata();
+    const transcript = withTranscript ? await readTranscriptOf(invocation.tabId, documentId, metadata.videoId) : undefined;
+    if (withTranscript && !await currentInvocation().then((now) => now.nonce === invocation.nonce, () => false)) {
+      throw new Error('The page changed while Rhythm read it. Try again.');
+    }
+    return { metadata, capturedAt, transcript };
   }
   if (!await chrome.permissions.contains(YOUTUBE_ACCESS)) throw new Error(OPEN_A_VIDEO);
   // With the permission, Chrome reports YouTube tab addresses; no `tabs` permission is involved.
@@ -67,9 +92,10 @@ export async function captureCurrentVideo(): Promise<{ metadata: VideoMetadata; 
     target: { tabId: tab.id, frameIds: [0] }, world: 'ISOLATED', func: readMetadata, args: [id],
   });
   if (!read?.result) throw new Error('This video is still loading or its page layout is unsupported. Try again when its title is visible.');
+  const transcript = withTranscript && read.documentId ? await readTranscriptOf(tab.id, read.documentId, id) : undefined;
   const [after] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (after?.id !== tab.id || videoId(after.url ?? '') !== id) throw new Error('The page changed while Rhythm read it. Try again.');
-  return read.result;
+  return { ...read.result, transcript };
 }
 
 export async function captureTranscript(page: PageCapture, request: BrowserRequest): Promise<TranscriptUpload | null> {

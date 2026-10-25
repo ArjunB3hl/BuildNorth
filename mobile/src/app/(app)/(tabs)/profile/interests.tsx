@@ -210,7 +210,7 @@ export default function InterestsScreen() {
             'Share with my chosen agent',
             RECOMMENDATIONS_ENABLED
               ? 'Your connected agent receives your interests and the video content you approve when it uses Rhythm’s tools.'
-              : 'Your connected agent can read your interests when it uses Rhythm’s tools.',
+              : 'Your connected agent can read your interests, and with the Saved videos permission the videos you saved with their transcripts, so it can summarise them.',
           )}
           <Divider />
           {row(
@@ -230,6 +230,10 @@ export default function InterestsScreen() {
               With learning on, the Chrome extension sends the fitness, health and food videos you watch, and Rhythm reads your
               messages to the coach and the recommendations you save or mark helpful. Collected video signals are kept 60 days.
               Learning looks back 45 days, and older activity counts less.
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Save to Rhythm in the Chrome extension also opens the video’s YouTube transcript, reads it and closes it again,
+              and keeps the transcript with that video.
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               Turning learning off deletes the collected video signals and the interests learned from them. Turning YouTube
