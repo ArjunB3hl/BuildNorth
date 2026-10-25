@@ -68,15 +68,20 @@ test('every section and page renders', async () => {
   expect(text()).toContain('· Today');
 
   await press(renderer, 'Coach');
-  expect(text()).toContain('What should I cook tonight? Something quick.');
-  expect(text()).toContain('Memory checked');
+  expect(text()).toContain('Connect your coach first');
+  await press(renderer, 'Open AI connections');
+  expect(text().toLowerCase()).toContain('claude for the mac demo coach');
+  expect(text()).toContain('Native voice is not included in this Mac demo.');
+  await press(renderer, 'Back to Profile');
 
   await press(renderer, 'Calendar');
   expect(text()).toContain('Your days, in rhythm.');
   expect(text()).toContain('Greek yogurt & berries');
+  expect(text()).toContain('Local demo records only. This is not your measured health report.');
   expect(text()).toContain('Full body at home'); // marking the plan done added a timed entry
   await press(renderer, 'Edit Greek yogurt & berries');
   expect(text()).toContain('Edit a moment');
+  expect(text()).not.toContain('Your days, in rhythm.');
   await press(renderer, 'Save on this Mac');
   await press(renderer, 'Recipe library ↗');
   expect(text()).toContain('YOUR RECIPES');
