@@ -8,6 +8,7 @@ A personal assistant for meals, activity and the week's plan, with an AI Coach, 
 | [`mobile/`](mobile/) | The Expo app (iPhone, Android, and an Apple Watch app in SwiftUI) plus the FastAPI backend in `mobile/backend/` | [mobile/README.md](mobile/README.md) |
 | [`mac/`](mac/) | The native macOS app: React Native for macOS with parts of Expo SDK 55 (project name `NorthAssistant`) | [mac/README.md](mac/README.md) |
 | [`extension/`](extension/) | Rhythm, a Chrome side panel for phone-controlled video interests and user-chosen MCP agents | [extension/README.md](extension/README.md) (backend side: [Rhythm guide](mobile/docs/rhythm.md)) |
+| [`inference/pose-coach/`](inference/pose-coach/) | Browser camera coach, embedded in the website; counted sets save to Activity | [Website integration](mobile/docs/pose-coach.md) |
 
 How both were built, what was checked and what is still open: [mobile/docs/work-log.md](mobile/docs/work-log.md).
 

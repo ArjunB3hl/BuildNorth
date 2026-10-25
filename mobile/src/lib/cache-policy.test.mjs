@@ -40,6 +40,7 @@ test('shouldPersistQuery: watch health values, memory search and status never re
   assert.equal(shouldPersistQuery(query(['watch-health', '2026-10-21'])), false);
   assert.equal(shouldPersistQuery(query(['memory-search', 'sleep'])), false);
   assert.equal(shouldPersistQuery(query(['status'])), false);
+  assert.equal(shouldPersistQuery(query(['pose-coach', 'live'])), false);
   assert.equal(shouldPersistQuery(query(['recipes'])), true);
   assert.equal(shouldPersistQuery(query(['watch-settings'])), true);
   assert.equal(shouldPersistQuery(query(['recipes'], 'error')), false);
