@@ -19,3 +19,6 @@
 
 # per-machine tool settings
 .claude/settings.local.json
+
+# Locally packaged demo releases; binaries and signing material stay out of Git.
+/artifacts/

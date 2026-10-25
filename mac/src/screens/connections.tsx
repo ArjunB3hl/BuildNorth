@@ -9,7 +9,7 @@ import { useNav } from '../navigation';
 export function ConnectionsScreen() {
   const claude = useDemoClaude(), nav = useNav();
   const [key, setKey] = useState(''), [model, setModel] = useState('claude-opus-5-5');
-  const [website, setWebsite] = useState<string>(Constants.expoConfig?.extra?.buildNorthWebUrl || 'http://localhost:8081');
+  const [website, setWebsite] = useState<string>(Constants.expoConfig?.extra?.buildNorthWebUrl || 'https://rhythm-buildnorth.expo.app');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   async function open(url: string) {
     try { await Linking.openURL(url); }
