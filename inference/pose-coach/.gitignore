@@ -1,0 +1,11 @@
+# secrets and local data (clips, landmark results) never go in the repo
+.env
+.data
+.venv
+.venv-kokoro
+# third-party assets fetched by tools/fetch_assets.sh (pinned versions + checksums)
+web/vendor
+web/models/*.task
+web/models/kokoro/*
+!web/models/kokoro/SHA256SUMS
+__pycache__/

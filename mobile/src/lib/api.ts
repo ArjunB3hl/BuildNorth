@@ -2,6 +2,8 @@ import Constants from 'expo-constants';
 import { createRhythmApi } from '@/lib/rhythm';
 
 import type {
+  CalendarEntry,
+  CalendarInput,
   AcceptResult,
   AssistantProposal,
   ConnectionsInfo,
@@ -227,6 +229,15 @@ export function createApi(getToken: TokenGetter) {
         send<{ draft: RoutineInput; warnings: string[] }>('POST', '/routines/extract', { text }, { timeoutMs: AI_TIMEOUT_MS, signal }),
     },
 
+    calendar: {
+      list: (start: string, days: number, timezone: string) => get<CalendarEntry[]>(`/calendar${q({ start, days, timezone })}`),
+      create: (body: CalendarInput & { clientKey: string }) => send<CalendarEntry>('POST', '/calendar', body),
+      update: (id: string, body: CalendarInput) => send<CalendarEntry>('PUT', `/calendar/${id}`, body),
+      remove: (id: string) => send<void>('DELETE', `/calendar/${id}`),
+      demo: (date: string, timezone: string) => send<{ entries: number }>('POST', '/calendar/demo', { date, timezone }),
+      clearDemo: () => send<void>('DELETE', '/calendar/demo/all'),
+    },
+
     sessions: {
       list: () => get<ActivitySession[]>('/sessions'),
       get: (id: string) => get<ActivitySession>(`/sessions/${id}`),
@@ -294,11 +305,11 @@ export function createApi(getToken: TokenGetter) {
 
     coach: {
       history: () => get<{ messages: CoachMessage[] }>('/coach/messages'),
-      send: (content: string, localDate: string, signal?: AbortSignal) =>
+      send: (content: string, localDate: string, signal?: AbortSignal, clientKey?: string) =>
         send<{ userMessage: CoachMessage; reply: CoachMessage; memoryAvailable: boolean }>(
           'POST',
           '/coach/messages',
-          { content, localDate },
+          { content, localDate, clientKey, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
           { timeoutMs: AI_TIMEOUT_MS, signal },
         ),
       clear: () => send<void>('DELETE', '/coach/messages'),

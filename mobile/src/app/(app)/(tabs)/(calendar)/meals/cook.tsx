@@ -1,19 +1,20 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { Countdown } from '@/components/countdown';
-import { Accent, Button } from '@/components/form';
+import { Accent, Button, Notice } from '@/components/form';
 import { ActionButton } from '@/components/meals/action-button';
 import { MealIcons } from '@/components/meals/icons';
 import { SectionCard } from '@/components/meals/layout';
 import { IngredientList } from '@/components/meals/recipe-parts';
 import { Collapse, FadeIn, FillBar } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
-import { Card, ErrorState, Loading, Row, Screen } from '@/components/ui';
+import { Card, ErrorState, Loading, Row, Screen, errorMessage } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
+import { newKey } from '@/lib/keys';
 import { useTheme } from '@/hooks/use-theme';
 
 const web = Platform.OS === 'web';
@@ -25,6 +26,12 @@ export default function CookMode() {
   const router = useRouter();
   const theme = useTheme();
   const recipe = useQuery({ queryKey: ['recipe', id], queryFn: () => api.recipes.get(id) });
+  const cache = useQueryClient();
+  const [mealKey] = useState(newKey);
+  const logMeal = useMutation({
+    mutationFn: () => api.calendar.create({ kind: 'meal', title: recipe.data!.title, occurredAt: new Date().toISOString(), durationMinutes: null, notes: null, clientKey: mealKey }),
+    onSuccess: () => { cache.invalidateQueries({ queryKey: ['calendar'] }); router.replace('/calendar'); },
+  });
   const [index, setIndex] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
 
@@ -33,7 +40,7 @@ export default function CookMode() {
   const r = recipe.data!;
   const step = r.steps[index];
   const next = r.steps[index + 1];
-  const last = index === r.steps.length - 1;
+  const last = index >= r.steps.length - 1;
 
   return (
     <Screen
@@ -46,7 +53,7 @@ export default function CookMode() {
             </View>
             <View style={styles.fill}>
               {last ? (
-                <Button title="Finish" onPress={() => router.back()} />
+                <View style={{ gap: 8 }}><Button title="Ate this · log meal" loading={logMeal.isPending} onPress={() => logMeal.mutate()} /><Button title="Finish without logging" variant="quiet" disabled={logMeal.isPending} onPress={() => router.back()} /></View>
               ) : (
                 <Button title="Next step" onPress={() => setIndex((i) => i + 1)} />
               )}
@@ -60,6 +67,7 @@ export default function CookMode() {
           headerLeft: () => <Button title="Close" size="small" variant="quiet" onPress={() => router.back()} />,
         }}
       />
+      {logMeal.isError ? <Notice tone="error">{errorMessage(logMeal.error)}</Notice> : null}
       <View style={styles.progress}>
         <ThemedText type="smallBold" themeColor="textSecondary" accessibilityLiveRegion="polite">
           Step {index + 1} of {r.steps.length}

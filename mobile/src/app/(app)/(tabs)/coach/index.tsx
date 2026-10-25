@@ -27,6 +27,7 @@ import { useBottomBarInset } from '@/hooks/use-bottom-bar-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
 import { confirmAction } from '@/lib/confirm';
+import { newKey } from '@/lib/keys';
 import { localDate } from '@/lib/dates';
 import type { CoachMessage } from '@/lib/types';
 
@@ -41,6 +42,7 @@ export default function CoachScreen() {
   const queryClient = useQueryClient();
   const listRef = useRef<FlatList<CoachMessage>>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const turnKey = useRef({ text: '', key: '' });
   const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState<{ text: string; error: unknown } | null>(null);
   // Replies that arrived in this session are written out block by block; older ones just appear.
@@ -58,7 +60,8 @@ export default function CoachScreen() {
   const send = useMutation({
     mutationFn: (text: string) => {
       abortRef.current = new AbortController();
-      return api.coach.send(text, localDate(), abortRef.current.signal);
+      if (turnKey.current.text !== text) turnKey.current = { text, key: newKey() };
+      return api.coach.send(text, localDate(), abortRef.current.signal, turnKey.current.key);
     },
     onMutate: () => setFailed(null),
     onSuccess: (result) => {
@@ -66,6 +69,8 @@ export default function CoachScreen() {
       queryClient.setQueryData<{ messages: CoachMessage[] }>(['coach'], (old) => ({
         messages: [...(old?.messages ?? []), result.userMessage, result.reply],
       }));
+      turnKey.current = { text: '', key: '' };
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
       setDraft(''); // cleared only once the reply is safely stored
     },
     onError: (error, text) => {

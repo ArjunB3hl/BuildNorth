@@ -163,3 +163,15 @@ enum LocalDay {
     return formatter.date(from: day).map { calendar.startOfDay(for: $0) }
   }
 }
+
+/// Unified meals and movement journal, returned by GET /watch/calendar.
+struct CalendarEntry: Codable, Identifiable, Equatable, Sendable {
+  let id: String
+  let kind: String
+  let title: String
+  let localDate: String
+  let localTime: String
+  let durationMinutes: Int?
+  let source: String
+  let timeEstimated: Bool
+}

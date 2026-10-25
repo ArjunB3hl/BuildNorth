@@ -1,3 +1,4 @@
+import { CalendarScreen } from './screens/calendar';
 import { StyleSheet, View } from 'react-native';
 
 import { Sidebar } from './components/sidebar';
@@ -55,6 +56,8 @@ function CurrentPage() {
           return <TodayScreen />;
         case 'coach':
           return <CoachScreen />;
+        case 'calendar':
+          return <CalendarScreen />;
         case 'meals':
           return <MealsScreen />;
         case 'activity':

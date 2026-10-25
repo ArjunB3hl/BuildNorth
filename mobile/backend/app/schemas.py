@@ -425,6 +425,8 @@ class Suggestion(ApiModel):
 class CoachMessageIn(InputModel):
     content: Annotated[str, Field(min_length=1, max_length=4000), AfterValidator(_strip_multiline)]
     local_date: LocalDate | None = None
+    timezone: Annotated[str, Field(max_length=80)] = "UTC"
+    client_key: Annotated[str, Field(min_length=1, max_length=80)] | None = None
 
 
 class CoachContextOut(ApiModel):
@@ -441,6 +443,7 @@ class CoachContextOut(ApiModel):
     routines: int = 0
     plan_items: int = 0
     health_days: int = 0
+    calendar_entries: int = 0
 
 
 class CoachMessageOut(ApiModel):

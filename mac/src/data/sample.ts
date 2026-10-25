@@ -1,3 +1,4 @@
+import { demoCalendar, type DemoCalendarEntry } from './calendar';
 import { addDays, localDate } from '../lib/dates';
 import type {
   ActivitySession,
@@ -15,6 +16,7 @@ import type {
 // the BuildNorth backend. Dates are relative to today.
 
 export type SampleData = {
+  calendarEntries: DemoCalendarEntry[];
   profile: Profile;
   preferences: Preference[];
   recipes: Recipe[];
@@ -377,6 +379,7 @@ export function createSampleData(today: string = localDate()): SampleData {
   ];
 
   return {
+    calendarEntries: demoCalendar(today),
     profile: {
       preferredName: null,
       goals: ['Eat more plants', 'Move 3 times a week'],

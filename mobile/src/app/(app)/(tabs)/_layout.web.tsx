@@ -18,8 +18,8 @@ const rhythmPaths = ['/profile/videos', '/profile/interests'];
 const main: NavItem[] = [
   { href: '/', label: 'Overview', icon: { ios: 'square.grid.2x2', android: 'space_dashboard', web: 'space_dashboard' }, active: (p) => p === '/' },
   { href: '/coach', label: 'Coach', icon: { ios: 'bubble.left.and.bubble.right', android: 'forum', web: 'forum' }, active: (p) => p.startsWith('/coach'), ai: true },
-  { href: '/meals', label: 'Meals', icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, active: (p) => p.startsWith('/meals') },
-  { href: '/activity', label: 'Activity', icon: { ios: 'figure.run', android: 'fitness_center', web: 'fitness_center' }, active: (p) => p.startsWith('/activity') },
+  { href: '/calendar', label: 'Calendar', icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }, active: (p) => p.startsWith('/calendar') || p.startsWith('/meals') || (p.startsWith('/activity') && p !== '/activity/camera') },
+  { href: '/activity/camera', label: 'Camera workout', icon: { ios: 'camera', android: 'videocam', web: 'videocam' }, active: (p) => p === '/activity/camera' },
 ];
 const rhythm: NavItem[] = [
   { href: '/profile/videos', label: 'Content library', icon: { ios: 'play.rectangle.on.rectangle', android: 'video_library', web: 'video_library' }, active: (p) => p.startsWith('/profile/videos') },

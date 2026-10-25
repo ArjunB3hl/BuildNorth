@@ -7,5 +7,8 @@ This repository holds two apps and a Chrome companion; see README.md for the lay
 - `extension/`: Rhythm (WXT, React, TypeScript, Manifest V3). Read `extension/README.md` and
   `mobile/docs/rhythm.md`. Its backend lives in `mobile/backend/app/rhythm/`.
 
+- `inference/pose-coach/`: local browser camera coach. Read its `docs/HANDOFF.md` and `mobile/docs/pose-coach.md`.
+  Private assets and recordings stay in ignored `.data/`; the website alone saves counted sets.
+
 Run commands from the app's own folder (`cd mobile`, `cd mac`, or `cd extension`);
 each has its own `package.json` and `node_modules`.

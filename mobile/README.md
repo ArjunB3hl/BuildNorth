@@ -649,6 +649,12 @@ cd backend && .venv/bin/python -m scripts.live_check
   `buildnorth/*` instead of an admin key.
 - Serve the API over HTTPS and set `EXPO_PUBLIC_API_URL`.
 
+## Camera workouts on the website
+
+The website's **Camera workout** navigation item embeds the local pose coach. Finish and save records counted
+sets in Activity with the signed-in account. Named movements, holds, technique results and Mistakes stay in the
+pose page. Native applications have no camera-coach entry point. See [the integration guide](docs/pose-coach.md).
+
 ## Later phases (not built yet — no placeholder buttons in the app)
 
 Integration boundaries already in place: all model calls go through `backend/app/ai.py` (`AIProvider.generate_json`),
