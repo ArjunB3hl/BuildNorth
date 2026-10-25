@@ -1,6 +1,6 @@
-# BuildNorth
+# Rhythm — Demo version
 
-A personal assistant for meals, activity and the week's plan, with an AI Coach, shared long-term memory
+A demo version of a personal assistant for meals, activity and the week's plan, with an AI Coach, shared long-term memory
 (SurrealDB Agent Memory) and access for AI assistants over MCP. One repository, two apps and a Chrome companion:
 
 | Folder | What | Guide |

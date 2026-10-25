@@ -121,7 +121,7 @@ final class AppModel {
       return true
     }
     guard TokenStore.save(info) else {
-      linkError = "Couldn't save the link from your iPhone. Unlock your watch and reopen BuildNorth to try again."
+      linkError = "Couldn't save the link from your iPhone. Unlock your watch and reopen Rhythm to try again."
       return false
     }
     clearLocalData()

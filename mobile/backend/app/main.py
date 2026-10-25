@@ -1,4 +1,4 @@
-"""BuildNorth backend: Clerk-authenticated health companion API.
+"""Rhythm backend: Clerk-authenticated health companion API.
 
 Structured records live in the SQL database (authoritative for app data);
 confirmed preferences, conversational facts and (when the user shares them) Apple
@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine.dispose()
 
 
-app = FastAPI(title="BuildNorth API", lifespan=lifespan)
+app = FastAPI(title="Rhythm API · Demo version", lifespan=lifespan)
 # Native apps don't need CORS; this only lets `expo start --web` on this machine call the API.
 app.add_middleware(
     CORSMiddleware,

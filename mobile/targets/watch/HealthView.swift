@@ -35,7 +35,7 @@ struct HealthView: View {
               .foregroundStyle(.secondary)
           }
         } else {
-          Text("Sends each day's summary to BuildNorth, with days missed while the app was closed (up to a week).")
+          Text("Sends each day's summary to Rhythm, with days missed while the app was closed (up to a week).")
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
@@ -55,9 +55,9 @@ struct HealthView: View {
             .font(.headline)
           Text(
             share
-              ? "Daily summaries, including today so far, go to the Coach's AI service, BuildNorth's hosted "
+              ? "Daily summaries, including today so far, go to the Coach's AI service, Rhythm's hosted "
                 + "long-term memory and AI assistants you connect."
-              : "Summaries are saved for you only. The Coach's AI service, BuildNorth's long-term memory and "
+              : "Summaries are saved for you only. The Coach's AI service, Rhythm's long-term memory and "
                 + "AI assistants you connect don't see them."
           )
           .font(.footnote)
@@ -92,7 +92,7 @@ struct HealthView: View {
         .font(.footnote)
     case .notRequested:
       VStack(alignment: .leading, spacing: 6) {
-        Text("BuildNorth reads sleep, heart rate, HRV, steps, active energy and workouts.")
+        Text("Rhythm reads sleep, heart rate, HRV, steps, active energy and workouts.")
           .font(.footnote)
         Button("Allow Health access") {
           Task { await model.requestHealthAccess() }

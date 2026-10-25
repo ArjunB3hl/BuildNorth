@@ -4,15 +4,15 @@ Web and phone: **Profile → AI connections**, also linked from Coach. Mac: **Pr
 
 | Option | What it does | Where the credential lives |
 | --- | --- | --- |
-| Connect ChatGPT or Claude | The external assistant reads your BuildNorth account through `/mcp` and can propose changes for approval. `get_calendar` reads timed meals/workouts, labels demo content, and respects Watch health-sharing consent. | The assistant handles OAuth with your BuildNorth Clerk account. |
-| Claude API key on web/phone | Claude answers inside BuildNorth's Coach, using its existing context and Calendar logging. Other AI features retain the server's configured provider. | Encrypted, scoped to the signed-in account on the backend; only its last four characters are returned. |
+| Connect ChatGPT or Claude | The external assistant reads your Rhythm account through `/mcp` and can propose changes for approval. `get_calendar` reads timed meals/workouts, labels demo content, and respects Watch health-sharing consent. | The assistant handles OAuth with your Rhythm Clerk account. |
+| Claude API key on web/phone | Claude answers inside Rhythm's Coach, using its existing context and Calendar logging. Other AI features retain the server's configured provider. | Encrypted, scoped to the signed-in account on the backend; only its last four characters are returned. |
 | Claude API key on Mac | Claude answers inside the Mac demo Coach using local demo profile, preferences, plan and Calendar. Conversations remain local. | Memory only; disconnecting or quitting clears it. Native requests go directly to `https://api.anthropic.com`. |
 
 An Anthropic API key is separate from a Claude subscription and from an MCP connection token. Verification calls the Models API and does not generate a paid message. Sending Coach messages uses the key's API allowance. No judge key is embedded in the app or repository. Get a key from the [Anthropic Console](https://platform.claude.com/settings/keys).
 
 ## Demo on localhost
 
-1. Start the BuildNorth API and website, sign in, then open AI connections.
+1. Start the Rhythm API and website, sign in, then open AI connections.
 2. Enter a judge-provided Claude API key and an accessible Claude model; select **Verify and connect Claude**.
 3. Open Coach and send a message. The existing web/phone completed-event logging continues to feed Calendar.
 4. Remove the key after the demo. Coach returns to the server's default provider, if configured. Account-data erasure also deletes the encrypted key.
@@ -26,8 +26,8 @@ Web/phone key entry requires HTTPS except on localhost. A physical phone must us
 2. Set `AI_CREDENTIAL_ENCRYPTION_KEY` to a persistent Fernet key shared by all backend workers. Keep it in the deployment secret manager, separate from the database. SQLite development creates a private `ai-credentials.key` beside its database; preserve that key if preserving the database. Do not regenerate a production encryption key on each deploy.
 3. Set `WEB_ALLOWED_ORIGINS` to the deployed website origin and rebuild web/phone with `EXPO_PUBLIC_API_URL=https://api.your-domain`. Configure Clerk for the deployed website as well.
 4. Set `mac/app.json` → `extra.buildNorthWebUrl` to the deployed website before packaging Mac, or enter it in the Mac connection screen. Mac keeps its demo data local; its account-setup button opens the live website in the system browser.
-5. In BuildNorth's AI connections page, copy the server address. In ChatGPT, open **Plugins → + → Add custom MCP server**, choose OAuth, create/install it, and sign in with BuildNorth. In Claude, open **Customize → Connectors → Add → Custom → Web**, choose sign-in and Claude's published identity, then sign in with BuildNorth. Account/workspace policies may control availability. Complete setup on the provider's supported web/desktop surface; mobile access depends on that provider's app and account.
-6. Ask the assistant to read your BuildNorth Calendar. The setup screen does not claim a connection succeeded merely because you opened settings. Verify an actual tool response after deployment. Use the existing Content library connections for the separate Rhythm `/rhythm/mcp` endpoint and saved-video tools.
+5. In Rhythm's AI connections page, copy the server address. In ChatGPT, open **Plugins → + → Add custom MCP server**, choose OAuth, create/install it, and sign in with Rhythm. In Claude, open **Customize → Connectors → Add → Custom → Web**, choose sign-in and Claude's published identity, then sign in with Rhythm. Account/workspace policies may control availability. Complete setup on the provider's supported web/desktop surface; mobile access depends on that provider's app and account.
+6. Ask the assistant to read your Rhythm Calendar. The setup screen does not claim a connection succeeded merely because you opened settings. Verify an actual tool response after deployment. Use the existing Content library connections for the separate Rhythm `/rhythm/mcp` endpoint and saved-video tools.
 
 Both providers reach remote connectors from their cloud services, so an unexposed localhost endpoint cannot work. This is expected in the preview; the configured public URL appears automatically after backend deployment. No API key is needed to connect an external ChatGPT/Claude account.
 

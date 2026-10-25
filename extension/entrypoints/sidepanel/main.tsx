@@ -54,9 +54,9 @@ function FollowWebsite() {
 
 function SignedOut() {
   return <Welcome>
-    <p>Rhythm uses your BuildNorth sign-in. Sign in on the website, and this panel signs in with you.</p>
+    <p>Rhythm uses your Rhythm sign-in. Sign in on the website, and this panel signs in with you.</p>
     <button type="button" className="primary" onClick={() => void chrome.tabs.create({ url: signInPage })}>
-      Sign in on the BuildNorth website
+      Sign in on the Rhythm website
     </button>
     <p className="muted">Already signed in there, or still seeing this? Close this panel and open it again.</p>
     <details>
@@ -74,7 +74,7 @@ function Root() {
   }
   return <ClerkProvider publishableKey={key} syncHost={syncHost} afterSignOutUrl={url} signInFallbackRedirectUrl={url}
     signUpFallbackRedirectUrl={url} appearance={appearance(dark)}
-    localization={{ signIn: { start: { title: 'Sign in to Rhythm', subtitle: 'Use your BuildNorth account' } } }}>
+    localization={{ signIn: { start: { title: 'Sign in to Rhythm', subtitle: 'Use your Rhythm account' } } }}>
     <FollowWebsite />
     <ClerkLoading><Welcome><p>Loading sign-in…</p></Welcome></ClerkLoading>
     <ClerkFailed><Welcome><p>Sign-in could not load. Check your connection and reopen Rhythm.</p></Welcome></ClerkFailed>

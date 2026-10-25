@@ -574,7 +574,7 @@ function WeekPlan({ today }: { today: string }) {
       ))}
       <Notice tone="info">
         “Help plan my week” and plan changes in your own words need the
-        BuildNorth backend, so they aren’t in the Mac app yet.
+        Rhythm backend, so they aren’t in the Mac app yet.
       </Notice>
     </View>
   );

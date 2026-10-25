@@ -73,6 +73,6 @@ def delete_all_data(request: Request, user: CurrentUser, db: Db, memory: Memory)
         memory_detail += " Rhythm's private memory erasure is queued for retry."
     elif memory is None and rhythm.memory_status == "ok":
         memory_status = "erased"
-        memory_detail = "Rhythm's private memory erasure completed. General BuildNorth memory is not configured."
+        memory_detail = "Rhythm's private memory erasure completed. General Rhythm memory is not configured."
     memory_detail += " Today's Rhythm acquisition counter remains until the daily reset."
     return DeleteDataOut(deleted_records=deleted, memory_status=memory_status, memory_detail=memory_detail)

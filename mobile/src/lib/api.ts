@@ -45,7 +45,7 @@ import type {
 } from '@/lib/types';
 
 /**
- * Base URL of the BuildNorth backend. EXPO_PUBLIC_API_URL wins; otherwise, in
+ * Base URL of the Rhythm backend. EXPO_PUBLIC_API_URL wins; otherwise, in
  * development, use the machine serving the JS bundle so Expo Go on a phone on
  * the same Wi-Fi reaches the backend without extra configuration.
  */
@@ -160,7 +160,7 @@ export function createApi(getToken: TokenGetter) {
       // The backend always answers errors with JSON. Anything else came from something in between,
       // e.g. a tunnel whose endpoint is offline (ngrok answers 404 with an HTML page) or a captive portal.
       if (__DEV__) console.warn(`[api] ${method} ${path} -> ${response.status} from outside the backend (${response.headers.get('ngrok-error-code') ?? 'non-JSON'})`);
-      throw new ApiError("Can't reach the BuildNorth server right now. Check your connection and try again.", 'network', response.status);
+      throw new ApiError("Can't reach the Rhythm server right now. Check your connection and try again.", 'network', response.status);
     }
     if (!response.ok) {
       const detail = typeof data?.detail === 'string' ? data.detail : undefined;

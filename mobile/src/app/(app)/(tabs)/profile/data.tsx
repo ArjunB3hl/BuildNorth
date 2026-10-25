@@ -49,7 +49,7 @@ export default function DataScreen() {
 
   async function confirm() {
     const ok = await confirmAction({
-      title: 'Delete all your BuildNorth data?',
+      title: 'Delete all your Rhythm data?',
       message:
         'This permanently deletes your profile, recipes, shopping list, routines, sessions, check-ins, plan, coach conversation, Apple Watch links and health summaries, and everything long-term memory holds about you. It cannot be undone.',
       confirmLabel: 'Delete everything',
@@ -63,16 +63,16 @@ export default function DataScreen() {
   return (
     <Screen>
       <Stagger>
-        <SectionCard title="What BuildNorth stores" icon={{ ios: 'tray.full', android: 'database', web: 'database' }}>
+        <SectionCard title="What Rhythm stores" icon={{ ios: 'tray.full', android: 'database', web: 'database' }}>
           <FactList
             items={[
               {
                 icon: { ios: 'person', android: 'person', web: 'person' },
-                text: "Your profile, recipes, shopping list, routines, activity sessions, check-ins, plan and coach conversation, in BuildNorth's database.",
+                text: "Your profile, recipes, shopping list, routines, activity sessions, check-ins, plan and coach conversation, in Rhythm's database.",
               },
               {
                 icon: { ios: 'applewatch', android: 'watch', web: 'watch' },
-                text: "If you link an Apple Watch: daily health summaries it uploads (sleep, resting heart rate, HRV, steps, active energy and workouts) and the watch's link, in BuildNorth's database.",
+                text: "If you link an Apple Watch: daily health summaries it uploads (sleep, resting heart rate, HRV, steps, active energy and workouts) and the watch's link, in Rhythm's database.",
               },
               {
                 icon: { ios: 'brain', android: 'psychology', web: 'psychology' },
@@ -98,7 +98,7 @@ export default function DataScreen() {
             {deleted.length === 0 ? <ThemedText type="small">No app records were stored.</ThemedText> : null}
             <Notice tone={result.memoryStatus === 'failed' ? 'error' : 'success'}>{result.memoryDetail}</Notice>
             <ThemedText type="small" themeColor="textSecondary">
-              Your sign-in account itself still exists. You can keep using BuildNorth with a fresh start, or sign out.
+              Your sign-in account itself still exists. You can keep using Rhythm with a fresh start, or sign out.
             </ThemedText>
             <FormActions>
               <Button title="Sign out" variant="secondary" onPress={signOut} />

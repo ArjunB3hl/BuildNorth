@@ -1,4 +1,4 @@
-/* The BuildNorth web app's look (mobile/src/constants/theme.ts WebColors, components/ui.tsx and form.tsx), in plain CSS. */
+/* The Rhythm web app's look (mobile/src/constants/theme.ts WebColors, components/ui.tsx and form.tsx), in plain CSS. */
 :root {
   color-scheme: light dark;
   --font: Spline Sans, Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -71,7 +71,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand h1 { display: block; font-size: 17px; line-height: 20px; font-weight: 700; letter-spacing: -0.3px; }
 .brand span { display: block; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-2); }
-.brand b { color: var(--accent-text); font-weight: 600; }
+.brand .demo-label { width: fit-content; margin-top: 4px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 
 /* The AI orb (components/ai-orb.tsx) */
 .orb {

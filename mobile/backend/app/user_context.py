@@ -1,4 +1,4 @@
-"""What BuildNorth knows about one user, gathered for one request. Shared by the Coach and the MCP server.
+"""What Rhythm knows about one user, gathered for one request. Shared by the Coach and the MCP server.
 
 Everything is read for the verified user ID only:
 - the profile and saved preferences, from the app database. These are authoritative and always current:
@@ -267,7 +267,7 @@ def _personalization(memory: MemoryState, preferences: list[PreferenceContext], 
         recalled = sum(p.recalled for p in preferences)
         return f"{base} Long-term memory was checked: {recalled} preference(s) recalled as relevant to this request."
     return (f"{base} Long-term memory was NOT checked ({memory.status.replace('_', ' ')}). Tell the user that long-term "
-            "memory couldn't be checked, and don't present the answer as drawing on what BuildNorth remembers beyond this.")
+            "memory couldn't be checked, and don't present the answer as drawing on what Rhythm remembers beyond this.")
 
 
 def gather(

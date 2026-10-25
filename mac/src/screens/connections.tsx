@@ -27,7 +27,7 @@ export function ConnectionsScreen() {
       const origin = website.trim().replace(/\/+$/, '');
       if (!/^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?$/i.test(origin)) throw new Error();
       open(`${origin}/profile/connections`);
-    } catch { setError('Enter an HTTPS BuildNorth website address, or localhost for this demo.'); }
+    } catch { setError('Enter an HTTPS Rhythm website address, or localhost for this demo.'); }
   }
   return <Screen title="AI connections" subtitle="Your assistants, on every device">
     {error ? <Notice tone="error">{error}</Notice> : null}
@@ -47,20 +47,20 @@ export function ConnectionsScreen() {
     </Card>
     <SectionHeader title="Connect your ChatGPT or Claude account" />
     <Card>
-      <ThemedText>Set up BuildNorth in your assistant to use your signed-in web and phone data. Complete setup in your browser, then use that account in the assistant’s supported apps.</ThemedText>
+      <ThemedText>Set up Rhythm in your assistant to use your signed-in web and phone data. Complete setup in your browser, then use that account in the assistant’s supported apps.</ThemedText>
       <Notice tone="info">This Mac keeps its Calendar in local demo mode. Account connectors read your web account’s data, not this Mac’s sample data. The Claude demo Coach above uses this Mac’s data directly.</Notice>
-      <TextField label="BuildNorth website" value={website} onChangeText={setWebsite} autoCapitalize="none" autoCorrect={false} placeholder="https://your-buildnorth-website" />
+      <TextField label="Rhythm website" value={website} onChangeText={setWebsite} autoCapitalize="none" autoCorrect={false} placeholder="https://your-buildnorth-website" />
       <Button title="Set up account connections" onPress={setupAccount} />
-      <ThemedText type="small" themeColor="textSecondary">On the website, copy the BuildNorth connector address. If it is local, external assistants will become available after deployment to public HTTPS.</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">On the website, copy the Rhythm connector address. If it is local, external assistants will become available after deployment to public HTTPS.</ThemedText>
     </Card>
     <Card>
       <ThemedText type="subtitle">ChatGPT</ThemedText>
-      <ThemedText>Open Plugins → + → Add custom MCP server. Paste BuildNorth’s public connector address, select OAuth, install it, and sign in with your BuildNorth account.</ThemedText>
+      <ThemedText>Open Plugins → + → Add custom MCP server. Paste Rhythm’s public connector address, select OAuth, install it, and sign in with your Rhythm account.</ThemedText>
       <Button title="Open ChatGPT setup" variant="secondary" onPress={() => open('https://chatgpt.com/plugins')} />
     </Card>
     <Card>
       <ThemedText type="subtitle">Claude</ThemedText>
-      <ThemedText>Open Customize → Connectors → Add → Custom → Web. Paste BuildNorth’s public connector address, choose Sign in now and Claude’s published identity, then sign in with BuildNorth.</ThemedText>
+      <ThemedText>Open Customize → Connectors → Add → Custom → Web. Paste Rhythm’s public connector address, choose Sign in now and Claude’s published identity, then sign in with Rhythm.</ThemedText>
       <Button title="Open Claude connectors" variant="secondary" onPress={() => open('https://claude.ai/customize/connectors')} />
     </Card>
   </Screen>;

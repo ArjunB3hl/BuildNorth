@@ -19,10 +19,10 @@ export function secretTransportAllowed(value: string): boolean {
 export const ASSISTANT_SETUP = [
   {
     name: 'ChatGPT', url: 'https://chatgpt.com/plugins', action: 'Open ChatGPT setup',
-    steps: 'Open Plugins → + → Add custom MCP server. Name it BuildNorth, paste the address, and select OAuth. Create and install it, sign in with your BuildNorth account, then select BuildNorth in a new chat.',
+    steps: 'Open Plugins → + → Add custom MCP server. Name it Rhythm, paste the address, and select OAuth. Create and install it, sign in with your Rhythm account, then select Rhythm in a new chat.',
   },
   {
     name: 'Claude', url: 'https://claude.ai/customize/connectors', action: 'Open Claude connectors',
-    steps: 'Open Customize → Connectors → Add → Custom → Web. Name it BuildNorth and paste the address. Use Sign in now and Claude’s published identity, then sign in with your BuildNorth account. Enable BuildNorth in your conversation.',
+    steps: 'Open Customize → Connectors → Add → Custom → Web. Name it Rhythm and paste the address. Use Sign in now and Claude’s published identity, then sign in with your Rhythm account. Enable Rhythm in your conversation.',
   },
 ] as const;

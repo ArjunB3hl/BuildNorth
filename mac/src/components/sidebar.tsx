@@ -35,9 +35,9 @@ export function Sidebar() {
       ]}
     >
       <View style={styles.brand}>
-        <ThemedText style={styles.wordmark}>BuildNorth</ThemedText>
+        <ThemedText style={styles.wordmark}>Rhythm</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Personal assistant
+          Demo version
         </ThemedText>
       </View>
       {SECTIONS.map(s => (
@@ -57,7 +57,7 @@ export function Sidebar() {
           <ThemedText type="smallBold">Saved on this Mac</ThemedText>
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          Sample data. Not connected to the BuildNorth backend yet.
+          Local demo data. Live account syncing is not connected.
         </ThemedText>
       </View>
     </View>

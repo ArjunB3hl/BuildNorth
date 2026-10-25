@@ -112,7 +112,7 @@ export default function MealsScreen() {
             <EmptyPanel
               icon={MealIcons.recipe}
               title="No recipes yet"
-              body="Paste a recipe, an ingredient list or a cooking transcript and BuildNorth turns it into a recipe you can edit."
+              body="Paste a recipe, an ingredient list or a cooking transcript and Rhythm turns it into a recipe you can edit."
               actions={<Button title="Add your first recipe" size="small" onPress={addRecipe} />}
             />
           )}

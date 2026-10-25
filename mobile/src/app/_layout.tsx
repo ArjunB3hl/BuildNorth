@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider } from 'expo-router';
+import Head from 'expo-router/head';
 import * as SplashScreen from 'expo-splash-screen';
 import { StyleSheet, useColorScheme } from 'react-native';
 
@@ -17,6 +18,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Head><title>Rhythm · Demo version</title><meta name="description" content="Demo version of Rhythm, your companion for meals, movement and everyday routines." /></Head>
       <AnimatedSplashOverlay />
       {publishableKey ? (
         // tokenCache keeps the Clerk session in expo-secure-store, so it survives app restarts.

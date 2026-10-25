@@ -19,7 +19,7 @@ import type { HealthDay, HealthWorkout } from '@/lib/types';
 import { isActiveToken, linkWatch } from '@/lib/watch-link';
 import { Stagger } from '@/components/motion';
 
-/** Link the BuildNorth Apple Watch app, choose whether its health summaries are shared, and see what it uploaded. */
+/** Link the Rhythm Apple Watch app, choose whether its health summaries are shared, and see what it uploaded. */
 export default function WatchScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -34,7 +34,7 @@ export default function WatchScreen() {
 
   const link = useMutation({
     // The plaintext token exists only inside this function: it goes from the server straight to the watch
-    // and BuildNorth never returns, caches or stores it. WatchConnectivity itself keeps the last application
+    // and Rhythm never returns, caches or stores it. WatchConnectivity itself keeps the last application
     // context (token included) on this iPhone until the next link or unlink replaces it.
     mutationFn: async () => {
       // Don't mint for a watch that can't receive it.
@@ -94,7 +94,7 @@ export default function WatchScreen() {
     const ok = await confirmAction({
       title: 'Unlink Apple Watch?',
       message:
-        'Your watch signs out and stops showing your plan. Health summaries it already uploaded stay in BuildNorth until you delete your data.',
+        'Your watch signs out and stops showing your plan. Health summaries it already uploaded stay in Rhythm until you delete your data.',
       confirmLabel: 'Unlink',
       destructive: true,
     });
@@ -131,7 +131,7 @@ export default function WatchScreen() {
           description={state.message}
           action={<Pill label={state.ready ? 'Ready to link' : 'Not ready'} tone={state.ready ? 'success' : 'muted'} />}>
           {link.isSuccess ? (
-            <Notice tone="success">Link sent. Open BuildNorth on your watch; it signs in by itself.</Notice>
+            <Notice tone="success">Link sent. Open Rhythm on your watch; it signs in by itself.</Notice>
           ) : null}
           {link.data?.notRevoked ? (
             <Notice tone="warning">An earlier link couldn&apos;t be revoked. It&apos;s still listed under Linked watches; revoke it there.</Notice>
@@ -139,7 +139,7 @@ export default function WatchScreen() {
           {link.isError ? <Notice tone="error">{linkErrorMessage(link.error)}</Notice> : null}
           <ThemedText type="small" themeColor="textSecondary">
             The watch gets its own key, valid for 90 days, that only reaches your plan, check-ins and health summaries.
-            BuildNorth doesn&apos;t store it on this iPhone, though iOS holds on to the last link sent to the watch until
+            Rhythm doesn&apos;t store it on this iPhone, though iOS holds on to the last link sent to the watch until
             you link again or unlink.
           </ThemedText>
           <FormActions>
@@ -169,7 +169,7 @@ export default function WatchScreen() {
             {SHARING_OFF}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Watch measurements are context only. BuildNorth doesn&apos;t diagnose or give medical advice.
+            Watch measurements are context only. Rhythm doesn&apos;t diagnose or give medical advice.
           </ThemedText>
           {settings.isError && !settings.data ? <ErrorState error={settings.error} onRetry={() => settings.refetch()} /> : null}
           {share.isError ? <Notice tone="error">{errorMessage(share.error)}</Notice> : null}
@@ -182,7 +182,7 @@ export default function WatchScreen() {
           {tokens.isError && !tokens.data ? <ErrorState error={tokens.error} onRetry={() => tokens.refetch()} /> : null}
           {tokens.data && active.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary">
-              {expired ? "Your watch's link has expired. Link it again to keep using BuildNorth on your wrist." : 'No watch is linked.'}
+              {expired ? "Your watch's link has expired. Link it again to keep using Rhythm on your wrist." : 'No watch is linked.'}
             </ThemedText>
           ) : null}
           {active.length ? (
@@ -224,7 +224,7 @@ export default function WatchScreen() {
           {health.data && days.length === 0 ? (
             <EmptyState
               title="No health summaries yet"
-              body="Open BuildNorth on your watch and allow Health access. It uploads yesterday and today each time it syncs."
+              body="Open Rhythm on your watch and allow Health access. It uploads yesterday and today each time it syncs."
             />
           ) : null}
           {days.length ? (
@@ -256,8 +256,8 @@ function readiness(watch: WatchState): { ready: boolean; message: string } {
       ready: false,
       message:
         Platform.OS === 'ios'
-          ? "This version of the app can't talk to Apple Watch (Expo Go can't). Use the installed BuildNorth app to link your watch."
-          : 'Apple Watch works with BuildNorth on iPhone.',
+          ? "This version of the app can't talk to Apple Watch (Expo Go can't). Use the installed Rhythm app to link your watch."
+          : 'Apple Watch works with Rhythm on iPhone.',
     };
   }
   if (!watch.supported) return { ready: false, message: "This device can't pair with an Apple Watch." };
@@ -266,7 +266,7 @@ function readiness(watch: WatchState): { ready: boolean; message: string } {
   if (!watch.watchAppInstalled) {
     return {
       ready: false,
-      message: 'Install BuildNorth on your watch: open the Watch app on this iPhone and find BuildNorth under Available Apps.',
+      message: 'Install Rhythm on your watch: open the Watch app on this iPhone and find Rhythm under Available Apps.',
     };
   }
   return {
@@ -284,7 +284,7 @@ function linkErrorMessage(error: unknown): string {
       case 'not_paired':
         return 'No Apple Watch is paired with this iPhone.';
       case 'app_not_installed':
-        return "BuildNorth isn't installed on your Apple Watch yet.";
+        return "Rhythm isn't installed on your Apple Watch yet.";
       case 'inactive':
         return "The connection to your Apple Watch isn't ready yet. Try again in a moment.";
       case 'unavailable':

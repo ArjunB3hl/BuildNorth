@@ -51,7 +51,7 @@ export function ProfileScreen() {
         />
       </Card>
       <ListItem
-        title="What BuildNorth remembers"
+        title="What Rhythm remembers"
         subtitle={`${plural(
           state.preferences.length,
           'saved preference',
@@ -233,7 +233,7 @@ export function MemoryScreen() {
   const list = state.preferences;
 
   return (
-    <Screen title="What BuildNorth remembers">
+    <Screen title="What Rhythm remembers">
       <ThemedText themeColor="textSecondary">
         Preferences you save or confirm are used by the Coach and by AI
         assistants you connect. Your profile, recipes and routines are stored
@@ -286,7 +286,7 @@ export function MemoryScreen() {
       ) : null}
       <View style={styles.start}>
         <Button
-          title="Erase everything BuildNorth remembers"
+          title="Erase everything Rhythm remembers"
           variant="danger"
           disabled={list.length === 0}
           onPress={() =>

@@ -19,7 +19,7 @@ const KEY_ICON = { ios: 'key', android: 'key', web: 'key' } as const;
 // Browsers without the Web Share API would reject Share.share, so the web only offers it where it exists.
 const canShare = Platform.OS !== 'web' || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
 
-/** Connect AI assistants (OpenCode, ChatGPT, Claude) to BuildNorth over MCP. */
+/** Connect AI assistants (OpenCode, ChatGPT, Claude) to Rhythm over MCP. */
 export default function ConnectionsScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
