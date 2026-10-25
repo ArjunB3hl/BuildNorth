@@ -26,8 +26,11 @@ test('Mac demo key verifies, powers Coach and is forgotten on disconnect or a fr
   try {
     await act(async () => { app = Renderer.create(<App />); });
     await press(app, 'Coach');
-    await press(app, 'Connect Claude or ChatGPT');
-    expect(text(app).toLowerCase()).toContain('connect your chatgpt or claude account');
+    expect(text(app)).toContain('Connect your coach first');
+    expect(app.root.findAllByType(TextInput).some(n => n.props.accessibilityLabel === 'Message to coach')).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
+    await press(app, 'Open AI connections');
+    expect(text(app).toLowerCase()).toContain('connect chatgpt, claude or elevenlabs');
     await act(async () => {
       app.root.findAllByType(TextInput).find(n => n.props.placeholder === 'sk-ant-…')!.props.onChangeText(key);
     });
@@ -46,11 +49,14 @@ test('Mac demo key verifies, powers Coach and is forgotten on disconnect or a fr
     await press(app, 'Disconnect Claude');
     expect(text(app)).not.toContain('Claude ready');
     await press(app, 'Open Coach');
-    expect(app.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Message to coach')!.props.editable).toBe(false);
+    expect(text(app)).toContain('Connect your coach first');
+    expect(app.root.findAllByType(TextInput).some(n => n.props.accessibilityLabel === 'Message to coach')).toBe(false);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     await act(async () => app.unmount());
     await act(async () => { app = Renderer.create(<App />); });
     await press(app, 'Coach');
-    expect(text(app)).toContain('Connect Claude or ChatGPT');
+    expect(text(app)).toContain('Connect your coach first');
+    expect(app.root.findAllByType(TextInput).some(n => n.props.accessibilityLabel === 'Message to coach')).toBe(false);
   } finally {
     await act(async () => app?.unmount());
     globalThis.fetch = previous;

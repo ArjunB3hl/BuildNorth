@@ -79,8 +79,74 @@ export function CalendarScreen() {
     });
   };
 
+  // A separate screen keeps the editor visible instead of opening below the month grid.
+  if (edit) {
+    return (
+      <Screen
+        key="editor"
+        title={state.calendarEntries.some(e => e.id === edit.id) ? 'Edit a moment' : 'Log a moment'}
+        subtitle="Saved only in this Mac’s demo calendar"
+      >
+        <Card>
+          <View style={s.row}>
+            <Button
+              title="Meal"
+              variant={edit.kind === 'meal' ? 'primary' : 'secondary'}
+              onPress={() => setEdit({ ...edit, kind: 'meal' })}
+            />
+            <Button
+              title="Movement"
+              variant={edit.kind === 'activity' ? 'primary' : 'secondary'}
+              onPress={() => setEdit({ ...edit, kind: 'activity' })}
+            />
+          </View>
+          <TextField
+            label="Title"
+            value={edit.title}
+            onChangeText={title => setEdit({ ...edit, title })}
+            maxLength={120}
+          />
+          <View style={s.row}>
+            <View style={s.flex}>
+              <TextField
+                label="Date · YYYY-MM-DD"
+                value={edit.date}
+                onChangeText={date => setEdit({ ...edit, date })}
+              />
+            </View>
+            <View style={s.flex}>
+              <TextField
+                label="Time · HH:mm"
+                value={edit.time}
+                onChangeText={time => setEdit({ ...edit, time })}
+              />
+            </View>
+          </View>
+          {error ? <Notice tone="error">{error}</Notice> : null}
+          <View style={s.row}>
+            <Button title="Save on this Mac" onPress={save} />
+            <Button
+              title="Cancel"
+              variant="secondary"
+              onPress={() => setEdit(null)}
+            />
+            <Button
+              title="Delete entry"
+              variant="quiet"
+              onPress={() => {
+                dispatch({ type: 'calendar/remove', id: edit.id });
+                setEdit(null);
+              }}
+            />
+          </View>
+        </Card>
+      </Screen>
+    );
+  }
+
   return (
     <Screen
+      key="calendar"
       title="Your days, in rhythm."
       subtitle="Everything you eat. Every way you move. One calendar."
       actions={<Button title="＋ Log an entry" onPress={newEntry} />}
@@ -245,62 +311,6 @@ export function CalendarScreen() {
         <Text type="small" themeColor="textSecondary">Sleep patterns and workout heart rate sync from Apple Watch to your signed-in website and phone Calendar. This Mac demo has no live Watch data.</Text>
         <Button title="Open website connection settings" variant="secondary" onPress={() => nav.go('profile', { name: 'connections' })} />
       </Card>
-      {edit ? (
-        <Card>
-          <Text type="subtitle">Edit a moment</Text>
-          <View style={s.row}>
-            <Button
-              title="Meal"
-              variant={edit.kind === 'meal' ? 'primary' : 'secondary'}
-              onPress={() => setEdit({ ...edit, kind: 'meal' })}
-            />
-            <Button
-              title="Movement"
-              variant={edit.kind === 'activity' ? 'primary' : 'secondary'}
-              onPress={() => setEdit({ ...edit, kind: 'activity' })}
-            />
-          </View>
-          <TextField
-            label="Title"
-            value={edit.title}
-            onChangeText={title => setEdit({ ...edit, title })}
-            maxLength={120}
-          />
-          <View style={s.row}>
-            <View style={s.flex}>
-              <TextField
-                label="Date · YYYY-MM-DD"
-                value={edit.date}
-                onChangeText={date => setEdit({ ...edit, date })}
-              />
-            </View>
-            <View style={s.flex}>
-              <TextField
-                label="Time · HH:mm"
-                value={edit.time}
-                onChangeText={time => setEdit({ ...edit, time })}
-              />
-            </View>
-          </View>
-          {error ? <Notice tone="error">{error}</Notice> : null}
-          <View style={s.row}>
-            <Button title="Save on this Mac" onPress={save} />
-            <Button
-              title="Cancel"
-              variant="secondary"
-              onPress={() => setEdit(null)}
-            />
-            <Button
-              title="Delete entry"
-              variant="quiet"
-              onPress={() => {
-                dispatch({ type: 'calendar/remove', id: edit.id });
-                setEdit(null);
-              }}
-            />
-          </View>
-        </Card>
-      ) : null}
       <View style={s.row}>
         <Button
           title="Recipe library ↗"

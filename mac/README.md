@@ -1,7 +1,7 @@
 # Rhythm for Mac — Demo version
 
 A native macOS version of the Rhythm iPhone app, built with React Native for macOS plus parts of Expo SDK 55.
-The UI mirrors the iPhone app: the same five sections, design tokens, components and API data types, with a Mac
+The UI uses Today, Coach, Calendar and Profile, shared design tokens, components and API data types, with a Mac
 sidebar instead of a tab bar.
 
 **Status:** demo version using data saved on this Mac. Live account syncing is not connected. Coach can use a
@@ -398,6 +398,23 @@ npx jest
 | eas-cli asks about git or uploads the whole repository | Set `EAS_NO_VCS=1` |
 
 ## What was tested
+
+### Calendar and connections, 2026-10-25
+
+- Inspected the native Mac UI: Today, recipe details, Calendar month grid, Movement filter, monthly report,
+  AI connections and the disconnected Coach screen.
+- Fixed Calendar's editor opening below the month grid and report. Opening an entry now shows a dedicated
+  editor; cancel and save return to the calendar at the top. Verified empty-title validation and saving an
+  existing demo entry unchanged in the native UI.
+- The ElevenLabs website button opened the configured local website's AI connections page in Chrome,
+  with Claude and ElevenLabs setup forms visible.
+- TypeScript and ESLint passed. All three Jest suites passed, including mocked Claude verification, chat,
+  disconnect and fresh-session gating, plus Calendar editing and library navigation.
+- No real provider key or paid AI conversation was used. Mac remains a local demo: live Watch workout,
+  heart-rate and sleep syncing is available through the signed-in website and phone, not this Mac calendar.
+  Native ElevenLabs voice is a website handoff.
+
+### Earlier native and release validation
 
 Tested on 2026-10-19 and 20 on an Apple M3 MacBook Air (macOS 27, Xcode 27.1):
 - **Debug builds:** built and launched after each change. JavaScript came from `expo start` on port 8090 ("macos
