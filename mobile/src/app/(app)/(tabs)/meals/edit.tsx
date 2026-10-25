@@ -1,16 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { useState, type ReactNode } from 'react';
+import { Platform, StyleSheet, TextInput, useWindowDimensions, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { Button, Notice, TextField } from '@/components/form';
+import { ActionButton } from '@/components/meals/action-button';
+import { MealIcons } from '@/components/meals/icons';
+import { SectionCard } from '@/components/meals/layout';
+import { nutritionParts, StepNumber } from '@/components/meals/recipe-parts';
 import { ThemedText } from '@/components/themed-text';
-import { Card, ErrorState, errorMessage, Loading, Row, Screen, SectionHeader, Stepper } from '@/components/ui';
+import { Card, ErrorState, errorMessage, Loading, Screen, SectionHeader, Stepper } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
 import { useTheme } from '@/hooks/use-theme';
 import { dropDraft, getDraft, type RecipeDraftHandoff } from '@/lib/drafts';
 import type { Nutrition, Recipe, RecipeInput } from '@/lib/types';
+import { Enter } from '@/components/motion';
+
+const web = Platform.OS === 'web';
+/** Below this window width the web stacks each ingredient's fields like the phone layout. */
+const INLINE_FROM = 640;
 
 type IngredientRow = { key: string; name: string; quantity: string; unit: string; note: string };
 type StepRow = { key: string; text: string; minutes: string };
@@ -54,6 +64,8 @@ function RecipeEditor({ recipe, handoff, draftId }: { recipe?: Recipe; handoff?:
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { width } = useWindowDimensions();
+  const inline = web && width >= INLINE_FROM;
   const base = recipe ?? handoff?.draft;
   const initialRows = toRows(base ?? { ingredients: [], steps: [] });
 
@@ -66,7 +78,13 @@ function RecipeEditor({ recipe, handoff, draftId }: { recipe?: Recipe; handoff?:
   const [nutrition, setNutrition] = useState<Nutrition | null>(base?.nutrition ?? null);
   const [validation, setValidation] = useState<string | null>(null);
 
-  const inputStyle = [styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.backgroundSelected }];
+  // Phones put white fields on grey row cards; the web uses white fields with a hairline, like TextField.
+  const inputStyle = [
+    styles.input,
+    web
+      ? { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }
+      : { color: theme.text, backgroundColor: theme.background, borderColor: theme.backgroundSelected },
+  ];
 
   const save = useMutation({
     mutationFn: (body: RecipeInput) => (recipe ? api.recipes.update(recipe.id, body) : api.recipes.create(body)),
@@ -125,13 +143,31 @@ function RecipeEditor({ recipe, handoff, draftId }: { recipe?: Recipe; handoff?:
       return next;
     });
 
+  /**
+   * On the web, rows share their section's card (split by hairlines when `divided`); phones keep one card per row.
+   */
+  const rowWrap = (k: string, index: number, divided: boolean, children: ReactNode) =>
+    web ? (
+      <View
+        key={k}
+        style={[styles.webRow, divided && index > 0 && [styles.divided, { borderTopColor: theme.border }]]}>
+        {children}
+      </View>
+    ) : (
+      <Card key={k} style={styles.rowCard}>
+        {children}
+      </Card>
+    );
+
   return (
     <Screen
       footer={
         <>
           {validation ? <Notice tone="error">{validation}</Notice> : null}
           {save.isError ? <Notice tone="error">{errorMessage(save.error)}</Notice> : null}
-          <Button title={recipe ? 'Save changes' : 'Save recipe'} onPress={submit} loading={save.isPending} />
+          <View style={web && styles.footerActions}>
+            <Button title={recipe ? 'Save changes' : 'Save recipe'} onPress={submit} loading={save.isPending} />
+          </View>
         </>
       }>
       <Stack.Screen options={{ title: recipe ? 'Edit recipe' : handoff?.source === 'manual' ? 'New recipe' : 'Review recipe' }} />
@@ -139,140 +175,273 @@ function RecipeEditor({ recipe, handoff, draftId }: { recipe?: Recipe; handoff?:
         <Notice tone="info">{['Please review:', ...handoff.warnings.map((w) => `• ${w}`)].join('\n')}</Notice>
       ) : null}
 
-      <TextField label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Lentil soup" maxLength={200} />
-      <Stepper label="Servings" value={servings} onChange={setServings} min={1} max={100} />
-      <TextField label="Description (optional)" value={description} onChangeText={setDescription} multiline maxLength={2000} />
+      <FormSection title="Details">
+        <TextField label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Lentil soup" maxLength={200} />
+        <View style={web && styles.stepper}>
+          <Stepper label="Servings" value={servings} onChange={setServings} min={1} max={100} />
+        </View>
+        <TextField label="Description (optional)" value={description} onChangeText={setDescription} multiline maxLength={2000} />
+      </FormSection>
 
-      <SectionHeader title="Ingredients" />
-      {ingredients.map((row) => (
-        <Card key={row.key} style={styles.rowCard}>
-          <TextInput
-            value={row.name}
-            onChangeText={(t) => updateIngredient(row.key, { name: t })}
-            placeholder="Ingredient"
-            placeholderTextColor={theme.textSecondary}
-            accessibilityLabel="Ingredient name"
-            style={inputStyle}
-            maxLength={200}
-          />
-          <Row>
+      <FormSection title="Ingredients" icon={MealIcons.ingredients} count={ingredients.length} index={1}>
+        {inline && ingredients.length ? (
+          <View style={styles.inlineRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+            <ColumnLabel style={styles.qty}>Qty</ColumnLabel>
+            <ColumnLabel style={styles.unit}>Unit</ColumnLabel>
+            <ColumnLabel style={styles.name}>Ingredient</ColumnLabel>
+            <ColumnLabel style={styles.note}>Note</ColumnLabel>
+            <View style={styles.iconSpacer} />
+          </View>
+        ) : null}
+        {ingredients.map((row, index) => {
+          const nameInput = (
             <TextInput
-              value={row.quantity}
-              onChangeText={(t) => updateIngredient(row.key, { quantity: t })}
-              placeholder="Qty"
-              keyboardType="decimal-pad"
+              value={row.name}
+              onChangeText={(t) => updateIngredient(row.key, { name: t })}
+              placeholder="Ingredient"
               placeholderTextColor={theme.textSecondary}
-              accessibilityLabel={`Quantity for ${row.name || 'ingredient'}`}
-              style={[inputStyle, styles.small]}
+              accessibilityLabel="Ingredient name"
+              style={[inputStyle, inline && styles.name]}
+              maxLength={200}
             />
-            <TextInput
-              value={row.unit}
-              onChangeText={(t) => updateIngredient(row.key, { unit: t })}
-              placeholder="Unit"
-              autoCapitalize="none"
-              placeholderTextColor={theme.textSecondary}
-              accessibilityLabel={`Unit for ${row.name || 'ingredient'}`}
-              style={[inputStyle, styles.small]}
-              maxLength={20}
-            />
+          );
+          const amountInputs = (
+            <>
+              <TextInput
+                value={row.quantity}
+                onChangeText={(t) => updateIngredient(row.key, { quantity: t })}
+                placeholder="Qty"
+                keyboardType="decimal-pad"
+                placeholderTextColor={theme.textSecondary}
+                accessibilityLabel={`Quantity for ${row.name || 'ingredient'}`}
+                style={[inputStyle, styles.qty]}
+              />
+              <TextInput
+                value={row.unit}
+                onChangeText={(t) => updateIngredient(row.key, { unit: t })}
+                placeholder="Unit"
+                autoCapitalize="none"
+                placeholderTextColor={theme.textSecondary}
+                accessibilityLabel={`Unit for ${row.name || 'ingredient'}`}
+                style={[inputStyle, styles.unit]}
+                maxLength={20}
+              />
+            </>
+          );
+          const noteInput = (
             <TextInput
               value={row.note}
               onChangeText={(t) => updateIngredient(row.key, { note: t })}
               placeholder="Note"
               placeholderTextColor={theme.textSecondary}
               accessibilityLabel={`Note for ${row.name || 'ingredient'}`}
-              style={[inputStyle, styles.fill]}
+              style={[inputStyle, inline ? styles.note : styles.noteStacked]}
               maxLength={200}
             />
-            <RemoveButton label={`Remove ${row.name || 'ingredient'}`} onPress={() => setIngredients((rows) => rows.filter((r) => r.key !== row.key))} />
-          </Row>
-        </Card>
-      ))}
-      <Button
-        title="Add ingredient"
-        size="small"
-        variant="secondary"
-        onPress={() => setIngredients((rows) => [...rows, { key: key(), name: '', quantity: '', unit: '', note: '' }])}
-      />
-
-      <SectionHeader title="Steps" />
-      {steps.map((row, index) => (
-        <Card key={row.key} style={styles.rowCard}>
-          <ThemedText type="smallBold">Step {index + 1}</ThemedText>
-          <TextInput
-            value={row.text}
-            onChangeText={(t) => updateStep(row.key, { text: t })}
-            placeholder="What to do"
-            placeholderTextColor={theme.textSecondary}
-            accessibilityLabel={`Step ${index + 1} instructions`}
-            multiline
-            style={[inputStyle, styles.multiline]}
-            maxLength={2000}
-          />
-          <Row>
-            <TextInput
-              value={row.minutes}
-              onChangeText={(t) => updateStep(row.key, { minutes: t })}
-              placeholder="Timer (min)"
-              keyboardType="decimal-pad"
-              placeholderTextColor={theme.textSecondary}
-              accessibilityLabel={`Timer in minutes for step ${index + 1}`}
-              style={[inputStyle, styles.timer]}
+          );
+          const removeButton = (
+            <ActionButton
+              title="Remove"
+              icon={MealIcons.close}
+              iconOnly
+              size="small"
+              accessibilityLabel={`Remove ${row.name || 'ingredient'}`}
+              onPress={() => setIngredients((rows) => rows.filter((r) => r.key !== row.key))}
             />
-            <View style={styles.fill} />
-            <Button title="↑" size="small" variant="secondary" disabled={index === 0} onPress={() => moveStep(index, -1)} accessibilityLabel={`Move step ${index + 1} up`} />
-            <Button title="↓" size="small" variant="secondary" disabled={index === steps.length - 1} onPress={() => moveStep(index, 1)} accessibilityLabel={`Move step ${index + 1} down`} />
-            <RemoveButton label={`Remove step ${index + 1}`} onPress={() => setSteps((rows) => rows.filter((r) => r.key !== row.key))} />
-          </Row>
-        </Card>
-      ))}
-      <Button title="Add step" size="small" variant="secondary" onPress={() => setSteps((rows) => [...rows, { key: key(), text: '', minutes: '' }])} />
+          );
+          return rowWrap(
+            row.key,
+            index,
+            !inline,
+            inline ? (
+              <View style={styles.inlineRow}>
+                {amountInputs}
+                {nameInput}
+                {noteInput}
+                {removeButton}
+              </View>
+            ) : (
+              <>
+                {nameInput}
+                <View style={styles.inlineRow}>
+                  {amountInputs}
+                  {noteInput}
+                  {removeButton}
+                </View>
+              </>
+            ),
+          );
+        })}
+        <View style={styles.start}>
+          <ActionButton
+            title="Add ingredient"
+            icon={MealIcons.add}
+            size="small"
+            onPress={() => setIngredients((rows) => [...rows, { key: key(), name: '', quantity: '', unit: '', note: '' }])}
+          />
+        </View>
+      </FormSection>
+
+      <FormSection title="Steps" icon={MealIcons.steps} count={steps.length} index={2}>
+        {steps.map((row, index) =>
+          rowWrap(
+            row.key,
+            index,
+            true,
+            <>
+              <View style={styles.inlineRow}>
+                <StepNumber n={index + 1} />
+                <ThemedText type="smallBold" style={styles.fill}>
+                  Step {index + 1}
+                </ThemedText>
+                <ActionButton
+                  title="Move up"
+                  icon={MealIcons.up}
+                  iconOnly
+                  size="small"
+                  disabled={index === 0}
+                  onPress={() => moveStep(index, -1)}
+                  accessibilityLabel={`Move step ${index + 1} up`}
+                />
+                <ActionButton
+                  title="Move down"
+                  icon={MealIcons.down}
+                  iconOnly
+                  size="small"
+                  disabled={index === steps.length - 1}
+                  onPress={() => moveStep(index, 1)}
+                  accessibilityLabel={`Move step ${index + 1} down`}
+                />
+                <ActionButton
+                  title="Remove"
+                  icon={MealIcons.close}
+                  iconOnly
+                  size="small"
+                  onPress={() => setSteps((rows) => rows.filter((r) => r.key !== row.key))}
+                  accessibilityLabel={`Remove step ${index + 1}`}
+                />
+              </View>
+              <TextInput
+                value={row.text}
+                onChangeText={(t) => updateStep(row.key, { text: t })}
+                placeholder="What to do"
+                placeholderTextColor={theme.textSecondary}
+                accessibilityLabel={`Step ${index + 1} instructions`}
+                multiline
+                style={[inputStyle, styles.multiline]}
+                maxLength={2000}
+              />
+              <View style={styles.inlineRow}>
+                <SymbolView name={MealIcons.timer} size={18} tintColor={theme.textSecondary} />
+                <TextInput
+                  value={row.minutes}
+                  onChangeText={(t) => updateStep(row.key, { minutes: t })}
+                  placeholder="Timer (min)"
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={theme.textSecondary}
+                  accessibilityLabel={`Timer in minutes for step ${index + 1}`}
+                  style={[inputStyle, styles.timer]}
+                />
+                <ThemedText type="small" themeColor="textSecondary">
+                  minutes
+                </ThemedText>
+              </View>
+            </>,
+          ),
+        )}
+        <View style={styles.start}>
+          <ActionButton
+            title="Add step"
+            icon={MealIcons.add}
+            size="small"
+            onPress={() => setSteps((rows) => [...rows, { key: key(), text: '', minutes: '' }])}
+          />
+        </View>
+      </FormSection>
 
       {nutrition ? (
-        <Card>
-          <ThemedText type="smallBold">Estimated nutrition per serving</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {[
-              nutrition.calories != null && `~${Math.round(nutrition.calories)} kcal`,
-              nutrition.proteinG != null && `~${Math.round(nutrition.proteinG)} g protein`,
-              nutrition.carbsG != null && `~${Math.round(nutrition.carbsG)} g carbs`,
-              nutrition.fatG != null && `~${Math.round(nutrition.fatG)} g fat`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </ThemedText>
+        <SectionCard
+          title="Nutrition per serving"
+          icon={MealIcons.nutrition}
+          action={<Button title="Remove estimate" size="small" variant="quiet" onPress={() => setNutrition(null)} />}>
+          <ThemedText type="small">{nutritionParts(nutrition).join(' · ')}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             A rough AI estimate, not a measurement.
           </ThemedText>
-          <Button title="Remove estimate" size="small" variant="quiet" onPress={() => setNutrition(null)} />
-        </Card>
+        </SectionCard>
       ) : null}
 
-      <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} multiline maxLength={4000} style={styles.multiline} />
+      <FormSection index={3}>
+        <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} multiline maxLength={4000} style={styles.multiline} />
+      </FormSection>
     </Screen>
   );
 }
 
-function RemoveButton({ label, onPress }: { label: string; onPress: () => void }) {
-  const theme = useTheme();
+/** A titled card on the web; on phones the fields sit on the page under a section header, as before. */
+function FormSection({
+  title,
+  icon,
+  count,
+  index = 0,
+  children,
+}: {
+  title?: string;
+  icon?: SymbolViewProps['name'];
+  count?: number;
+  /** Its place in the page's entrance stagger. */
+  index?: number;
+  children: ReactNode;
+}) {
+  if (web) {
+    return (
+      <Enter index={index}>
+        {title ? (
+          <SectionCard title={title} icon={icon} count={count}>
+            {children}
+          </SectionCard>
+        ) : (
+          <Card style={styles.section}>{children}</Card>
+        )}
+      </Enter>
+    );
+  }
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      hitSlop={6}
-      style={[styles.remove, { backgroundColor: theme.backgroundSelected }]}>
-      <ThemedText type="smallBold">✕</ThemedText>
-    </Pressable>
+    <Enter index={index} style={styles.section}>
+      {title ? <SectionHeader title={title} /> : null}
+      {children}
+    </Enter>
+  );
+}
+
+function ColumnLabel({ children, style }: { children: string; style: StyleProp<TextStyle> }) {
+  return (
+    <ThemedText type="smallBold" themeColor="textSecondary" style={[styles.columnLabel, style]}>
+      {children}
+    </ThemedText>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  section: { gap: Spacing.three },
   rowCard: { gap: Spacing.two },
+  webRow: { gap: Spacing.two },
+  divided: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.three, marginTop: Spacing.one },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: Spacing.two + Spacing.one, minHeight: 44, fontSize: 16 },
-  small: { width: 72 },
+  qty: { width: 72 },
+  unit: { width: web ? 84 : 72 },
+  name: { flex: 2, minWidth: 0 },
+  note: { flex: 1.5, minWidth: 0 },
+  // minWidth 0: web inputs otherwise keep their intrinsic width and overflow narrow rows.
+  noteStacked: { flex: 1, minWidth: 0 },
+  // Matches the 36pt icon-only remove button so the column labels line up.
+  iconSpacer: { width: 36 },
+  columnLabel: { fontSize: 12, lineHeight: 16 },
   timer: { width: 120 },
   multiline: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' },
-  remove: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  start: { alignSelf: 'flex-start' },
+  stepper: { maxWidth: 320 },
+  footerActions: { flexDirection: 'row', justifyContent: 'flex-end' },
 });

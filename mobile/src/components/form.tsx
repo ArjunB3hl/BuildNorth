@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -57,20 +57,31 @@ export function LoadingScreen({ label }: { label: string }) {
   );
 }
 
-export function TextField({ label, style, ...props }: TextInputProps & { label: string }) {
+export function TextField({ label, style, onFocus, onBlur, ...props }: TextInputProps & { label: string }) {
   const theme = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       <ThemedText type="smallBold">{label}</ThemedText>
       <TextInput
         placeholderTextColor={theme.textSecondary}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={[
           styles.input,
           {
             color: theme.text,
             backgroundColor: theme.backgroundElement,
-            borderColor: theme.backgroundSelected,
+            borderColor: focused ? Accent : theme.border,
           },
+          // The accent border is the focus indicator; the browser's own outline would double it.
+          Platform.OS === 'web' && styles.noOutline,
           style,
         ]}
         {...props}
@@ -113,12 +124,20 @@ export function Button({
       disabled={inactive}
       onPress={onPress}
       hitSlop={size === 'small' ? 6 : 0}
-      style={({ pressed }) => [
-        styles.button,
-        size === 'small' && styles.buttonSmall,
-        { backgroundColor: background },
-        inactive ? styles.inactive : pressed && styles.pressed,
-      ]}>
+      style={(state) => {
+        // react-native-web adds `hovered` to the press state.
+        const hovered = !inactive && (state as { hovered?: boolean }).hovered;
+        return [
+          styles.button,
+          size === 'small' && styles.buttonSmall,
+          { backgroundColor: background },
+          // Secondary buttons share their fill with cards, so they need an outline to read as buttons.
+          variant === 'secondary' && { borderWidth: 1, borderColor: theme.border },
+          Platform.OS === 'web' && buttonTransition,
+          hovered && (filled ? styles.hoveredFilled : { backgroundColor: theme.backgroundSelected }),
+          inactive ? styles.inactive : state.pressed && styles.pressed,
+        ];
+      }}>
       {loading ? (
         <ActivityIndicator color={labelColor} />
       ) : (
@@ -144,12 +163,16 @@ export function Notice({ tone, children }: { tone: keyof typeof ToneColors; chil
   );
 }
 
+// react-native-web passes CSS transitions through; they aren't in React Native's style types.
+const buttonTransition = { transitionProperty: 'background-color, opacity, transform', transitionDuration: '150ms' } as object;
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: Spacing.three },
   scrollContent: { flexGrow: 1, padding: Spacing.four },
   column: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.three },
   field: { gap: Spacing.two },
+  noOutline: { outlineWidth: 0 },
   input: {
     borderWidth: 1,
     borderRadius: 12,
@@ -165,7 +188,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
   },
   buttonSmall: { minHeight: 36, paddingHorizontal: Spacing.two + Spacing.one, borderRadius: 10 },
-  pressed: { opacity: 0.8 },
+  pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  hoveredFilled: { opacity: 0.9 },
   inactive: { opacity: 0.5 },
   notice: { borderRadius: 12, padding: Spacing.three },
 });

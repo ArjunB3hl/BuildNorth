@@ -3,6 +3,41 @@
 A personal health companion for meals, cooking, exercise routines, daily check-ins and progress.
 Expo (SDK 57, Expo Router, TypeScript) app + FastAPI backend.
 
+## Web app
+
+Detailed change record, source map and verification limits: [Web app implementation](docs/web-app.md).
+
+Run the backend as described below, then `npm run web` in `mobile/` and open
+`http://localhost:8081`. Sign in with the same Clerk account used by the phone and Rhythm.
+The web app uses React Native Web and Expo Router, with a responsive sidebar and a web overview.
+Coach, meals, activity, profile, Rhythm settings and video management use the existing authenticated APIs.
+Browser sign-out clears this browser's account cache without revoking Apple Watch tokens.
+
+The overview refreshes recommendations and browser connections every 15 seconds while mounted.
+It shows permitted pages and recommendations, not verified watch history. To share content:
+
+1. Open **Interests & sharing** and turn on **Learn my interests automatically** and **YouTube with page details**.
+   Switches save as they change. Rhythm learns from your coach chats and the workout and recipe videos you watch;
+   pages can be permitted once it has learned something. The overview's Personalisation card shows whether it's on.
+2. Build/load `extension/` and sign in with the same account. The panel's **Open web interests** and
+   **Open web dashboard** links default to `http://localhost:8081`; configure `WXT_WEB_APP_URL` for another origin.
+3. Open a YouTube watch page, click Rhythm's toolbar icon and select **Use this page**.
+   Transcript reading requires its separate consent and a task. Recommendations need a connected agent
+   or the existing manual workflow; merely selecting a page does not generate one.
+4. Review saved recommendations in the overview or **Content library**. Revoke page grants from the overview;
+   manage agents, memory and deletion in the profile screens.
+
+Clerk manages essential authentication storage. The overview offers an optional, host-only
+`buildnorth_display=compact` cookie for compact display of the cookie panel. It expires after 30 days,
+uses `SameSite=Lax` and `Secure` on HTTPS, and can be removed with **Use essential only**.
+It contains no health information, tokens or browsing activity. This choice never enables content sharing.
+The extension's cookies permission is used by Clerk, with host access limited to Clerk and the backend;
+it does not harvest cookies from fitness sites. Saved app records also use the existing per-account offline cache.
+
+`npm run build:web` writes a static export to `dist/`. This is a local implementation, not a hosted deployment.
+A deployed frontend also needs its HTTPS origin allowed by backend CORS and Clerk's authorized parties,
+plus the correct public API URL; the backend currently allows localhost web origins only.
+
 ```
 Expo app ── Clerk session token ──▶ FastAPI backend ──▶ SQL database (authoritative app records)
   (Clerk sign-in,                    verifies token via    ├─▶ SurrealDB Agent Memory (confirmed preferences and
@@ -30,6 +65,19 @@ Apple Watch app (SwiftUI) ──────────────────
 The app never sends a user ID. The backend takes the user from the verified Clerk token and scopes every query and
 every Agent Memory read/write to that user. Nothing the coach says is medical advice; generated recipes aren't checked
 for allergens and nutrition values are labelled as estimates.
+
+## Rhythm video companion
+
+The current video-companion phase is **Rhythm**: interests learned from the user's
+own activity (opt-in, off by default), selective YouTube analysis, and the user's
+chosen MCP agent. While learning is on, the backend learns from coach chats, the
+fitness, health and food videos the extension sees the user watch, and saved or
+helpful recommendations. The apps show only the learning and sharing switches;
+learned interests stay in the backend. Its phone screens are
+under **Profile → Interests & sharing / Content library**, its Chrome app is in
+`../extension/`, and its dedicated MCP endpoint is `/rhythm/mcp`.
+See [the implementation, setup and verification guide](docs/rhythm.md).
+The 3D, motion and live-coaching ideas under Later phases are outside this phase.
 
 ## Weekly planner
 
@@ -437,6 +485,8 @@ the watch's JSON against the contract and typechecks `targets/watch` for watchOS
    - `EXPO_PUBLIC_API_URL` (optional; default: the machine running Metro, port 8000)
 3. **Backend env**: `backend/.env` (see `backend/.env.example`) — server-only, never commit:
    - `SPECTRON_URL`, `SPECTRON_CONTEXT_ID`, `SPECTRON_API_KEY` — SurrealDB Agent Memory (context *ID*, not its display name)
+   - `SPECTRON_OWNER_USER_ID` — explicitly binds that Context to one Clerk account, including Rhythm;
+     other accounts need their own configured Context bindings (see [Rhythm setup](docs/rhythm.md))
    - `CLERK_PUBLISHABLE_KEY` — same public key; locates Clerk's JWKS for token verification
    - `AI_PROVIDER` = `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`
    - `DATABASE_URL` (default: SQLite in `backend/var/`, git-ignored), `AUTO_MIGRATE` (default `true`)

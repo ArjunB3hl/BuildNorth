@@ -6,7 +6,7 @@ import type { Query, QueryClient } from '@tanstack/react-query';
  * Never written to AsyncStorage: memory search results and server status (live answers, not saved content),
  * and Apple Watch health summaries (device-measured sleep, heart rate and HRV stay on the server only).
  */
-const NOT_PERSISTED = new Set(['memory-search', 'status', 'watch-health']);
+const NOT_PERSISTED = new Set(['memory-search', 'status', 'watch-health', 'rhythm', 'rhythm-interests']);
 
 /** Only successful reads of saved content are persisted for offline use. */
 export function shouldPersistQuery(query: Pick<Query, 'queryKey' | 'state'>): boolean {
