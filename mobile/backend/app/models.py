@@ -352,11 +352,11 @@ class RhythmSignal(Base):
     played_seconds: Mapped[float | None] = mapped_column(Float)
     # The user's own reaction from the side panel: "more" (Save to Rhythm / more like this) or "less" (not interested).
     reaction: Mapped[str | None] = mapped_column(String(10))
-    # For a saved video: the summary the user's chosen agent wrote through MCP (save_video_summary), and which agent.
-    # Learning reads it; the apps don't show it.
+    # A useful transcript summary, shared by the library and the user's chosen agent.
     summary: Mapped[str | None] = mapped_column(Text)
     summarized_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     summary_by: Mapped[str | None] = mapped_column(String(160))
+    summary_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     observed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 

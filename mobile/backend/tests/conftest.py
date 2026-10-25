@@ -25,6 +25,7 @@ from app.main import app
 from app.memory import MemoryService
 from app.planner import CHANGE_SCHEMA, PROPOSAL_SCHEMA
 from app.rhythm.learn import LEARN_SCHEMA
+from app.rhythm.summaries import SUMMARY_SCHEMA
 
 FRONTEND_API = "test-app.clerk.accounts.dev"
 PUBLISHABLE_KEY = "pk_test_" + base64.b64encode(f"{FRONTEND_API}$".encode()).decode().rstrip("=")
@@ -132,6 +133,10 @@ class FakeAI:
         self.change: dict[str, Any] = {"summary": "", "persistence": "temporary", "lasting_preference": None, "operations": []}
         # Scripted reading for Rhythm's interest learning; by default the model adds nothing.
         self.learn: dict[str, Any] = {"topics": [], "purposes": [], "experience_level": "unknown", "avoid": []}
+        self.video_notes: dict[str, Any] = {
+            "kind": "ideas", "overview": "Notes from this video.",
+            "sections": [{"heading": "Missing details", "numbered": False, "items": ["Only a transcript excerpt was captured."]}],
+        }
 
     def generate_json(self, *, system, messages, schema, temperature=0.2, max_tokens=4000):  # type: ignore[no-untyped-def]
         self.calls.append({"system": system, "messages": messages, "schema": schema})
@@ -167,6 +172,8 @@ class FakeAI:
             return self.change
         if schema is LEARN_SCHEMA:
             return self.learn
+        if schema is SUMMARY_SCHEMA:
+            return self.video_notes
         raise AssertionError("unexpected schema")
 
 

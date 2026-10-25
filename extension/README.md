@@ -12,6 +12,14 @@ the phone and web dashboard.
 The web companion, cookie behavior and verification limits are documented in the
 [web implementation guide](../mobile/docs/web-app.md).
 
+**Saved video notes:** **Save to Rhythm** keeps the original video title, channel and YouTube link in
+**Content library → Saved videos** on the website and phone. When YouTube supplies a transcript, the backend uses
+your connected Claude key or its configured AI to prepare useful notes: ingredients and cooking instructions,
+exercise steps and form cues, or practical takeaways for other content. Missing details are called out. Without a
+transcript it saves the link and metadata; without working AI you can retry **Generate summary** in the library.
+Existing saved videos and summaries also appear there, even while recommendations are off. Migration `0012` is
+required (normally applied on backend startup). The extension itself never receives the AI key.
+
 **Status:** it builds, loads in Chrome and passes its checks. Signing in to the panel, turning on learning and the full
 journey from phone to panel to agent haven't been completed with a real account yet (see *What was tested*).
 
@@ -60,7 +68,8 @@ Your agent (Claude Code, OpenCode, …) ── bnr_ token or OAuth ──▶ bac
   credentials. The panel and the agent work on the same tasks and recommendations through the backend.
 - **No model runs in the extension.** Screening, and learning's check on this device, are word-list matches. When the
   backend has an AI provider configured, its learning can also ask that model to read watched titles and your coach
-  messages (see *Permissions and privacy*). Any other interpretation happens in the agent you connect.
+  messages (see *Permissions and privacy*). Explicitly saved transcripts can also use the backend AI for library notes;
+  recommendation tasks use the agent you connect.
 
 ## Requirements
 

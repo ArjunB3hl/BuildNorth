@@ -26,7 +26,7 @@ export function ClaudeKeyConnection() {
     try {
       await api.connections.connectClaude(secret, model.trim() || status.data?.model || 'claude-opus-5-5');
       await queries.invalidateQueries({ queryKey: ['claude-connection'] });
-      setMessage('Key verified. Claude will answer your next Coach message.');
+      setMessage('Key verified. Claude is ready for Coach and saved-video summaries.');
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
@@ -35,13 +35,13 @@ export function ClaudeKeyConnection() {
     try {
       await api.connections.disconnectClaude();
       await queries.invalidateQueries({ queryKey: ['claude-connection'] });
-      setMessage('Your key was removed. Coach will use the server’s default provider, if available.');
+      setMessage('Your key was removed. Coach and video summaries will use the server’s default provider, if available.');
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
-  return <SectionCard title="Claude for the built-in Coach" description="For the demo, bring an Anthropic API key. This powers Coach inside Rhythm; it does not connect a Claude subscription. API usage is billed to the key’s account.">
+  return <SectionCard title="Claude for Coach & video notes" description="For the demo, bring an Anthropic API key. This powers Coach and turns transcripts you save into useful Content library notes. It does not connect a Claude subscription. API usage is billed to the key’s account.">
     <ThemedText type="small" themeColor="textSecondary">The key is verified without generating a message, encrypted on the Rhythm server, and shared only across your signed-in web and phone sessions. Remove it when you finish the demo.</ThemedText>
-    {status.data?.configured ? <Notice tone={status.data.usable ? 'success' : 'warning'}>Claude key ending in {status.data.hint} · {status.data.model}{status.data.usable ? ' · Ready for Coach' : ' · Reconnect required'}</Notice> : null}
+    {status.data?.configured ? <Notice tone={status.data.usable ? 'success' : 'warning'}>Claude key ending in {status.data.hint} · {status.data.model}{status.data.usable ? ' · Ready for Coach & video notes' : ' · Reconnect required'}</Notice> : null}
     {!transport ? <Notice tone="warning">Use an HTTPS backend before entering an API key on this device. Localhost on this computer is also supported.</Notice> : null}
     {status.data && !status.data.storageAvailable ? <Notice tone="warning">The server’s secure key storage needs setup before you can attach a key.</Notice> : null}
     <TextField label={status.data?.configured ? 'Replace Claude API key' : 'Claude API key'} value={key} onChangeText={setKey} secureTextEntry

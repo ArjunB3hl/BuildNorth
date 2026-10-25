@@ -179,7 +179,9 @@ export function createApi(getToken: TokenGetter) {
   };
 
   return {
-    rhythm: createRhythmApi((method, path, body) => request(method, path, { body })),
+    rhythm: createRhythmApi((method, path, body) => request(method, path, {
+      body, timeoutMs: path.startsWith('/rhythm/saved/') && path.endsWith('/summary') ? AI_TIMEOUT_MS : DEFAULT_TIMEOUT_MS,
+    })),
     status: () => get<ServiceStatus>('/status', { auth: false }),
 
     profile: {

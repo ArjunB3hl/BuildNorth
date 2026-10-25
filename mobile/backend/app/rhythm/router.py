@@ -3,12 +3,12 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from app.deps import CurrentUser, Db, OptionalAI
-from app.rhythm import browser, data, grants, learn, memory, profile, recommendations, search, tasks, transcripts
+from app.rhythm import browser, data, grants, learn, memory, profile, recommendations, saved, search, summaries, tasks, transcripts
 from app.rhythm.policy import Actor, Denied, Policy, run
 from app.rhythm.schemas import BrowserInput, BrowserProof, InterestsInput, RecordId, Result, ShortlistInput, TaskInput
 from app.rhythm.schemas import AgentApproval, Assistant, ImportedTranscript, TranscriptInput, TranscriptUpload
 from app.rhythm.schemas import FeedbackInput, RecommendationsInput, SearchInput, SettingsInput, SignalInput
-from app.rhythm.schemas import ChoicesInput, ForgetTopicInput, ReactionInput
+from app.rhythm.schemas import ChoicesInput, ForgetTopicInput, ReactionInput, VideoId
 from app.schemas import InputModel, Text80
 
 router = APIRouter(prefix="/rhythm", tags=["rhythm"])
@@ -61,8 +61,22 @@ def add_reaction(body: ReactionInput, request: Request, user: CurrentUser, ai: O
     """"Save to Rhythm" or "Not interested" on the current video, from the side panel."""
     result = run(request.app, Actor(user.user_id), lambda p: learn.react(p, body))
     if result.status == "ok":
+        if body.reaction == "more":
+            background.add_task(summaries.summarize, request.app, user.user_id, body.metadata.video_id, ai)
         background.add_task(learn.refresh, request.app, user.user_id, ai, force=True)
     return result
+
+
+@router.get("/saved", response_model=Result)
+def saved_videos(request: Request, user: CurrentUser):
+    """Explicitly saved videos remain visible with recommendations and agent sharing switched off."""
+    return run(request.app, Actor(user.user_id), lambda p: saved.listing(p, False, 100, include_transcript=False))
+
+
+@router.post("/saved/{video_id}/summary", response_model=Result)
+def summarize_saved_video(video_id: VideoId, request: Request, user: CurrentUser, ai: OptionalAI):
+    """Generate missing notes for an old save, or retry a failed/interrupted automatic summary."""
+    return summaries.summarize(request.app, user.user_id, video_id, ai)
 
 
 @router.get("/learned", response_model=Result)
