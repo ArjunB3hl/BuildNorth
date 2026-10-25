@@ -1,0 +1,9 @@
+{
+  "name": "pose-coach",
+  "private": true,
+  "type": "module",
+  "description": "Browser pose coach prototype: MediaPipe pose -> exercise engine -> Claude cues -> speech",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

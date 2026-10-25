@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pose eval</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; background: #fafafa; color: #222; }
+  #stage { position: relative; display: inline-block; }
+  video, canvas { width: 480px; display: block; }
+  canvas { position: absolute; left: 0; top: 0; }
+  #log { white-space: pre-wrap; font: 12px ui-monospace, monospace; max-height: 60vh; overflow: auto; }
+</style>
+</head>
+<body>
+<h3>Pose evaluation over the clip set</h3>
+<p>Query: <code>?model=lite|full|heavy&amp;fps=30&amp;only=id1,id2</code>. Results are saved by the dev server.</p>
+<div id="stage"><video id="v" muted playsinline crossorigin="anonymous"></video><canvas id="c"></canvas></div>
+<div id="log"></div>
+<script type="module" src="/web/js/eval.js"></script>
+</body>
+</html>

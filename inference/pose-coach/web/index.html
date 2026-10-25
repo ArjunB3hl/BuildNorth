@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rhythm pose coach</title>
+<style>
+  :root { --bg: #0f1115; --panel: #181b22; --text: #e8eaf0; --muted: #9aa3b2; --accent: #4fd1c5; --warn: #f6ad55; --bad: #fc8181; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0 12px 0 0; }
+  select, button, label { font: inherit; }
+  select, button { background: #232733; color: var(--text); border: 1px solid #333a48; border-radius: 8px; padding: 7px 10px; }
+  button.primary { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  /* (a long clip or recording name in a picker must not widen a phone-width page) */
+  header label { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; }
+  header select { min-width: 0; flex: 0 1 auto; }
+  #stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+  #stage > video, #stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #stage.mirror #video, #stage.mirror #overlay { transform: scaleX(-1); }
+  /* form check: the user's own rep (faulty part in red) next to the 3D demo of the right form, in the side panel (the
+     camera view shows only the video and the skeleton) */
+  #demo { background: var(--panel); border: 2px solid var(--warn); border-radius: 12px; overflow: hidden; display: none; }
+  #demo.show { display: block; }
+  #demoCaption { padding: 7px 10px 4px; font-size: 15px; font-weight: 700; color: var(--warn); }
+  .fc-row { display: flex; gap: 6px; padding: 0 6px; align-items: flex-start; }
+  .fc-row figure { flex: 1; margin: 0; position: relative; min-width: 0; }
+  .fc-row figcaption { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 3px 2px; }
+  #youCanvas { width: 100%; height: auto; max-height: 300px; object-fit: contain; display: block; border-radius: 6px; }
+  #demo video { width: 100%; height: auto; max-height: 300px; object-fit: contain; display: block;
+                background: #1e2124; border-radius: 6px; }
+  #noDemo { display: none; min-height: 150px; border-radius: 6px; background: #1e2124; color: var(--muted); font-size: 12px;
+            align-items: center; justify-content: center; text-align: center; padding: 8px; }
+  #demo.nodemo #noDemo { display: flex; } #demo.nodemo video { display: none; }
+  /* a library movement's fault (a held pose's, a moving one's): "Like this" is the movement's reference pose, drawn as
+     the user's skeleton is (or, with none in the movement library, the user's own alone) */
+  #likeCanvas { display: none; width: 100%; height: auto; max-height: 300px; object-fit: contain; border-radius: 6px; }
+  #demo.pose #likeCanvas { display: block; } #demo.pose video, #demo.pose #noDemo { display: none; }
+  #demo.alone .fc-row figure + figure { display: none; }
+  #demoDetail { padding: 6px 10px 2px; font-size: 13px; }
+  #demoCredit { padding: 2px 10px 7px; font-size: 10px; color: var(--muted); }
+  .fc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 7px 0; }
+  .fc-foot #demoCredit { padding-bottom: 0; }
+  #demo3d { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 700;
+            padding: 5px 10px; }
+  /* a mistake shown again from the Workout card's list (pinned): which one, and Close (no timer puts it away) */
+  .fc-pin { display: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0 10px; }
+  #demo.pinned .fc-pin { display: flex; }
+  #demoWhen { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+  /* the Workout card's Mistakes: every mistake the form check showed, newest first, to see again after the workout;
+     or a saved workout's (the picker) */
+  #mistakes { margin-top: 12px; border-top: 1px solid #262b36; padding-top: 8px; }
+  #mistakes h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
+  #reviewPick { min-width: 0; max-width: 75%; padding: 3px 6px; font-size: 12px; }
+  #mistakesOf { font-size: 12px; color: var(--muted); margin: 6px 0; overflow-wrap: anywhere; }
+  #mistakeList { display: flex; flex-direction: column; gap: 4px; max-height: 45vh; overflow: auto; font-size: 13px; }
+  .mistake { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center;
+             padding: 4px 6px; border: 1px solid transparent; border-radius: 8px; }
+  .mistake.on { border-color: var(--warn); }
+  .m-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .m-text { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+  .m-text b { font-weight: 600; }
+  .m-label { color: var(--warn); }
+  .m-text small { color: var(--muted); font-size: 12px; }
+  .m-acts { display: flex; gap: 4px; }
+  #mistakesLeft { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  #mistakesLeft:empty { display: none; }
+  /* the form check in 3D (view3d.js), only when asked: over the whole video until the user closes it */
+  #view3d { position: absolute; inset: 0; background: #1e2124; display: none; flex-direction: column; z-index: 5; }
+  #view3d.show { display: flex; }
+  /* a phone-width page: the video's 16:9 leaves the character a sliver under the title and notes, so the stage stands
+     taller while the 3D view is open */
+  @media (max-width: 600px) { #stage:has(> #view3d.show) { aspect-ratio: 3 / 4; } }
+  #v3dHead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+  #v3dTitle { flex: 1; font-weight: 700; color: var(--warn); }
+  .muted { color: var(--muted); font-size: 12px; }
+  #v3dCanvas { flex: 1; position: relative; min-height: 0; cursor: grab; touch-action: none; }
+  #v3dLabels { position: absolute; left: 0; right: 0; top: 8px; display: flex; justify-content: space-around; pointer-events: none;
+               font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  #v3dLabels b { color: var(--bad); font-weight: 700; }
+  #v3dStatus { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  #v3dFoot { padding: 6px 12px 10px; font-size: 13px; }
+  #v3dProgress { height: 3px; background: var(--accent); width: 0; }
+  /* the side panel's Now card: the count, what the camera sees, the coach's questions and its last line (the camera
+     view itself shows only the video and the skeleton) */
+  #now { display: flex; flex-direction: column; gap: 8px; }
+  .now-count { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+  #reps { font-size: 56px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  #reps.tentative { color: var(--muted); }      /* auto mode: a first rep, not counted until its set starts */
+  #repsLabel { color: var(--muted); overflow-wrap: anywhere; }
+  #now.technique .now-count { flex-direction: column; align-items: flex-start; gap: 4px; }
+  #now.technique #reps { font-size: 28px; }
+  #banner { padding: 7px 10px; border-radius: 8px; font-weight: 600; display: none; }
+  #banner.wait { display: block; background: rgba(246, 173, 85, .92); color: #2b1a05; }
+  /* auto mode, a first rep of an exercise: big enough to read from where the person exercises */
+  #banner.tentative { display: block; background: rgba(79, 209, 197, .95); color: #0b2b28; font-size: 20px; font-weight: 800; }
+  #banner.stale { display: block; background: rgba(252, 129, 129, .95); color: #2b0505; font-size: 18px; font-weight: 800; }
+  #banner.ready { display: block; background: rgba(79, 209, 197, .9); color: #0b2b28; }
+  #say { font-size: 17px; border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; display: none; }
+  /* the coach's questions: which exercise (at the start, or "Change exercise"), and whether a set is done */
+  .ask { border: 1px solid var(--accent); border-radius: 10px; padding: 8px 10px; }
+  .ask[hidden] { display: none; }
+  .ask-q { font-weight: 700; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { padding: 5px 10px; border-radius: 999px; font-size: 13px; }
+  .chips button.on, .chips button.primary { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 600; }
+  .now-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  #micRow { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  #micRow[hidden] { display: none; }
+  #micRow.on #micState { color: var(--accent); }
+  #micRow.refused #micState { color: var(--warn); }
+  #micRow.hearing #micState { color: var(--accent); font-weight: 700; }
+  /* push-to-talk: held down (the button or the Space bar), one utterance is recorded */
+  #ptt { touch-action: none; user-select: none; -webkit-user-select: none; }
+  #ptt.held { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 700; }
+  #talk.on { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 600; }
+  .now-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* the conversation with the coach: what the user said and what the coach said (the log is the technical side) */
+  #chat { display: flex; flex-direction: column; gap: 4px; max-height: 30vh; overflow: auto; font-size: 14px; }
+  #chat .line { overflow-wrap: anywhere; }
+  #chat .line b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+  #chat .line.you b { color: var(--text); }
+  #chat .line.coach b { color: var(--accent); }
+  #chat .line.engine { color: var(--muted); }
+  #chatEmpty { color: var(--muted); font-size: 12px; }
+  aside { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border-radius: 12px; padding: 12px 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  #log { font: 12px/1.45 ui-monospace, monospace; max-height: 42vh; overflow: auto; white-space: pre-wrap; }
+  /* inside the BuildNorth app (?embed=1): the app has the title; the input and model stay as they are */
+  body.embed header h1, body.embed .dev { display: none; }
+  .cue { color: var(--warn); } .coach { color: var(--accent); } .err { color: var(--bad); } .you { font-weight: 700; }
+  /* coach connections: what is signed in or set up, which one Auto uses, the ElevenLabs agent's id */
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  button.mini { padding: 3px 8px; font-size: 12px; }
+  #connections .kv { font-size: 13px; overflow-wrap: anywhere; }
+  #connections .kv .live { color: var(--accent); }
+  #connections .kv .err { color: var(--bad); }
+  #connections code { font: 12px ui-monospace, monospace; background: #232733; border-radius: 4px; padding: 1px 5px; color: var(--text); }
+  #elevenForm { display: flex; gap: 6px; margin-top: 10px; }
+  #elevenForm input { flex: 1; min-width: 0; background: #232733; color: var(--text); border: 1px solid #333a48; border-radius: 8px;
+                      padding: 4px 8px; font: 12px ui-monospace, monospace; }
+  #elevenForm select { padding: 3px 4px; font-size: 12px; }
+  body.embed #elevenForm { display: none; }        /* (an id outranks .dev): inside the app, the state only */
+  #connMsg:empty { display: none; }
+  #connMsg { margin-top: 6px; font-size: 12px; }
+  /* a movement of the library the user named: what it tracks, and its animation in 3D (the 3D view, on request) */
+  #moveRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+  #moveRow[hidden] { display: none; }
+  #moveRow b { color: var(--text); font-weight: 600; }
+  /* a movement's form, measured (web/js/holdform.js for a held pose, shown once the coach was told the hold's start;
+     web/js/moveform.js for a moving or rhythm one): the fault the user was told of, big enough to read on the mat;
+     "Form checked" (.ok) only when nothing is open, waiting its turn (.pending), out of the frame or seen from a view
+     that cannot judge it (.unseen: what to do about it); every check unseen a while (form_unseen), its cue as big as
+     a fault (.alert: the user missed the small line for 46 s), while it lasts */
+  #moveForm { font-size: 13px; color: var(--muted); }
+  #moveForm[hidden] { display: none; }
+  #moveForm.fault, #moveForm.alert { font-size: 17px; font-weight: 700; color: var(--warn);
+                                     border-left: 3px solid var(--warn); padding: 2px 0 2px 10px; }
+  #moveForm.ok { color: var(--accent); font-weight: 600; }
+  #holdAgain { align-self: flex-start; }
+  #view3d.clip #v3dTitle { color: var(--accent); }
+  #view3d.clip #v3dLabels { display: none; }
+  /* the movement library: grouped, each with how it is tracked; tap one to name it, or show it in 3D */
+  #library .lib-about { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  #library details { border-top: 1px solid #262b36; }
+  #library summary { cursor: pointer; padding: 6px 0; font-weight: 600; font-size: 14px; }
+  #library summary .muted { font-weight: 400; }
+  .lib-item { display: flex; align-items: center; gap: 6px; padding: 3px 0 5px; }
+  .lib-pick { flex: 1; min-width: 0; text-align: left; background: none; border: 1px solid transparent; padding: 4px 6px;
+              display: flex; flex-direction: column; gap: 1px; }
+  .lib-pick:hover { border-color: #333a48; }
+  .lib-pick .lib-name { overflow-wrap: anywhere; }
+  .lib-pick .lib-track { font-size: 11px; color: var(--muted); }
+  .lib-item.on .lib-pick { border-color: var(--accent); }
+  .lib-item.on .lib-name { color: var(--accent); font-weight: 600; }
+  .lib-item.next .lib-pick { border-style: dashed; border-color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rhythm pose coach</h1>
+  <label>Exercise <select id="exercise"></select></label>
+  <label class="dev">Source <select id="source"><option value="camera">Camera</option></select></label>
+  <label class="dev">Pose model <select id="model"><option>full</option><option>lite</option><option>heavy</option></select></label>
+  <label title="Who writes the spoken cues. Auto: the first connected of the ElevenLabs agent, Claude and ChatGPT (see Connections)">AI coach <select id="coachKind">
+    <option value="auto">Auto</option>
+    <option value="eleven">Rhythm coach agent (ElevenLabs)</option>
+    <option value="claude">Claude Sonnet 5.5</option>
+    <option value="chatgpt">ChatGPT (GPT-6 Luna)</option>
+    <option value="off">Off: the engine's own cues</option>
+  </select></label>
+  <label title="Who speaks them. Auto: the agent's own voice with the ElevenLabs coach, Kokoro otherwise">Voice <select id="voiceKind">
+    <option value="auto">Auto</option>
+    <option value="kokoro">Kokoro (this Mac)</option>
+    <option value="eleven">The agent's own (ElevenLabs)</option>
+    <option value="mac">Mac voice</option>
+    <option value="off">Off</option>
+  </select></label>
+  <label title="When a rep goes wrong, replay it next to a 3D demo of the right form"><input type="checkbox" id="useDemos" checked> Form check (3D demos)</label>
+  <label title="Saves this set's body landmarks and events to the local data folder when you press Stop, so the engine can be checked against what happened. No camera images."><input type="checkbox" id="record" checked> Save set for debugging (landmarks only)</label>
+  <button id="start" class="primary">Start</button>
+  <button id="stop" disabled>Stop</button>
+</header>
+<main>
+  <div>
+    <div id="stage" class="mirror">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="view3d">
+        <div id="v3dHead"><div id="v3dTitle"></div><span class="muted">drag to turn</span><button id="v3dClose">Close</button></div>
+        <div id="v3dCanvas"><div id="v3dLabels"><span>You (<b id="v3dPart"></b> in red)</span><span id="v3dRight">Like this</span></div>
+          <div id="v3dStatus">Building the 3D view...</div></div>
+        <div id="v3dProgress"></div>
+        <div id="v3dFoot"></div>
+      </div>
+    </div>
+  </div>
+  <aside>
+    <div class="card" id="now">
+      <div class="now-count"><div id="reps">-</div><div id="repsLabel">press Start</div></div>
+      <div id="moveRow" hidden><span id="moveNote"></span><button id="move3d" class="mini" title="Its animation from the movement library, on a 3D character">Show in 3D</button></div>
+      <div id="moveForm" hidden></div>
+      <button id="holdAgain" class="mini" hidden
+        title="Your last seconds replayed next to the movement done right">See it again</button>
+      <div id="banner"></div>
+      <div id="askEnd" class="ask" hidden><div class="ask-q" id="askEndText">Done with this set?</div>
+        <div class="chips"><button id="endDone" class="primary">Done</button><button id="endNot">Not yet</button></div></div>
+      <div id="askEx" class="ask" hidden><div class="ask-q" id="askExText">Which exercise or movement are you doing?</div>
+        <div class="chips" id="exChips"></div></div>
+      <div id="say"></div>
+      <div class="now-foot">
+        <span class="now-actions">
+          <button id="changeEx" class="mini" disabled title="Name the exercise you are doing, or let the coach detect it">Change exercise</button>
+          <button id="talk" class="mini" title="Talk to the coach without a workout (it closes after 2 minutes without a word)">Talk to coach</button>
+          <button id="ptt" class="mini" hidden title="Hold (or hold the Space bar) and talk: one sentence, for a noisy room">Hold to talk</button>
+        </span>
+        <span id="micRow" hidden><span id="micState"></span><button id="micToggle" class="mini">Mute</button></span>
+      </div>
+    </div>
+    <div id="demo">
+      <div class="fc-pin"><span id="demoWhen"></span><button id="demoClose" class="mini">Close</button></div>
+      <div id="demoCaption"></div>
+      <div class="fc-row">
+        <figure><figcaption id="youLabel">Your rep</figcaption>
+          <canvas id="youCanvas" width="240" height="300"></canvas></figure>
+        <figure><figcaption>Like this</figcaption><video id="demoVideo" muted playsinline></video>
+          <canvas id="likeCanvas" width="240" height="300"></canvas>
+          <div id="noDemo">No 3D demo for this one</div></figure>
+      </div>
+      <div id="demoDetail"></div>
+      <div class="fc-foot"><div id="demoCredit"></div><button id="demo3d" title="Your rep on a 3D character next to the right form">See it in 3D</button></div>
+    </div>
+    <div class="card" id="chatCard"><h2>Coach chat</h2>
+      <div id="chat"><div id="chatEmpty">What you say to the coach and what it says show here.</div></div>
+    </div>
+    <div class="card" id="library"><div class="card-head"><h2>Movements</h2><span class="muted" id="libCount"></span></div>
+      <p class="lib-about">Name what you are doing: tap it here or say it. The coach keeps track of the one you name with what
+        the camera measures (a hold timer, the time moving, a rough count); it does not recognise these by itself. Reps are
+        counted for gym exercises only.</p>
+      <div id="libGroups"><span class="muted">Loading the movement library...</span></div>
+    </div>
+    <div class="card"><h2>Live</h2>
+      <div class="kv">
+        <span>Tracking</span><span id="fps">-</span>
+        <span>Camera view</span><span id="view">-</span>
+        <span>Signal</span><span id="signal">-</span>
+        <span>Last rep</span><span id="lastRep">-</span>
+        <span>Coach</span><span id="coachState">off</span>
+        <span>Cue delay</span><span id="cueDelay">-</span>
+      </div>
+    </div>
+    <div class="card" id="connections"><div class="card-head"><h2>Connections</h2>
+        <button id="connCheck" class="mini" title="Check the sign-ins again, and try again what failed to start">Check again</button></div>
+      <div class="kv">
+        <span>ElevenLabs</span><span id="conn-eleven">-</span>
+        <span>Claude</span><span id="conn-claude">-</span>
+        <span>ChatGPT</span><span id="conn-chatgpt">-</span>
+        <span>Speech to text</span><span id="conn-stt">-</span>
+        <span>Auto uses</span><span id="connAuto">-</span>
+      </div>
+      <form id="elevenForm" class="dev" title="The ElevenLabs coach agent: its id is not a secret (the agent answers only pages on this machine)">
+        <input id="elevenAgent" placeholder="ElevenLabs agent id: agent_..." autocomplete="off" spellcheck="false" aria-label="ElevenLabs agent id">
+        <select id="elevenPlan" aria-label="ElevenLabs plan"><option value="">plan?</option><option value="free">Free</option>
+          <option value="starter">Starter</option><option value="creator">Creator</option><option value="pro">Pro</option>
+          <option value="scale">Scale</option><option value="business">Business</option></select>
+        <button type="submit" class="mini">Save</button><button type="button" id="elevenForget" class="mini">Forget</button>
+      </form>
+      <div id="connMsg" class="muted"></div>
+    </div>
+    <div class="card"><h2>Workout</h2><div class="kv" id="workout"></div>
+      <div id="mistakes">
+        <div class="card-head"><h3>Mistakes</h3>
+          <select id="reviewPick" aria-label="Whose mistakes"
+            title="Review a saved workout's mistakes (saved with &quot;Save set for debugging&quot;: landmarks only)">
+            <option value="">This workout</option></select></div>
+        <div id="mistakesOf"></div>
+        <div id="mistakeList"></div>
+        <div id="mistakesLeft"></div>
+      </div></div>
+    <div class="card"><h2>What happened</h2><div id="log"></div></div>
+  </aside>
+</main>
+<script type="importmap">{ "imports": { "three": "/web/vendor/three-0.170.0/build/three.module.js",
+  "three/addons/": "/web/vendor/three-0.170.0/examples/jsm/" } }</script>
+<script type="module" src="/web/js/app.js"></script>
+</body>
+</html>

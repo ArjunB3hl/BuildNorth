@@ -1,0 +1,39 @@
+diff --git a/src/app/(app)/(tabs)/activity/_layout.tsx b/src/app/(app)/(tabs)/activity/_layout.tsx
+index 2536bc2..fd8d3d1 100644
+--- a/src/app/(app)/(tabs)/activity/_layout.tsx
++++ b/src/app/(app)/(tabs)/activity/_layout.tsx
+@@ -11,6 +11,7 @@ export default function ActivityLayout() {
+       <Stack.Screen name="edit" options={{ title: 'Edit routine' }} />
+       <Stack.Screen name="import" options={{ title: 'Describe a workout' }} />
+       <Stack.Screen name="run" options={{ title: 'Session', presentation: 'fullScreenModal', gestureEnabled: false }} />
++      <Stack.Screen name="camera" options={{ title: 'Camera workout', presentation: 'fullScreenModal', gestureEnabled: false }} />
+       <Stack.Screen name="session/[id]" options={{ title: 'Session' }} />
+     </Stack>
+   );
+diff --git a/src/app/(app)/(tabs)/activity/index.tsx b/src/app/(app)/(tabs)/activity/index.tsx
+index e640653..92c3eb6 100644
+--- a/src/app/(app)/(tabs)/activity/index.tsx
++++ b/src/app/(app)/(tabs)/activity/index.tsx
+@@ -40,6 +40,8 @@ export default function ActivityScreen() {
+ 
+   const newRoutine = () => router.push('/activity/edit');
+   const describe = () => router.push('/activity/import');
++  // The pose coach counts reps with the camera; it is a browser page, so the web app only (activity/camera.web.tsx).
++  const camera = () => router.push('/activity/camera');
+ 
+   return (
+     <Screen
+@@ -53,7 +55,12 @@ export default function ActivityScreen() {
+         <PageIntro
+           text="Build routines, run them as sessions and keep a record of what you did."
+           primary={<Button title="New routine" onPress={newRoutine} />}
+-          secondary={<Button title="Describe a workout" variant="secondary" onPress={describe} />}
++          secondary={
++            <>
++              {Platform.OS === 'web' ? <Button title="Camera workout" variant="secondary" onPress={camera} /> : null}
++              <Button title="Describe a workout" variant="secondary" onPress={describe} />
++            </>
++          }
+         />
+       </Enter>
+ 
