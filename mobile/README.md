@@ -646,8 +646,36 @@ cd backend && .venv/bin/python -m scripts.live_check
 
 ### Deploy the backend on Render
 
-Use a **Web Service**, branch `main`, root directory `mobile/backend`, Python runtime. The `.python-version`
-file selects Python 3.13. Set:
+Use a **Web Service**, branch `main`. The main API has its own CPU-only Dockerfile at
+`mobile/backend/Dockerfile`. For an existing Docker service, set these exact values:
+
+| Docker setting | Value |
+|---|---|
+| Root Directory | `mobile/backend` |
+| Dockerfile Path | `./Dockerfile` |
+| Docker Build Context Directory | `.` |
+| Docker Command | Leave blank; use the image's default command |
+| Health Check Path | `/health` |
+
+Render resolves the Dockerfile and context relative to Root Directory. `.` is a directory, not a
+Dockerfile path. Alternatively, leave Root Directory blank and set Dockerfile Path to
+`./mobile/backend/Dockerfile` and Docker Build Context Directory to `./mobile/backend`.
+Do not use `inference/minicpm-o/docker/Dockerfile` or `inference/speech-worker/Dockerfile` for this service.
+
+The image uses Python 3.13, runs as a non-root user, migrates the configured database before startup,
+and listens on `0.0.0.0:$PORT` with one Uvicorn worker. It requires `DATABASE_URL` and
+`AI_CREDENTIAL_ENCRYPTION_KEY` at runtime. No credentials are used during the image build, and its
+restricted build context excludes local `.env` files and databases. Start with 1 CPU / 2 GB for the
+demo API and measure usage; speech model memory belongs to the separate speech worker.
+
+To build the same image locally from `mobile/backend`:
+
+```bash
+docker build --platform linux/amd64 -t rhythm-api .
+```
+
+If creating a **Python runtime** service instead, use root directory `mobile/backend`.
+The `.python-version` file selects Python 3.13. Set:
 
 | Setting | Value |
 |---|---|
@@ -724,6 +752,36 @@ References: [Render FastAPI deployment](https://render.com/docs/deploy-fastapi),
 [environment variables](https://render.com/docs/configure-environment-variables),
 [Postgres connections](https://render.com/docs/postgresql-creating-connecting), and
 [filesystem persistence](https://render.com/docs/disks).
+
+### Website on EAS Hosting
+
+The demo website is [rhythm-buildnorth.expo.app](https://rhythm-buildnorth.expo.app), linked to
+[`@arjun273773/BuildNorth`](https://expo.dev/accounts/arjun273773/projects/BuildNorth).
+Its public API origin is `https://buildnorth.onrender.com`. The website can load before the API is ready,
+but account data and Coach require a successful Render deployment.
+
+The EAS project's `production` environment stores only these public settings:
+
+| Variable | Value |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | `https://buildnorth.onrender.com` |
+| `EXPO_PUBLIC_WEB_APP_URL` | `https://rhythm-buildnorth.expo.app` |
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | The demo Clerk instance's publishable key |
+
+From `mobile/`, build with the saved production values and deploy:
+
+```bash
+npx eas-cli@latest env:exec production 'EXPO_NO_DOTENV=1 npm run build:web' --non-interactive
+npx eas-cli@latest deploy --prod --environment production --non-interactive --no-source-maps
+```
+
+`EXPO_NO_DOTENV=1` prevents a developer's local `.env` or `.env.local` from bundling a localhost/tunnel API
+address into the public website. Set **both** `WEB_ALLOWED_ORIGINS` and `CLERK_AUTHORIZED_PARTIES` on the
+Render API to `https://rhythm-buildnorth.expo.app`. Use this stable production origin, not a temporary
+deployment URL. Keep database credentials, model keys, and the credential-encryption key only on the backend.
+
+The website currently uses the same development Clerk instance as the local demo. Publishing the website
+does not deploy camera inference or the optional speech worker; follow their separate setup instructions.
 
 ### Other production settings
 

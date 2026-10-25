@@ -1,0 +1,18 @@
+# Only ship API source and migration files. Never send local credentials, databases,
+# virtual environments, recordings, or unrelated inference containers to the builder.
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!alembic.ini
+!docker-entrypoint.sh
+!app/
+!app/**
+!migrations/
+!migrations/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

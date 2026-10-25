@@ -24,7 +24,7 @@
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png",
-      "name": "Rhythm \u00b7 Demo version",
+      "name": "Rhythm · Demo version",
       "shortName": "Rhythm",
       "description": "Demo version of Rhythm, your companion for meals, movement and everyday routines."
     },
@@ -53,6 +53,29 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.arjun273773.buildnorth.watch",
+                  "targetName": "watch",
+                  "entitlements": {
+                    "com.apple.developer.healthkit": true,
+                    "com.apple.developer.healthkit.access": []
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "09d1e081-f14e-4acf-b420-029271bb27ef"
+      }
+    },
+    "owner": "arjun273773"
   }
 }
