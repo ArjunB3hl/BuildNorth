@@ -46,7 +46,7 @@ export default function ApprovalsScreen() {
         recent.refetch();
       }}>
       <ThemedText type="small" themeColor="textSecondary">
-        Connected assistants (OpenCode, ChatGPT, Claude) can propose changes. They are applied only when you approve the
+        Connected assistants can propose changes. They are applied only when you approve the
         exact changes below.
       </ThemedText>
       {pending.isPending ? <Loading label="Loading requests…" /> : null}

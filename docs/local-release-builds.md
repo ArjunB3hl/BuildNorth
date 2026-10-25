@@ -10,6 +10,7 @@ The phone apps use the deployed API and Clerk account. The Mac app keeps its exi
 | Android | `Rhythm-1.0.0-android-release.apk` | Drag the APK onto a running ARM64 Android emulator. |
 | Android archive | `Rhythm-1.0.0-android-release.aab` | Retained for future packaging; use the APK for direct installation. |
 | Mac | `Rhythm.app` and its ZIP | Open the app on an Apple silicon Mac. |
+| Chrome extension | Production extension ZIP | Unzip, open `chrome://extensions`, enable Developer mode, and load its unpacked folder. |
 
 The applications bundle their JavaScript and run without Metro. iPhone and Watch simulator apps target Apple silicon;
 physical Apple devices require their own signing/provisioning. Mac is ad-hoc signed and has not been notarized.
@@ -29,8 +30,12 @@ Each platform's `build-result.json` records its verification results and limitat
 actual ZIP/APK/AAB files. Optional website checks and screenshots are saved under `verification/`.
 Double-click `Open demo.command` in Finder to choose and launch a platform. Start the relevant iPhone/Watch simulator
 or Android emulator first; the helper preserves existing app data and never uninstalls a conflicting Android package.
+The Mac option starts the packaged Release as a separate instance, so an open development copy cannot intercept it.
+Both Mac copies use the same local demo database; close the one you are not testing before making edits.
 Verify the packaged files with `shasum -a 256 -c SHA256SUMS` from the release directory.
 The website's download URLs remain empty until there is an actual HTTPS distribution destination.
+The extension's verification record includes its stable ID and required Clerk/Render origin setup. The separate
+production package does not replace the user's installed development extension automatically.
 
 ## Rebuild iPhone and Watch
 
@@ -66,6 +71,11 @@ and checks the signing certificate and embedded production URLs. `RHYTHM_RELEASE
 `RHYTHM_ANDROID_ARCHITECTURES` defaults to `arm64-v8a` for this computer's emulator; use `arm64-v8a,x86_64` if an
 Intel emulator is also needed.
 
+On this Mac, start the preserved test emulator from the repository root with
+`python3 scripts/start-android-demo-emulator.py`. A copy is included in the artifact folder. Add `--headless` for
+unattended testing or `--avd NAME` for another existing ARM64 AVD. The helper uses SwiftShader with guest Vulkan
+disabled, waits up to two minutes for boot, and never resets data or downloads a system image.
+
 Keep `~/.codex/private/rhythm-android-signing.json` and its referenced keystore private and backed up.
 The script reuses this key for subsequent builds, which allows app updates without uninstalling and losing data.
 Do not place signing material in the artifact library. `RHYTHM_ANDROID_SIGNING_FILE` supports another private location.
@@ -91,6 +101,14 @@ use `ditto -c -k --sequesterRsrc --keepParent` to create a ZIP. Website handoffs
 ## Deployment checks and limits
 
 The deployed services are <https://rhythm-buildnorth.expo.app> and <https://buildnorth.onrender.com>.
+Run the credential-free public check from the repository root:
+
+```sh
+python3 scripts/check-deployment.py --output artifacts/releases/YYYY-MM-DD/verification/deployment-latest.json
+```
+
+It checks readiness, protected API routes, allowed/rejected CORS origins, and both MCP discovery/authentication
+challenges. It makes no account writes or paid model requests. `--api` and `--website` accept another pair of origins.
 Each artifact's verification record distinguishes build checks, process startup, and interactive tests. A successful
 build alone does not confirm sign-in or navigation. Hardware camera/microphone permissions, physical Watch readings
 and real HealthKit syncing require device testing.

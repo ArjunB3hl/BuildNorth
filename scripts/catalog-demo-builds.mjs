@@ -14,6 +14,7 @@ const platforms = [
   { id: 'watchos', name: 'Apple Watch', target: 'Xcode Simulator', instructions: 'Use the paired Watch simulator. The iPhone simulator archive also contains the Watch app. Physical HealthKit sensor readings require real hardware.' },
   { id: 'android', name: 'Android', target: 'Android emulator · ARM64', instructions: 'Drag the APK onto a running ARM64 Android emulator to install it. The AAB is an archive for future packaging, not a directly installable app.' },
   { id: 'macos', name: 'Mac', target: 'Apple silicon Mac', instructions: 'Unzip the archive and open Rhythm.app. This is an ad-hoc signed local demo, without notarization. Its JavaScript is bundled; Metro is not required.' },
+  { id: 'extension', name: 'Chrome extension', target: 'Chrome · Load unpacked', instructions: 'Unzip the production build and load its folder from chrome://extensions with Developer mode enabled. It uses the live website and API and keeps the existing Rhythm extension identity. Review the <a href="extension/SETUP.txt">account setup notes</a> before replacing your local development copy.' },
 ];
 const checksumLines = [];
 for (const platform of platforms) {
@@ -40,6 +41,7 @@ try {
 await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 await writeFile(join(directory, 'SHA256SUMS'), checksumLines.join('\n') + '\n');
 await copyFile(join(root, 'scripts/launch-local-demo.sh'), join(directory, 'launch-demo.sh'));
+await copyFile(join(root, 'scripts/start-android-demo-emulator.py'), join(directory, 'start-android-demo-emulator.py'));
 await writeFile(join(directory, 'Open demo.command'), '#!/usr/bin/env bash\ncd "$(dirname "$0")"\nexec bash ./launch-demo.sh "$@"\n');
 await chmod(join(directory, 'Open demo.command'), 0o755);
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
