@@ -132,6 +132,18 @@ management screen. Rhythm queries are excluded from the existing persisted cache
 The dashboard's library counts describe returned recommendations, not watch time
 or a complete browsing history.
 
+### The extension uses the website's sign-in (25 October 2026)
+
+The Rhythm extension no longer needs its own sign-in. With Clerk's Sync Host, its
+panel and service worker read this web app's Clerk cookie on `http://localhost`
+(any port), so whoever is signed in here is signed in there. The panel's
+**Sign in on the BuildNorth website** opens `/sign-in`, and the panel follows
+sign-in, sign-out and account changes made here. Signing out in the panel signs
+out here too, because they share one sign-in. Nothing in `mobile/` changed for
+this. It needs the extension's origin in Clerk's `allowed_origins` and, if
+`CLERK_AUTHORIZED_PARTIES` is set, both this app's origin and the extension's;
+see [the extension README](../../extension/README.md#extension-id-clerk-and-other-backends).
+
 ## Source map
 
 Paths below are relative to the repository root.
@@ -221,7 +233,7 @@ browsing collector or other health-site adapter was added.
 | Cookie lifetime and scope | 30 days, host-only, `Path=/`, `SameSite=Lax`, `Secure` on HTTPS |
 | Cookie withdrawal | **Use essential only** expires the optional cookie; browser failures are reported in the panel |
 | Cookie contents | Display preference only; no health data, browsing history, identity or tokens |
-| Extension cookies permission | Existing Clerk SDK requirement, with host access limited to the configured backend and Clerk origin |
+| Extension cookies permission | Clerk SDK requirement. Host access is limited to the configured backend, the Clerk origin and the sync host (`http://localhost`), where the extension reads only this app's Clerk cookies to share its sign-in |
 | Saved app records | Existing per-account offline cache; this is separate from the optional cookie |
 
 Accepting the optional cookie does not enable metadata sharing, transcripts,

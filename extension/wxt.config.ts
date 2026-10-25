@@ -1,5 +1,6 @@
 import { defineConfig } from 'wxt';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_WEB_APP_URL, syncHostFor } from './lib/website-sign-in';
 
 function serviceOrigin(value: string): string {
   const url = new URL(value);
@@ -14,18 +15,20 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: () => {
     // A dashboard link needs no host permission and never transfers cookies or tokens.
-    serviceOrigin(import.meta.env.WXT_WEB_APP_URL || 'http://localhost:8081');
+    serviceOrigin(import.meta.env.WXT_WEB_APP_URL || DEFAULT_WEB_APP_URL);
     const backend = serviceOrigin(import.meta.env.WXT_API_URL || 'http://localhost:8000');
     const clerk = import.meta.env.WXT_CLERK_FRONTEND_API
       ? serviceOrigin(import.meta.env.WXT_CLERK_FRONTEND_API) : null;
+    // Where Clerk reads the website's sign-in from (lib/website-sign-in.ts): http://localhost for a local web app.
+    const syncHost = serviceOrigin(syncHostFor(import.meta.env));
     return {
       name: 'Rhythm — your interests, your videos',
       description: 'Choose YouTube videos that fit the interests Rhythm learns from your activity, with your own agent.',
       minimum_chrome_version: '116',
       // cookies is required by Clerk's extension SDK; alarms runs learning's 30-second playback checks.
       permissions: ['activeTab', 'scripting', 'sidePanel', 'storage', 'cookies', 'alarms'],
-      // Host access is limited to Clerk and our backend.
-      host_permissions: [backend, ...(clerk ? [clerk] : [])].map((origin) => `${origin}/*`),
+      // Host access is limited to our backend, Clerk, and the sync host whose Clerk cookie carries the website's sign-in.
+      host_permissions: [...new Set([backend, ...(clerk ? [clerk] : []), syncHost])].map((origin) => `${origin}/*`),
       // Requested only when you turn on learning, and removed when you turn it off.
       optional_host_permissions: ['https://www.youtube.com/*'],
       action: { default_title: 'Use Rhythm on this page' },

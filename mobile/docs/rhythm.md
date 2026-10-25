@@ -188,12 +188,13 @@ All examples contain names and placeholders. Configure secrets locally or in the
 server's secret manager; do not put them into chat, extension source, or a client bundle.
 
 1. **Clerk:** use the existing phone application and enable its Native API.
-   Email/password and supported verification steps are the extension's sign-in
-   path. A stable public CRX key can be set as `WXT_CRX_PUBLIC_KEY`; follow Clerk's
-   extension guide for the resulting extension ID and deployment configuration.
-   If `CLERK_AUTHORIZED_PARTIES` is configured, include the extension's
-   `chrome-extension://<id>` origin along with the existing authorized origins.
-   Complete account verification normally.
+   The extension uses the web app's sign-in through Clerk's Sync Host, with
+   email/password in the panel as a fallback. Set a stable public CRX key as
+   `WXT_CRX_PUBLIC_KEY` and add the extension's `chrome-extension://<id>` origin
+   to the instance's `allowed_origins` (see the extension README, *Extension ID,
+   Clerk and other backends*). If `CLERK_AUTHORIZED_PARTIES` is configured,
+   include the web app's origin and the extension's origin along with the existing
+   authorized origins. Complete account verification normally.
 2. **YouTube search:** enable YouTube Data API v3 in your Google project and set
    `YOUTUBE_API_KEY` in `mobile/backend/.env`. It is never sent to the extension or
    agent. Missing configuration returns `provider_error`, with no invented results.
@@ -257,7 +258,8 @@ Clerk secret key, model key, or SurrealDB key.
 2. Open **Profile → Content library → Connections**. Choose a named agent and its
    capabilities. Create a Rhythm connection token for a bearer-header client,
    or approve the request from an OAuth client. The token is shown once.
-3. Sign in to the extension with the same account. Open a YouTube `/watch?v=…`
+3. Sign in on the web app; the extension's panel uses the same sign-in (reopen
+   the panel if it still asks you to sign in). Open a YouTube `/watch?v=…`
    page and click the **Rhythm toolbar icon**, which supplies Chrome's temporary
    `activeTab` grant. Then choose **Use this page**. A side-panel button alone
    cannot grant Chrome access to a newly selected tab.
