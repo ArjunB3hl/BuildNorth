@@ -1,0 +1,31 @@
+{
+  "name": "rhythm-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:local": "node scripts/build-local.mjs",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "test": "wxt build --config wxt.test.config.ts --level warn && playwright test",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@clerk/chrome-extension": "3.1.97",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/chrome": "0.3.6",
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.0",
+    "@wxt-dev/module-react": "1.2.2",
+    "typescript": "~6.0.3",
+    "wxt": "0.21.4"
+  }
+}
