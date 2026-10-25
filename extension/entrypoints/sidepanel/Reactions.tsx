@@ -32,7 +32,9 @@ export function VideoReactions({ api, onSaved }: { api: RhythmApi; onSaved: () =
     </div>
     <p className="muted">Rhythm reads this tab’s video title, channel, description excerpt and length when you choose.
       Save to Rhythm also opens YouTube’s transcript, reads it and closes it again. They’re sent only for a workout,
-      martial arts, health or cooking video.</p>
+      martial arts, health or cooking video. Your connected AI turns the transcript into useful instructions or takeaways
+      in your Content library, alongside the original YouTube link.</p>
+    <p><a href={new URL('/profile/videos', settingsUrl).href} target="_blank" rel="noreferrer">Open Content library ↗</a></p>
     <p className={outcome?.status === 'ok' ? 'outcome notice success' : 'outcome notice'} role="status">
       {outcome?.title && <strong>{outcome.title}</strong>}{outcome?.message}
       {outcome?.needsSettings && <> <a href={settingsUrl} target="_blank" rel="noreferrer">Rhythm settings ↗</a></>}

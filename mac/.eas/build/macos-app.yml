@@ -46,22 +46,22 @@ build:
         name: Verify signature and zip the .app
         command: |
           set -eo pipefail
-          APP=macos/build/DerivedData/Build/Products/Release/NorthAssistant.app
+          APP=macos/build/DerivedData/Build/Products/Release/Rhythm.app
           test -d "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 || true
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/NorthAssistant-macOS.zip
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/Rhythm-macOS.zip
 
     # The .app as the build's application archive (eas build:download extracts it).
     - eas/upload_artifact:
-        name: Upload NorthAssistant.app (application archive)
+        name: Upload Rhythm.app (application archive)
         inputs:
           type: application-archive
-          path: macos/build/DerivedData/Build/Products/Release/NorthAssistant.app
+          path: macos/build/DerivedData/Build/Products/Release/Rhythm.app
 
     # The same app zipped with ditto, which keeps framework symlinks intact.
     - eas/upload_artifact:
-        name: Upload NorthAssistant-macOS.zip (build artifact)
+        name: Upload Rhythm-macOS.zip (build artifact)
         inputs:
           type: build-artifact
-          path: dist/NorthAssistant-macOS.zip
+          path: dist/Rhythm-macOS.zip

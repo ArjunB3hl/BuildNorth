@@ -7,6 +7,7 @@ import type {
   AcceptResult,
   AssistantProposal,
   ConnectionsInfo,
+  ClaudeConnection,
   ConnectionToken,
   ActivitySession,
   ChangePreview,
@@ -44,7 +45,7 @@ import type {
 } from '@/lib/types';
 
 /**
- * Base URL of the BuildNorth backend. EXPO_PUBLIC_API_URL wins; otherwise, in
+ * Base URL of the Rhythm backend. EXPO_PUBLIC_API_URL wins; otherwise, in
  * development, use the machine serving the JS bundle so Expo Go on a phone on
  * the same Wi-Fi reaches the backend without extra configuration.
  */
@@ -76,6 +77,7 @@ export class ApiError extends Error {
 }
 
 function friendlyHttpMessage(status: number, detail: string | undefined, path: string): string {
+  if (path === '/connections/claude' && detail && [400, 422, 429, 502, 503].includes(status)) return detail;
   const isAi = path.startsWith('/coach') || path.endsWith('/extract');
   // Planner errors carry a specific, user-facing explanation (what still works without AI, stale plans…).
   const isPlanner = path.startsWith('/planner') || path.startsWith('/plan/changes');
@@ -132,6 +134,7 @@ export function createApi(getToken: TokenGetter) {
       response = await fetch(`${API_URL}${path}`, {
         method,
         headers,
+        ...(path === '/connections/claude' ? { redirect: 'error' as const } : {}),
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
       });
@@ -157,7 +160,7 @@ export function createApi(getToken: TokenGetter) {
       // The backend always answers errors with JSON. Anything else came from something in between,
       // e.g. a tunnel whose endpoint is offline (ngrok answers 404 with an HTML page) or a captive portal.
       if (__DEV__) console.warn(`[api] ${method} ${path} -> ${response.status} from outside the backend (${response.headers.get('ngrok-error-code') ?? 'non-JSON'})`);
-      throw new ApiError("Can't reach the BuildNorth server right now. Check your connection and try again.", 'network', response.status);
+      throw new ApiError("Can't reach the Rhythm server right now. Check your connection and try again.", 'network', response.status);
     }
     if (!response.ok) {
       const detail = typeof data?.detail === 'string' ? data.detail : undefined;
@@ -176,7 +179,9 @@ export function createApi(getToken: TokenGetter) {
   };
 
   return {
-    rhythm: createRhythmApi((method, path, body) => request(method, path, { body })),
+    rhythm: createRhythmApi((method, path, body) => request(method, path, {
+      body, timeoutMs: path.startsWith('/rhythm/saved/') && path.endsWith('/summary') ? AI_TIMEOUT_MS : DEFAULT_TIMEOUT_MS,
+    })),
     status: () => get<ServiceStatus>('/status', { auth: false }),
 
     profile: {
@@ -268,6 +273,9 @@ export function createApi(getToken: TokenGetter) {
       review: (end: string) => get<WeeklyReview>(`/review/week${q({ end })}`),
     },
     connections: {
+      claude: () => get<ClaudeConnection>('/connections/claude'),
+      connectClaude: (apiKey: string, model: string) => send<ClaudeConnection>('PUT', '/connections/claude', { apiKey, model }),
+      disconnectClaude: () => send<void>('DELETE', '/connections/claude'),
       info: () => get<ConnectionsInfo>('/connections'),
       createToken: (label: string) => send<ConnectionToken & { token: string }>('POST', '/connections/tokens', { label }),
       revokeToken: (id: string) => send<void>('DELETE', `/connections/tokens/${id}`),

@@ -68,7 +68,7 @@ struct SleepView: View {
         Section {
           Text("Wear your watch to bed and turn on Track Sleep with Apple Watch in the iPhone Watch app → Sleep. Results appear after Apple Health records them.")
             .font(.caption2).foregroundStyle(.secondary)
-          Text("Missing sleep? Check BuildNorth's access in Settings → Health → Apps.")
+          Text("Missing sleep? Check Rhythm's access in Settings → Health → Apps.")
             .font(.caption2).foregroundStyle(.secondary)
         }
       }

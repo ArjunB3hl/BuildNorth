@@ -5,9 +5,9 @@ tested through Computer Use in the actual paired simulator UI. The requested
 flows passed after correcting the supplied watch build and recovering a stalled
 simulator service. No application source defect was confirmed during that run.
 
-These screenshots show the **BuildNorth** name used by the tested commit. They
-are a record of that build, not screenshots of the subsequent **Rhythm** branding
-from `main`.
+The full-flow screenshots show the **BuildNorth** name used by the tested commit.
+A separate home screenshot below records the subsequent **Rhythm** integration
+with `main`.
 
 ## Environment and scope
 
@@ -117,3 +117,37 @@ simulator health data and can be opened at full resolution.
 | Phone summaries | [Phone sync](assets/watch-ui-2026-10-25/phone-sync.png) |
 
 ![Final two-option watch home](assets/watch-ui-2026-10-25/home.png)
+
+## Integration with main and pre-merge verification
+
+After the UI run, the user requested committing, pushing and merging this work
+into `main`. Integrated `origin/main` at `95aed5e`, retaining its Rhythm branding
+and demo labels while keeping the two-option watch navigation, Sleep/Workout
+permission text, and `workout-processing` background mode. The removed legacy
+Today and Health screens remain removed.
+
+The new home initially placed the demo label over the Workout subtitle. Moving
+the label into a list section footer fixed the overlap. Rebuilt and installed the
+signed watch app, opened it through Computer Use, and confirmed the persisted
+sign-in, Rhythm title, exactly two main options, readable demo footer, and no
+active-workout indicator. Left the watch on this home screen. This was a home
+smoke check; the complete Sleep/Workout flows above were run at `d843a88`.
+
+Checks on the integrated tree all passed:
+
+- `npm run lint` and `npm run typecheck`.
+- `bash scripts/check-watch-models.sh`: 174 model checks and watchOS 11
+  typechecking, rerun after the footer correction.
+- `node --experimental-strip-types --test src/lib/watch-link.test.mjs src/lib/health-sharing.test.mjs`:
+  13 phone-link and sharing-copy tests. Node 23.5 required the explicit type
+  stripping flag; running without it failed to load the TypeScript imports.
+- From `mobile/backend/`, `.venv/bin/python -m pytest -q tests/test_watch.py`:
+  54 passed.
+- Signed Debug watch simulator build using the command above with
+  `SYMROOT=/tmp/buildnorth-watch-merge-check`, rerun after the footer correction.
+- `git diff --check` and documentation image-link checks.
+
+The unrelated untracked `.claude/launch.json` was not modified or committed.
+The full backend suite and physical-device tests were not run for this integration.
+
+![Integrated Rhythm two-option home](assets/watch-ui-2026-10-25/home-integrated.png)

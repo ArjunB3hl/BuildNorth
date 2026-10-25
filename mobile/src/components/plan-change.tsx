@@ -200,7 +200,7 @@ function RememberOffer({ suggestion, onDone }: { suggestion: string; onDone: () 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
   });
   if (remember.isSuccess) {
-    return <Notice tone="success">Saved to your preferences. You can change or remove it in Profile → What BuildNorth remembers.</Notice>;
+    return <Notice tone="success">Saved to your preferences. You can change or remove it in Profile → What Rhythm remembers.</Notice>;
   }
   return (
     <View style={styles.preview}>

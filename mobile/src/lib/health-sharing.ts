@@ -9,7 +9,7 @@ export function coachAiService(aiProvider: string | undefined): string {
     case 'anthropic':
       return "the Coach's AI service (Anthropic)";
     case 'ollama':
-      return "the Coach's AI, which runs on BuildNorth's own server";
+      return "the Coach's AI, which runs on Rhythm's own server";
     default:
       return "the Coach's AI service (possibly a third party such as OpenAI or Anthropic)";
   }
@@ -19,13 +19,13 @@ export function coachAiService(aiProvider: string | undefined): string {
 export function sharingRecipients(aiProvider: string | undefined): string[] {
   return [
     `sent to ${coachAiService(aiProvider)}`,
-    "stored in BuildNorth's long-term memory service (hosted by SurrealDB Cloud) once each day is over",
+    "stored in Rhythm's long-term memory service (hosted by SurrealDB Cloud) once each day is over",
     'readable by AI assistants you connect, such as ChatGPT or Claude',
   ];
 }
 
 export const SHARING_OFF =
-  "When off, none of them see your summaries, and anything already in BuildNorth's memory is erased. Summaries are still stored in BuildNorth and shown here and on your watch.";
+  "When off, none of them see your summaries, and anything already in Rhythm's memory is erased. Summaries are still stored in Rhythm and shown here and on your watch.";
 
 /** The confirmation shown before sharing is turned on. */
 export function shareConfirmation(aiProvider: string | undefined): string {
@@ -33,6 +33,6 @@ export function shareConfirmation(aiProvider: string | undefined): string {
   return (
     'Your daily Apple Watch summaries (sleep, resting heart rate, HRV, steps, active energy and workouts), including ' +
     `today so far, will be ${coach}; ${memory}; and ${assistants}.\n\n` +
-    "You can turn this off at any time; that erases them from BuildNorth's memory."
+    "You can turn this off at any time; that erases them from Rhythm's memory."
   );
 }

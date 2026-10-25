@@ -130,14 +130,14 @@ export function Learning({ api, userId, interests, refresh, onMessage }: {
       <p className="muted">With learning on, Rhythm counts how much of a YouTube video actually plays while its tab is in view
         (ads, skipped parts and background play don’t count). After a minute of that, it checks the video on this device,
         using its title, visible description excerpt and any transcript you already opened. Only workout, martial arts,
-        exercise, health and cooking videos go to your BuildNorth server: the link, title, channel, description excerpt,
+        exercise, health and cooking videos go to your Rhythm server: the link, title, channel, description excerpt,
         length, up to 60 transcript lines and the seconds you watched. Other videos never leave this browser, and no
         browsing history is kept.
         Your server keeps those videos for 60 days, learns only from the last 45 days and gives recent ones more weight.
         Turning learning off deletes them. What Rhythm learns updates your profile and isn’t shown here.</p>
       <p className="muted">No browsing profile is sold or used for advertising.</p>
     </details>
-    <nav className="links" aria-label="BuildNorth">
+    <nav className="links" aria-label="Rhythm">
       <a href={settingsUrl} target="_blank" rel="noreferrer">Rhythm settings ↗</a>
       <a href={import.meta.env.WXT_PROFILE_URL || 'buildnorth://profile/interests'}>Open profile ↗</a>
       <a href={webApp} target="_blank" rel="noreferrer">Open web dashboard ↗</a>

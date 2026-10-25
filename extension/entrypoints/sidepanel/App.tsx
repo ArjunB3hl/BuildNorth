@@ -140,7 +140,7 @@ function Panel({ api, account, userId }: { api: ReturnType<typeof apiFor>; accou
         <button onClick={() => void pause()}>Pause</button>
       </div>
       <details><summary>What is shared</summary>
-        <p className="muted">When you choose a page, eligible page details go to your BuildNorth server. Private transcript copies expire within 24 hours.
+        <p className="muted">When you choose a page, eligible page details go to your Rhythm server. Private transcript copies expire within 24 hours.
           Temporary task details expire after seven days; saved recommendations and their short quoted excerpts remain until deleted.
           Navigating ends live access. Pause revokes the current page’s cached-text permission; manage earlier page grants on your phone.</p>
         <p className="muted">Your chosen external agent receives approved content when it uses Rhythm’s tools, under its host’s retention policy.

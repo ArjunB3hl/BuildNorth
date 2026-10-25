@@ -57,7 +57,7 @@ export default function WebLayout() {
           {main.map((item) => <NavLink key={item.label} item={item} active={item.active(path)} />)}
         </View>
         <View style={styles.group}>
-          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.groupLabel}>RHYTHM</ThemedText>
+          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.groupLabel}>DISCOVER</ThemedText>
           {rhythm.map((item) => <NavLink key={item.label} item={item} active={item.active(path)} />)}
         </View>
         <View style={[styles.group, styles.bottom]}>

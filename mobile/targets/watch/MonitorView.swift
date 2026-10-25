@@ -6,22 +6,26 @@ struct MonitorView: View {
 
   var body: some View {
     List {
-      NavigationLink {
-        SleepView()
-      } label: {
-        choice("Sleep", subtitle: "Your nightly patterns", icon: "moon.zzz.fill", color: .indigo)
-      }
-      NavigationLink {
-        WorkoutView()
-      } label: {
-        choice("Workout", subtitle: model.workout.isActive ? "Workout in progress" : "Live heart rate",
-               icon: "waveform.path.ecg", color: .pink)
+      Section {
+        NavigationLink {
+          SleepView()
+        } label: {
+          choice("Sleep", subtitle: "Your nightly patterns", icon: "moon.zzz.fill", color: .indigo)
+        }
+        NavigationLink {
+          WorkoutView()
+        } label: {
+          choice("Workout", subtitle: model.workout.isActive ? "Workout in progress" : "Live heart rate",
+                 icon: "waveform.path.ecg", color: .pink)
+        }
+      } footer: {
+        Text("Demo version").font(.caption2).foregroundStyle(.secondary)
       }
       if let error = model.linkError {
         Text(error).font(.footnote).foregroundStyle(.orange)
       }
     }
-    .navigationTitle("BuildNorth")
+    .navigationTitle("Rhythm")
   }
 
   private func choice(_ title: String, subtitle: String, icon: String, color: Color) -> some View {

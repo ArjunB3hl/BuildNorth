@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { Platform, Share } from 'react-native';
 
 import { Button, Notice, TextField } from '@/components/form';
+import { AssistantSetup } from '@/components/profile/assistant-setup';
+import { ClaudeKeyConnection } from '@/components/profile/claude-key';
 import { ActionRow, DestructiveButton, FormActions } from '@/components/profile/controls';
 import { Enter, SkeletonCard } from '@/components/motion';
 import { CodeBox, SectionCard } from '@/components/profile/section';
 import { SettingsGroup, SettingsRow } from '@/components/profile/settings-list';
-import { ThemedText } from '@/components/themed-text';
 import { ErrorState, errorMessage, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/use-api';
 import { confirmAction } from '@/lib/confirm';
@@ -18,12 +19,13 @@ const KEY_ICON = { ios: 'key', android: 'key', web: 'key' } as const;
 // Browsers without the Web Share API would reject Share.share, so the web only offers it where it exists.
 const canShare = Platform.OS !== 'web' || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
 
-/** Connect AI assistants (OpenCode, ChatGPT, Claude) to BuildNorth over MCP. */
+/** Connect AI assistants (OpenCode, ChatGPT, Claude) to Rhythm over MCP. */
 export default function ConnectionsScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
   const info = useQuery({ queryKey: ['connections'], queryFn: api.connections.info });
-  const [label, setLabel] = useState('OpenCode');
+  const [label, setLabel] = useState('My assistant');
+  const [advanced, setAdvanced] = useState(false);
   const [created, setCreated] = useState<{ token: string; label: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -54,29 +56,18 @@ export default function ConnectionsScreen() {
 
   return (
     <Screen aboveTabBar={false} refreshing={info.isRefetching} onRefresh={() => info.refetch()}>
-      <Enter>
-        <ThemedText type="small" themeColor="textSecondary">
-          Assistants connect to your BuildNorth data with their own AI models. They can read your profile, recipes, routines
-          and plan (and Apple Watch health summaries, only if you turn on health sharing in Profile → Apple Watch), and propose
-          changes — which are applied only after you approve them (Today → Waiting for your approval). This doesn&apos;t change
-          the Coach tab.
-        </ThemedText>
-      </Enter>
+      <ClaudeKeyConnection />
 
       {info.isPending ? <SkeletonCard lines={2} /> : null}
       {info.isError ? <ErrorState error={info.error} onRetry={() => info.refetch()} /> : null}
       {info.data ? (
         <Enter index={1}>
-          <SectionCard
-            title="MCP server address"
-            icon={{ ios: 'network', android: 'hub', web: 'hub' }}
-            description="ChatGPT and Claude sign in with your BuildNorth account (OAuth) and need a public HTTPS address. Assistants that use a fixed key, like OpenCode, use a connection token.">
-            <CodeBox value={info.data.mcpUrl} accessibilityLabel={`MCP server address: ${info.data.mcpUrl}`} />
-          </SectionCard>
+          <AssistantSetup url={info.data.mcpUrl} />
         </Enter>
       ) : null}
 
-      {created ? (
+      <Button title={advanced ? 'Hide connection tokens' : 'Advanced: connection tokens'} variant="quiet" onPress={() => setAdvanced(!advanced)} />
+      {advanced && (created ? (
         <Enter>
           <SectionCard title={`Token for “${created.label}” — copy it now`} icon={KEY_ICON}>
             <CodeBox value={created.token} accessibilityLabel="New connection token" />
@@ -110,7 +101,7 @@ export default function ConnectionsScreen() {
             </FormActions>
           </SectionCard>
         </Enter>
-      )}
+      ))}
 
       {active.length ? (
         <SettingsGroup title="Active tokens" index={3}>

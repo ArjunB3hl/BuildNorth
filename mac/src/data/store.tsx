@@ -46,6 +46,7 @@ type Action =
   | { type: 'preference/remove'; id: string }
   | { type: 'memory/erase' }
   | { type: 'coach/clear' }
+  | { type: 'coach/exchange'; message: string; reply: string }
   | { type: 'store/reset' };
 
 // UUIDs rather than a counter: saved items outlive the app process.
@@ -54,6 +55,13 @@ const now = () => new Date().toISOString();
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case 'coach/exchange':
+      return { ...state, coach: [...state.coach,
+        { id: newId('message'), role: 'user', content: action.message, suggestions: [] },
+        { id: newId('message'), role: 'assistant', content: action.reply, suggestions: [],
+          context: { memory: 'not_configured', preferences: state.preferences.length, recalled: 0,
+            recipes: 0, routines: 0, planItems: state.plan.length } },
+      ] };
     case 'calendar/save':
       return {
         ...state,

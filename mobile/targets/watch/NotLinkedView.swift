@@ -6,6 +6,9 @@ struct NotLinkedView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 8) {
+        Text("Demo version")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
         Image(systemName: "applewatch.radiowaves.left.and.right")
           .font(.title2)
           .foregroundStyle(.tint)
@@ -16,7 +19,7 @@ struct NotLinkedView: View {
             .font(.footnote)
             .foregroundStyle(.orange)
         }
-        Text("Sign in to BuildNorth on your iPhone. Open Profile → Apple Watch → Sign in Apple Watch.")
+        Text("Sign in to Rhythm on your iPhone. Open Profile → Apple Watch → Sign in Apple Watch.")
           .font(.footnote)
         Text("Your watch signs in automatically, ready for Sleep and Workout.")
           .font(.footnote)
@@ -24,6 +27,6 @@ struct NotLinkedView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .navigationTitle("BuildNorth")
+    .navigationTitle("Rhythm")
   }
 }

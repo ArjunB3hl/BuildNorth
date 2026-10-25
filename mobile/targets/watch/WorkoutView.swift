@@ -12,7 +12,7 @@ struct WorkoutView: View {
         if workout.state == .idle {
           Image(systemName: "waveform.path.ecg").font(.largeTitle).foregroundStyle(.pink)
           Text("Follow your heart rate while you exercise.").font(.footnote)
-          Text("Start here to record a workout in Apple Health. Keep BuildNorth running for this workout.")
+          Text("Start here to record a workout in Apple Health. Keep Rhythm running for this workout.")
             .font(.caption2).foregroundStyle(.secondary)
         } else {
           TimelineView(.periodic(from: .now, by: 1)) { context in

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -34,6 +34,7 @@ import type { CoachMessage } from '@/lib/types';
 const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
+  const router = useRouter();
   const api = useApi();
   const theme = useTheme();
   const headerHeight = useHeaderHeight();
@@ -54,8 +55,9 @@ export default function CoachScreen() {
   const gutter = web && width >= 600 ? Spacing.four : Spacing.three;
 
   const status = useQuery({ queryKey: ['status'], queryFn: api.status, staleTime: 60_000 });
+  const claude = useQuery({ queryKey: ['claude-connection'], queryFn: api.connections.claude });
   const history = useQuery({ queryKey: ['coach'], queryFn: api.coach.history });
-  const aiUnavailable = !!status.data && !status.data.aiAvailable;
+  const aiUnavailable = claude.data?.configured ? !claude.data.usable : !!status.data && !status.data.aiAvailable;
 
   const send = useMutation({
     mutationFn: (text: string) => {
@@ -137,7 +139,7 @@ export default function CoachScreen() {
     if (confirmed) clear.mutate();
   };
 
-  const showHeader = aiUnavailable || history.isPending || (history.isError && !history.data) || clear.isError;
+  const showHeader = true;
   const showWelcome = !!history.data && messages.length === 0 && !send.isPending && !failed;
   const column = { paddingHorizontal: gutter, maxWidth: ChatColumnWidth + gutter * 2 };
 
@@ -169,10 +171,10 @@ export default function CoachScreen() {
           ListHeaderComponent={
             showHeader ? (
               <View style={styles.headerBlock}>
+                <Button title={claude.data?.usable ? 'Claude connected · AI settings' : 'Connect Claude or ChatGPT'} size="small" variant="quiet" onPress={() => router.push('/profile/connections')} />
                 {aiUnavailable ? (
                   <Notice tone="error">
-                    The coach is unavailable right now. Meals, activity and your plan still work.
-                    {__DEV__ && status.data?.aiUnavailableReason ? `\n(dev: ${status.data.aiUnavailableReason})` : ''}
+                    Connect a Claude API key in AI settings to use Coach. Your Calendar and saved content still work.
                   </Notice>
                 ) : null}
                 {clear.isError ? <Notice tone="error">{errorMessage(clear.error)}</Notice> : null}

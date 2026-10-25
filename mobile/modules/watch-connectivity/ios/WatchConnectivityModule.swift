@@ -141,7 +141,7 @@ internal final class WatchNotPairedException: Exception, @unchecked Sendable {
 
 internal final class WatchAppNotInstalledException: Exception, @unchecked Sendable {
   override var reason: String {
-    "The BuildNorth watch app isn't installed on the paired Apple Watch"
+    "The Rhythm watch app isn't installed on the paired Apple Watch"
   }
 }
 

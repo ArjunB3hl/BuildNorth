@@ -47,7 +47,8 @@ export async function reactToVideo(api: Api, capture: Capture, reaction: Reactio
     }
     const result = await api.react(metadata, capturedAt, reaction, segments.length ? { segments } : undefined);
     const saved = result.status === 'ok' && reaction === 'more'
-      ? segments.length ? ' Its transcript was saved too.' : ' YouTube had no transcript for it, so only its details were saved.'
+      ? segments.length ? ' Its transcript was saved too. Check your Content library for useful notes and the YouTube link.'
+        : ' YouTube had no transcript for it, so only its details and YouTube link were saved in your Content library.'
       : '';
     return {
       status: result.status, title: metadata.title, needsSettings: result.status === 'permission_required',

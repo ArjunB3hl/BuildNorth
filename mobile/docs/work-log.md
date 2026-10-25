@@ -195,6 +195,16 @@ See [the full report and committed screenshots](watch-ui-validation-2026-10-25.m
 These captures show the BuildNorth-branded `d843a88` build, before integrating the later
 Rhythm branding from `main`.
 
+For the requested merge, integrated `main` at `95aed5e` and kept its Rhythm/demo branding
+alongside the new watch flows. A new home screenshot verifies exactly Sleep and Workout,
+with the demo label below the options after correcting an overlap. The final home smoke
+check retained sign-in and showed no active workout. The full-flow screenshots remain
+explicitly attributed to the earlier build.
+
+Pre-merge checks passed: lint, typecheck, 174 Swift model checks and watchOS 11 typechecking,
+13 phone-link/privacy Node tests, 54 backend watch tests, and a signed watch simulator build.
+The report includes the commands, environment repairs, limits and 12 screenshots.
+
 ## How to run
 
 - **Mac app:** `cd ~/Developer/BuildNorth/mac && npm start`, then `npm run macos`.

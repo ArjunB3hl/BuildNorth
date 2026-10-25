@@ -63,7 +63,7 @@ export default function MemoryScreen() {
     const ok = await confirmAction({
       title: 'Erase all memory?',
       message:
-        'This permanently removes your saved preferences and everything long-term memory holds about you, including Apple Watch health summaries shared with it. Recipes, routines, check-ins, your plan and the health summaries stored in BuildNorth stay.',
+        'This permanently removes your saved preferences and everything long-term memory holds about you, including Apple Watch health summaries shared with it. Recipes, routines, check-ins, your plan and the health summaries stored in Rhythm stay.',
       confirmLabel: 'Erase',
       destructive: true,
     });
@@ -75,7 +75,7 @@ export default function MemoryScreen() {
     <Screen refreshing={prefs.isRefetching} onRefresh={() => prefs.refetch()}>
       <Stagger>
         <ThemedText type="small" themeColor="textSecondary">
-          Preferences you save or confirm are used by the Coach and by AI assistants you connect (they read them through BuildNorth,
+          Preferences you save or confirm are used by the Coach and by AI assistants you connect (they read them through Rhythm,
           and changes they suggest need your approval). If you turn on health sharing (Profile → Apple Watch), daily Apple Watch
           health summaries are remembered too. Your profile, recipes and routines are stored separately and aren&apos;t affected
           here.
@@ -181,7 +181,7 @@ export default function MemoryScreen() {
           {erase.isSuccess ? <Notice tone="success">Memory erased ({erase.data.forgotten} records). Saved preferences were removed too.</Notice> : null}
           {erase.isError ? <Notice tone="error">{errorMessage(erase.error)}</Notice> : null}
           <FormActions>
-            <Button title="Erase everything BuildNorth remembers" variant="danger" loading={erase.isPending} onPress={() => void confirmErase()} />
+            <Button title="Erase everything Rhythm remembers" variant="danger" loading={erase.isPending} onPress={() => void confirmErase()} />
           </FormActions>
         </SectionCard>
       </Stagger>

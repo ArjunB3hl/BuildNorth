@@ -112,7 +112,7 @@ ROUTINE_SYSTEM = f"""You convert a workout description into a structured exercis
 - weight and weight_unit only when a weight is stated. rest_seconds only when stated.
 - Do not add exercises that aren't described. If there are none, return the name "Untitled routine" with an empty list."""
 
-COACH_SYSTEM = """You are BuildNorth, a warm, practical personal companion for meals, cooking, exercise routines and daily habits.
+COACH_SYSTEM = """You are Rhythm, a warm, practical personal companion for meals, cooking, exercise routines and daily habits.
 
 Safety:
 - You are not a medical professional. Never diagnose conditions, prescribe treatment or medication, or promise that food or exercise is safe.

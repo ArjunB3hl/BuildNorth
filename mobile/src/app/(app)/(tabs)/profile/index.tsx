@@ -11,6 +11,7 @@ import { easeOut, Enter, Skeleton } from '@/components/motion';
 import { DetailRow } from '@/components/profile/section';
 import { SettingsBlock, SettingsGroup, SettingsRow } from '@/components/profile/settings-list';
 import { ThemedText } from '@/components/themed-text';
+import { Wordmark } from '@/components/wordmark';
 import { Card, ErrorState, Row, Screen, SectionHeader, StaleBanner } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
@@ -43,6 +44,7 @@ export default function ProfileScreen() {
   const email = user?.primaryEmailAddress?.emailAddress ?? '';
   return (
     <Screen refreshing={progress.isRefetching} onRefresh={() => { progress.refetch(); profile.refetch(); }}>
+      {Platform.OS !== 'web' ? <Wordmark /> : null}
       <Enter>
         <AccountCard
           name={p?.preferredName || 'Your profile'}
@@ -90,7 +92,7 @@ export default function ProfileScreen() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title="Rhythm" index={3}>
+      <SettingsGroup title="Discover" index={3}>
         <SettingsRow
           icon={{ ios: 'slider.horizontal.3', android: 'tune', web: 'tune' }}
           title="Interests & sharing"
@@ -108,8 +110,8 @@ export default function ProfileScreen() {
       <SettingsGroup title="Connections" index={4}>
         <SettingsRow
           icon={{ ios: 'link', android: 'link', web: 'link' }}
-          title="Connect AI assistants"
-          subtitle="OpenCode, ChatGPT or Claude over MCP"
+          title="AI connections"
+          subtitle="ChatGPT, Claude and your demo API key"
           onPress={() => router.push('/profile/connections')}
         />
         {Platform.OS === 'ios' ? (
@@ -125,7 +127,7 @@ export default function ProfileScreen() {
       <SettingsGroup title="Memory & data" index={5}>
         <SettingsRow
           icon={{ ios: 'brain', android: 'psychology', web: 'psychology' }}
-          title="What BuildNorth remembers"
+          title="What Rhythm remembers"
           subtitle="View, correct or delete remembered preferences"
           onPress={() => router.push('/profile/memory')}
         />

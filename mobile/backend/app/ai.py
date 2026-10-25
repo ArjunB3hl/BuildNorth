@@ -145,12 +145,13 @@ class AnthropicProvider:
 
     name = "anthropic"
 
-    def __init__(self, api_key: str, model: str, timeout: float) -> None:
+    def __init__(self, api_key: str, model: str, timeout: float, *, base_url: str | None = None) -> None:
         import anthropic
 
         self._anthropic = anthropic
         self.model = model
-        self._client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=2)
+        self._client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=2,
+                                           **({"base_url": base_url} if base_url else {}))
 
     def generate_json(self, *, system, messages, schema, temperature=0.2, max_tokens=4000):  # type: ignore[no-untyped-def]
         anthropic = self._anthropic

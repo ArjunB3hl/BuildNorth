@@ -471,12 +471,12 @@ test('Save to Rhythm and Not interested: page details off reads nothing, other v
   // With learning off (as in this stand-in profile): sent with the reaction, and the server's message comes back,
   // with whether a transcript went along.
   expect(await reactToVideo(rhythm.api, capture('Beginner boxing footwork drill'), 'more')).toEqual({
-    status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. YouTube had no transcript for it, so only its details were saved.',
+    status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. YouTube had no transcript for it, so only its details and YouTube link were saved in your Content library.',
     title: 'Beginner boxing footwork drill', needsSettings: false,
   });
   // Save to Rhythm reads the transcript and sends it; the transcript can place a video its title doesn't.
   expect(await reactToVideo(rhythm.api, capture('Morning session', ['Today we drill the karate front kick.', 'Chamber the knee.']), 'more'))
-    .toMatchObject({ status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. Its transcript was saved too.' });
+    .toMatchObject({ status: 'ok', message: 'Saved to Rhythm. You’ll see more like this. Its transcript was saved too. Check your Content library for useful notes and the YouTube link.' });
   // Not interested doesn't read the transcript.
   await reactToVideo(rhythm.api, capture('Easy vegetarian meal prep', ['Chop the onions.']), 'less');
   expect(rhythm.calls.filter(([name]) => name === 'react')).toEqual([

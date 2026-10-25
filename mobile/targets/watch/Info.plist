@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSHealthShareUsageDescription</key>
-	<string>BuildNorth reads sleep patterns and workout heart rate to show your trends and save daily summaries to your BuildNorth account.</string>
+	<string>Rhythm reads sleep patterns and workout heart rate to show your trends and save daily summaries to your Rhythm account.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>BuildNorth saves workouts and their heart rate readings to Apple Health when you end a workout.</string>
+	<string>Rhythm saves workouts and their heart rate readings to Apple Health when you end a workout.</string>
 	<key>WKBackgroundModes</key>
 	<array>
 		<string>workout-processing</string>

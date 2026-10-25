@@ -147,7 +147,7 @@ export function ProfileForm({
 
         <SectionCard
           title="Dietary preferences"
-          description="Used to tailor suggestions. BuildNorth can't guarantee a recipe is allergen-free."
+          description="Used to tailor suggestions. Rhythm can't guarantee a recipe is allergen-free."
           icon={{ ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }}>
           <TagPicker
             label="Dietary preferences"

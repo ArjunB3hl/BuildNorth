@@ -44,7 +44,7 @@ final class WorkoutMonitor: NSObject {
       try await store.requestAuthorization(toShare: [workout, heart], read: HealthSync.readTypes)
       guard request == generation else { return }
       guard store.authorizationStatus(for: workout) == .sharingAuthorized else {
-        fail("Allow BuildNorth to save workouts in Settings → Health → Apps, then try again.")
+        fail("Allow Rhythm to save workouts in Settings → Health → Apps, then try again.")
         return
       }
       let config = HKWorkoutConfiguration()

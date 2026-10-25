@@ -434,7 +434,7 @@ class FeedbackContext(ApiModel):
 
 
 class SavedVideoView(ApiModel):
-    """A video the user saved with Save to Rhythm, as their chosen agent sees it (list_saved_videos)."""
+    """A saved video in the library or shared with an approved agent."""
     video_id: str
     url: str
     title: str | None
@@ -444,6 +444,8 @@ class SavedVideoView(ApiModel):
     description: str | None
     transcript: str | None
     summary: str | None
+    has_transcript: bool = False
+    summary_state: Literal["ready", "generating", "no_transcript", "not_ready"] = "not_ready"
     summarized_at: datetime | None
     saved_at: datetime
 

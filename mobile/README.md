@@ -331,10 +331,10 @@ How this and the Mac app were built, what was checked and what is still open: [d
   - **Workout** starts a general (*Other*) HealthKit workout, showing live BPM, recent trend, average, peak and
     elapsed time. Pause/resume and end/save are inside this screen. It uses `workout-processing` background mode
     and continues when the wrist is lowered or the user returns home. An ended workout is saved to Apple Health;
-    only its summary is uploaded. Stale readings show a dash after 30 seconds. Start a workout in BuildNorth to
+    only its summary is uploaded. Stale readings show a dash after 30 seconds. Start a workout in Rhythm to
     use live monitoring; it doesn't attach to another app's active workout. Force-quitting isn't supported for
     workout recovery. Signing out discards a workout still in progress.
-- **On the phone**: sign in to BuildNorth, then Profile → **Apple Watch** → **Sign in Apple Watch**. The watch
+- **On the phone**: sign in to Rhythm, then Profile → **Apple Watch** → **Sign in Apple Watch**. The watch
   signs in when the hand-off arrives. Sharing, linked watches and uploaded summaries remain on the phone.
 - **Health sync**: launch, foreground (at most every 10 minutes), Sleep → *Refresh*, and workout completion upload
   sleep minutes and workout summaries. The watch no longer requests resting HR, HRV, steps, distance or calories.

@@ -88,7 +88,7 @@ export default function RoutineDetail() {
 
       <Enter index={3}>
         <ThemedText type="small" themeColor="textSecondary">
-          Warm up first and stop if anything hurts. BuildNorth can&apos;t judge whether an exercise is safe for you.
+          Warm up first and stop if anything hurts. Rhythm can&apos;t judge whether an exercise is safe for you.
         </ThemedText>
       </Enter>
     </Screen>

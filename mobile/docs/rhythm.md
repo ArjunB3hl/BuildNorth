@@ -455,13 +455,29 @@ the camelCase schema names. Errors from policy are typed results with `status` a
 | `record_feedback` | `recommendation_id, feedback: {feedback, reason?}` | Pending phone-confirmed feedback; `feedback` |
 | `request_forget` | `memory_ref` | Pending deletion request; `memory` |
 | `list_saved_videos` | `unsummarized_only=false, limit=5` (1–10) | The videos saved with **Save to Rhythm**, newest first: link, title, channel, length, topics, description excerpt, the transcript Rhythm read, and any stored summary; `saved` |
-| `save_video_summary` | `video_id, summary` (1–2,000 characters) | Stores the agent's summary with that saved video (replacing an earlier one), adds any topics it names, and re-runs learning's vocabulary pass; `saved` |
+| `save_video_summary` | `video_id, summary` (1–6,000 characters) | Stores useful notes with that saved video (replacing an earlier summary), adds any topics it names, and re-runs learning's vocabulary pass; `saved` |
 
 **Saved-video summaries.** With the **Saved videos** permission and *Share with my chosen agent* on, the user's agent
 can read what they saved with **Save to Rhythm**, including the transcript, and store a summary of each
 (`rhythm_signals.summary`, `summarized_at`, `summary_by`; migration `0009`). The summary is part of that video's
-evidence for learning (vocabulary and model passes) and is deleted with the video. The apps don't show it. Both tools
-work whether recommendations are on or off.
+evidence for learning (vocabulary and model passes) and is deleted with the video. The website and phone show these
+notes in **Content library → Saved videos**, alongside the original title, channel, duration and YouTube link. Both
+tools work whether recommendations are on or off.
+
+An explicit **Save to Rhythm** also starts automatic summarization on the backend when a transcript was captured.
+It uses the account's connected Claude API key when present, otherwise the configured server AI provider. Cooking
+videos produce ingredients and ordered instructions; exercise tutorials produce setup, movements, stated reps/timing
+and form cues; other videos produce practical takeaways. Source text is untrusted input; the model is instructed to
+mark missing details and never invent quantities or steps. Generated output is schema-validated and capped at 6,000
+characters. Titles and URLs come from stored metadata, never the model. HTTPS YouTube links open through the phone's
+OS, which routes to YouTube when configured and otherwise to the browser.
+
+No transcript means metadata and link only. Missing AI, invalid output or a provider failure leaves the video saved
+with a **Generate summary** retry button. This also works on older saved videos. Existing summaries are kept without
+another model call. Migration `0012` adds a per-video generation claim; concurrent requests reuse it, claims expire
+after ten minutes, and in-flight output cannot overwrite an agent's newer summary or resurrect a deleted video.
+The library is account-scoped and works with agent sharing and recommendations off. Full transcripts are omitted
+from its REST response; approved MCP clients still receive them under the existing saved-video permission.
 
 Recommendation items are `{candidateId, analysisBasis, citations?}`.
 Input bases: `metadata`, `transcript`, `user_text`. Citations are
@@ -499,6 +515,8 @@ Profile and learning routes:
 | `PUT /rhythm/settings` | `{expectedRevision, enabledSites: ["youtube"], consent: {metadata, transcripts, agent, memory, learn}}`. Changes switches only and never learned interests; creates the profile when missing (`expectedRevision` 0). A stale revision returns `stale_context` |
 | `POST /rhythm/signals` | One watched video from the user's own extension, accepted only while learning and YouTube are on. Videos outside fitness, health and food return `irrelevant` and are not kept |
 | `POST /rhythm/reactions` | `{metadata, capturedAt, reaction: "more" \| "less", transcript?}` from the side panel's **Save to Rhythm** / **Not interested**. **Save to Rhythm** opens, reads and closes YouTube's transcript panel and sends up to 400 segments and 20,000 characters, which are stored with the video and also used to place it. Needs YouTube page details on, not learning; with learning off, "more" pins the video's topics |
+| `GET /rhythm/saved` | Latest 100 explicitly saved videos for the signed-in account, including notes, canonical YouTube links and summary state; no transcript payload |
+| `POST /rhythm/saved/{video_id}/summary` | Generate missing notes or retry a failed/expired generation for an owned saved video; existing notes are preserved |
 | `GET /rhythm/learned` | `learned`: each interest with its `state` (`pinned`, `learned`, `noticed`, `blocked`) and evidence counts (`videos`, `saved`, `chats`, `feedback`, `notInterested`); `experienceLevel`, `preferredDurationMinutes`, `availableEquipment` as `{value, source: "you" \| "learned" \| null}`; `avoid`; the stored `choices`; `suggestion` (`{topic, text}` or null); `learning`, `confirmed`, `deferred`. `profile_required` without a profile. Shown in Interests & sharing and the web Overview |
 | `PUT /rhythm/choices` | `{expectedRevision, pinned, blocked, acknowledged, experienceLevel, preferredDurationMinutes, availableEquipment}`. The user's own choices, which win over inference; `null` means "learn it". Every list replaces the stored one and omitted fields reset, so send them all. Creates the profile when missing (`expectedRevision` 0). Returns the new `learned` view; a stale revision returns `stale_context` |
 | `POST /rhythm/forget` | `{topic}`. Deletes the stored videos behind one interest, stops counting earlier chats and feedback about it, unpins it and answers its prompt. Returns the new `learned` view |

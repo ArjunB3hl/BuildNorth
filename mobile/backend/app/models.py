@@ -352,11 +352,11 @@ class RhythmSignal(Base):
     played_seconds: Mapped[float | None] = mapped_column(Float)
     # The user's own reaction from the side panel: "more" (Save to Rhythm / more like this) or "less" (not interested).
     reaction: Mapped[str | None] = mapped_column(String(10))
-    # For a saved video: the summary the user's chosen agent wrote through MCP (save_video_summary), and which agent.
-    # Learning reads it; the apps don't show it.
+    # A useful transcript summary, shared by the library and the user's chosen agent.
     summary: Mapped[str | None] = mapped_column(Text)
     summarized_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     summary_by: Mapped[str | None] = mapped_column(String(160))
+    summary_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     observed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
@@ -509,6 +509,16 @@ class RhythmUsage(Base):
     search_requests: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class ClaudeCredential(Timestamped, Base):
+    """Encrypted, account-owned API key. Never included in account context or MCP responses."""
+
+    __tablename__ = "claude_credentials"
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ciphertext: Mapped[str] = mapped_column(Text)
+    hint: Mapped[str] = mapped_column(String(4))
+    model: Mapped[str] = mapped_column(String(100))
+
+
 class CalendarEntry(Timestamped, Base):
     """A completed meal or workout. Demo entries are explicitly labelled and user-owned."""
 
@@ -528,6 +538,7 @@ class CalendarEntry(Timestamped, Base):
 
 # Tables holding per-user rows, in a safe deletion order (children before parents).
 USER_TABLES: tuple[type[Base], ...] = (
+    ClaudeCredential,
     RhythmSignal,
     RhythmBrowserRequest,
     RhythmCandidate,

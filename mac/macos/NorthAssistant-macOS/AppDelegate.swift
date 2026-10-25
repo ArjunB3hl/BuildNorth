@@ -8,7 +8,7 @@ struct NorthAssistantApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
   var body: some Scene {
-    Window("BuildNorth", id: "main") {
+    Window("Rhythm · Demo version", id: "main") {
       ReactNativeView(factory: appDelegate.reactNativeFactory)
         // Room for the sidebar plus a readable content column.
         .frame(minWidth: 900, minHeight: 600)
