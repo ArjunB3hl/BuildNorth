@@ -40,7 +40,7 @@ def save_summary(p: Policy, video_id: str, summary: str) -> Result:
         raise Denied("not_found", "That saved video is unavailable. Use a video from list_saved_videos.")
     row.summary = summary.strip()[:SUMMARY_CHARACTERS]
     row.summarized_at = utcnow()
-    row.summary_by = grant.label if grant else "BuildNorth"
+    row.summary_by = grant.label if grant else "Rhythm"
     # The summary can name topics the title and transcript didn't; it never removes any.
     found = kept_video(" ".join(v for v in (row.title, row.description, row.transcript, row.summary) if v))
     if found:

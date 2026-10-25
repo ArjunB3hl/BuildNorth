@@ -270,7 +270,7 @@ def test_proposal_changes_nothing_until_approved_in_app(live: SimpleNamespace) -
     assert plan(live, ALICE) == before  # nothing saved by proposing
     # Without an approval prompt in the client, applying just reports that approval is needed.
     still = ok(call(live, token, "apply_proposal", {"proposal_id": proposal["id"]}))
-    assert still["status"] == "pending" and "BuildNorth app" in still["next_step"]
+    assert still["status"] == "pending" and "Rhythm app" in still["next_step"]
     # A model-supplied "confirmed" flag is not approval: the argument isn't accepted and nothing changes.
     call(live, token, "apply_proposal", {"proposal_id": proposal["id"], "confirmed": True})
     assert plan(live, ALICE) == before

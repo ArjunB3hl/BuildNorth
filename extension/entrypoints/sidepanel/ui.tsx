@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** The panel's shared pieces, drawn to match the BuildNorth web app (colours and sizes live in style.css). */
+/** The panel's shared pieces, drawn to match the Rhythm web app (colours and sizes live in style.css). */
 
 // Material Symbols paths (24 × 24), the same icon family the web app uses.
 const paths = {
@@ -28,7 +28,7 @@ export function Orb({ size = 32, still = false }: { size?: number; still?: boole
 export function Brand({ size = 28 }: { size?: number }) {
   return <div className="brand">
     <Orb size={size} />
-    <div><h1>Rhythm</h1><span>Build<b>North</b></span></div>
+    <div><h1>Rhythm</h1><span className="demo-label">Demo version</span></div>
   </div>;
 }
 

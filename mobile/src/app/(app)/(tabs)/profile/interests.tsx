@@ -222,7 +222,7 @@ export default function InterestsScreen() {
           <Disclosure label="What is shared and how long it’s kept">
             {RECOMMENDATIONS_ENABLED ? (
               <ThemedText type="small" themeColor="textSecondary">
-                After you permit a video, Rhythm can send its link, title, channel, visible description excerpt and duration to your BuildNorth server.
+                After you permit a video, Rhythm can send its link, title, channel, visible description excerpt and duration to your Rhythm server.
                 Transcript reading only happens for a task you start, for at most three shortlisted videos.
               </ThemedText>
             ) : null}
@@ -254,7 +254,7 @@ export default function InterestsScreen() {
               configured separately for your account, and retained until you remove them.
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Delete Rhythm data, in the Content library, removes everything Rhythm holds, including what it learned.
+              Delete content library data removes saved videos, video history, and learned interests. Your meals, workouts and Coach conversation stay.
             </ThemedText>
           </Disclosure>
         </SectionCard>

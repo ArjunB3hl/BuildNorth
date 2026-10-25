@@ -102,6 +102,6 @@ test('every section and page renders', async () => {
   await press(renderer, 'Profile');
   expect(text()).toContain('Day streak');
   expect(text()).toContain('ABOUT YOU');
-  await pressFirst(renderer, 'What BuildNorth remembers');
+  await pressFirst(renderer, 'What Rhythm remembers');
   expect(text()).toContain('I prefer vegetarian dinners on weekdays.');
 });

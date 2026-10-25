@@ -288,12 +288,12 @@ export default function RhythmVideos() {
         </Grid>
         <Enter index={4}>
           <SectionCard
-            title="Delete Rhythm data"
+            title="Delete content library data"
             tone="danger"
             icon={{ ios: 'trash', android: 'delete', web: 'delete' }}
-            description="Removes learned interests, collected video history, tasks, transcripts, recommendations and connections. Today’s acquisition counter remains until the daily limit resets. Other BuildNorth features keep their data.">
+            description="Removes learned interests, collected video history, tasks, transcripts, recommendations and connections. Today’s acquisition counter remains until the daily limit resets. Other Rhythm features keep their data.">
             {deleteData ? <>
-              <Notice tone="warning">This removes the saved Rhythm content from your account. Private memory erasure may need to retry if unavailable.</Notice>
+              <Notice tone="warning">This removes the saved library content from your account. Private memory erasure may need to retry if unavailable.</Notice>
               <FormActions>
                 <Button title="Cancel" variant="secondary" onPress={() => setDeleteData(false)} />
                 <Button title="Confirm deletion" variant="danger" loading={busy}
@@ -301,7 +301,7 @@ export default function RhythmVideos() {
               </FormActions>
             </> : (
               <FormActions>
-                <DestructiveButton title="Delete Rhythm data…" size="regular" onPress={() => setDeleteData(true)} />
+                <DestructiveButton title="Delete content library data…" size="regular" onPress={() => setDeleteData(true)} />
               </FormActions>
             )}
           </SectionCard>

@@ -73,7 +73,7 @@ struct TodayView: View {
           .listRowBackground(Color.clear)
       }
     }
-    .navigationTitle("BuildNorth")
+    .navigationTitle("Rhythm")
     .refreshable { await model.refresh() }
     .alert("Couldn't update", isPresented: $model.showsActionError) {
       Button("OK", role: .cancel) {}
@@ -87,6 +87,9 @@ struct TodayView: View {
     let items = model.today?.items ?? []
     let left = items.filter { $0.status == .planned }.count
     return VStack(alignment: .leading, spacing: 2) {
+      Text("Demo version")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
       Text(Display.weekday(day))
         .font(.headline)
       Text(model.today == nil ? Display.monthDay(day) : "\(Display.monthDay(day)) · \(left) of \(items.count) left")

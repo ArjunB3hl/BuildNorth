@@ -13,17 +13,17 @@ enum APIError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .unauthorized: return "This watch was unlinked. Link it again from BuildNorth on your iPhone."
+    case .unauthorized: return "This watch was unlinked. Link it again from Rhythm on your iPhone."
     case .offline: return "Can't connect. Check your connection and try again."
-    case .unreachable: return "Can't reach the BuildNorth server right now."
-    case .timeout: return "BuildNorth took too long to answer. Try again."
+    case .unreachable: return "Can't reach the Rhythm server right now."
+    case .timeout: return "Rhythm took too long to answer. Try again."
     case .notFound: return "That item couldn't be found. It may have been deleted."
     case .http(422, let detail?) where !detail.hasPrefix("["): return detail
     case .http(422, _): return "Some details need fixing. Try again."
     case .http(409, let detail?): return detail
     case .http(429, _): return "Too many requests. Try again shortly."
     case .http: return "Something went wrong on our side. Try again."
-    case .invalidResponse: return "BuildNorth sent something unexpected. Try again."
+    case .invalidResponse: return "Rhythm sent something unexpected. Try again."
     }
   }
 

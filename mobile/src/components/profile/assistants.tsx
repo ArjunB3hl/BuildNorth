@@ -21,7 +21,7 @@ const ASSISTANTS: { id: Assistant; name: string; where: string; open?: { label: 
       { text: 'In Claude, open Customize → Connectors and choose Add custom connector.' },
       { text: 'Name it Rhythm and paste the address above.' },
       { text: 'For authentication choose Sign in now, and Use Claude’s published identity. Choose Add.' },
-      { text: 'Choose Connect and sign in with your BuildNorth account.' },
+      { text: 'Choose Connect and sign in with your Rhythm account.' },
     ],
   },
   {
@@ -30,14 +30,14 @@ const ASSISTANTS: { id: Assistant; name: string; where: string; open?: { label: 
     steps: () => [
       { text: 'In ChatGPT, open Plugins, choose +, then Add custom MCP server.' },
       { text: 'Paste the address above and choose OAuth for authentication. Create it.' },
-      { text: 'Sign in with your BuildNorth account when ChatGPT asks.' },
+      { text: 'Sign in with your Rhythm account when ChatGPT asks.' },
     ],
   },
   {
     id: 'codex', name: 'Codex', where: 'the Codex app, CLI and IDE extension (they share one setup)',
     steps: (url) => [
       { text: 'Add Rhythm to Codex:', command: `codex mcp add rhythm --url ${url}` },
-      { text: 'Sign in. A browser window opens for your BuildNorth account; no token to copy.', command: 'codex mcp login rhythm' },
+      { text: 'Sign in. A browser window opens for your Rhythm account; no token to copy.', command: 'codex mcp login rhythm' },
     ],
   },
 ];
@@ -61,7 +61,7 @@ export function AssistantConnections({ mcpUrl, agents, options, labels, busy, on
   return (
     <SectionCard
       title="Connect Claude, ChatGPT or Codex"
-      description="Add Rhythm in your assistant and sign in with your BuildNorth account. There’s no token to copy."
+      description="Add Rhythm in your assistant and sign in with your Rhythm account. There’s no token to copy."
       leading={<AiOrb size={32} still />}>
       {url && local(url) ? (
         <Notice tone="warning">

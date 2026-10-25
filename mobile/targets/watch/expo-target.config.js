@@ -5,7 +5,7 @@
 /** @type {import('@bacons/apple-targets/app.plugin').ConfigFunction} */
 module.exports = () => ({
   type: 'watch',
-  displayName: 'BuildNorth',
+  displayName: 'Rhythm',
   // Appended to the iOS bundle identifier: com.arjun273773.buildnorth.watch
   bundleIdentifier: '.watch',
   deploymentTarget: '11.0',

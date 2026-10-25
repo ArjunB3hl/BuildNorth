@@ -39,8 +39,8 @@ export function ClaudeKeyConnection() {
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
-  return <SectionCard title="Claude for the built-in Coach" description="For the demo, bring an Anthropic API key. This powers Coach inside BuildNorth; it does not connect a Claude subscription. API usage is billed to the key’s account.">
-    <ThemedText type="small" themeColor="textSecondary">The key is verified without generating a message, encrypted on the BuildNorth server, and shared only across your signed-in web and phone sessions. Remove it when you finish the demo.</ThemedText>
+  return <SectionCard title="Claude for the built-in Coach" description="For the demo, bring an Anthropic API key. This powers Coach inside Rhythm; it does not connect a Claude subscription. API usage is billed to the key’s account.">
+    <ThemedText type="small" themeColor="textSecondary">The key is verified without generating a message, encrypted on the Rhythm server, and shared only across your signed-in web and phone sessions. Remove it when you finish the demo.</ThemedText>
     {status.data?.configured ? <Notice tone={status.data.usable ? 'success' : 'warning'}>Claude key ending in {status.data.hint} · {status.data.model}{status.data.usable ? ' · Ready for Coach' : ' · Reconnect required'}</Notice> : null}
     {!transport ? <Notice tone="warning">Use an HTTPS backend before entering an API key on this device. Localhost on this computer is also supported.</Notice> : null}
     {status.data && !status.data.storageAvailable ? <Notice tone="warning">The server’s secure key storage needs setup before you can attach a key.</Notice> : null}

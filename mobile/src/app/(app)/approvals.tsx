@@ -112,7 +112,7 @@ function ProposalCard({ proposal }: { proposal: AssistantProposal }) {
         </ThemedText>
       ) : null}
       {proposal.rejected.length ? (
-        <Notice tone="info">{`Left out by BuildNorth's checks:\n${proposal.rejected.map((r) => `• ${r}`).join('\n')}`}</Notice>
+        <Notice tone="info">{`Left out by Rhythm's checks:\n${proposal.rejected.map((r) => `• ${r}`).join('\n')}`}</Notice>
       ) : null}
       {proposal.status === 'stale' ? <Notice tone="info">{STALE_NOTE[proposal.kind]}</Notice> : null}
       {decide.isError ? <Notice tone="error">{errorMessage(decide.error)}</Notice> : null}

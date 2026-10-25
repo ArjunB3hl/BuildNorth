@@ -1,10 +1,11 @@
 import { useSignUp } from '@clerk/expo';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Button, FormScreen, Notice, TextField } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
+import { Wordmark } from '@/components/wordmark';
 import { navigateAfterAuth } from '@/lib/auth-navigation';
 import { describeError } from '@/lib/errors';
 
@@ -66,6 +67,7 @@ export default function SignUpScreen() {
 
   return (
     <FormScreen>
+      {Platform.OS !== 'web' ? <Wordmark /> : null}
       <ThemedText type="subtitle">Create account</ThemedText>
 
       {awaitingCode ? (

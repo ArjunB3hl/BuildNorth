@@ -22,8 +22,8 @@ export default defineConfig({
     // Where Clerk reads the website's sign-in from (lib/website-sign-in.ts): http://localhost for a local web app.
     const syncHost = serviceOrigin(syncHostFor(import.meta.env));
     return {
-      name: 'Rhythm — your interests, your videos',
-      description: 'Choose YouTube videos that fit the interests Rhythm learns from your activity, with your own agent.',
+      name: 'Rhythm — Demo version',
+      description: 'Demo version. Choose YouTube videos that fit the interests Rhythm learns from your activity, with your own agent.',
       minimum_chrome_version: '116',
       // cookies is required by Clerk's extension SDK; alarms runs learning's 30-second playback checks.
       permissions: ['activeTab', 'scripting', 'sidePanel', 'storage', 'cookies', 'alarms'],
