@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import anthropic
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException
 from sqlalchemy.engine import make_url
 
-from app.ai import AnthropicProvider
+from app.ai import AIProvider, AnthropicProvider
 from app.config import Settings
 from app.models import ClaudeCredential
 
@@ -44,16 +45,28 @@ def seal(cipher: Fernet, user_id: str, key: str) -> str:
     return cipher.encrypt(json.dumps({"owner": user_id, "key": key}).encode()).decode()
 
 
-def personal_provider(cipher: Fernet | None, row: ClaudeCredential, timeout: float) -> AnthropicProvider:
+def unlock_key(cipher: Fernet | None, row: Any) -> str | None:
+    if cipher is None or row is None:
+        return None
     try:
-        if cipher is None:
-            raise ValueError("unavailable cipher")
         payload = json.loads(cipher.decrypt(row.ciphertext.encode()))
-        if payload["owner"] != row.user_id:
-            raise ValueError("credential owner mismatch")
-        return AnthropicProvider(payload["key"], row.model, timeout, base_url="https://api.anthropic.com")
+        key = payload["key"]
+        return key if payload["owner"] == row.user_id and isinstance(key, str) and key else None
     except (InvalidToken, KeyError, ValueError, TypeError):
-        raise HTTPException(503, "Your Claude key could not be unlocked. Reconnect it in AI connections.") from None
+        return None
+
+
+def shared_claude(state: Any) -> AIProvider | None:
+    """Only the operator's Claude provider supplies the shared demo fallback."""
+    provider = getattr(state, "ai", None)
+    return provider if getattr(provider, "name", None) == "anthropic" else None
+
+
+def personal_provider(cipher: Fernet | None, row: ClaudeCredential, timeout: float) -> AnthropicProvider:
+    key = unlock_key(cipher, row)
+    if key is None:
+        raise HTTPException(503, "Your Claude key could not be unlocked. Reconnect it in AI connections.")
+    return AnthropicProvider(key, row.model, timeout, base_url="https://api.anthropic.com")
 
 
 def verify_key(key: str, model: str) -> str:

@@ -194,28 +194,6 @@ Coach calls it on every message; assistants get the same result from the MCP too
   finds them. A recalled health sentence marks its day `recalled` instead of becoming a generic memory note. Details in
   *Apple Watch → What agents can use*.
 
-### OpenCode
-
-`opencode.json` in the project root adds one remote server, `buildnorth`; OpenCode merges it with your global config,
-so other servers and your selected model are unchanged. The token comes from an environment variable:
-
-```json
-{ "mcp": { "buildnorth": { "type": "remote", "url": "http://localhost:8000/mcp", "oauth": false,
-  "headers": { "Authorization": "Bearer {env:BUILDNORTH_MCP_TOKEN}" }, "timeout": 15000 } } }
-```
-
-1. In the app: Profile → *Connect AI assistants* → *Create token*, copy it.
-2. Put it in the git-ignored `.env.opencode` (`BUILDNORTH_MCP_TOKEN=bnc_…`, mode 600), or export it in your shell.
-3. Start OpenCode with the variable set (OpenCode 2 runs a background service, so restart it once):
-
-   ```bash
-   set -a; source .env.opencode; set +a; opencode service restart; opencode
-   ```
-
-4. `opencode mcp list` should show `✓ buildnorth connected`.
-
-OpenCode's *model* is configured separately (`opencode models`, `/models`); the MCP entry doesn't select one.
-
 ### ChatGPT and Claude (remote)
 
 Both connect from their own cloud, so the server needs a **public HTTPS URL**, and each user signs in with their
@@ -511,7 +489,8 @@ The UI evidence is for `d843a88`, before the later Rhythm branding integration.
    - `SPECTRON_OWNER_USER_ID` — explicitly binds that Context to one Clerk account, including Rhythm;
      other accounts need their own configured Context bindings (see [Rhythm setup](docs/rhythm.md))
    - `CLERK_PUBLISHABLE_KEY` — same public key; locates Clerk's JWKS for token verification
-   - `AI_PROVIDER` = `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`
+   - `AI_PROVIDER` = `auto` (default) | `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`.
+     `auto` detects `ANTHROPIC_API_KEY` for the shared Claude demo. Explicit `none` disables the fallback.
    - `DATABASE_URL` (default: SQLite in `backend/var/`, git-ignored), `AUTO_MIGRATE` (default `true`)
 4. **AI (local, free)**: install [Ollama](https://ollama.com) and `ollama pull gemma3:4b`; then `AI_PROVIDER=ollama`,
    `AI_MODEL=gemma3:4b`. Expect 40–60 s per reply on an M3/16 GB Mac. For faster replies use `AI_PROVIDER=anthropic`
@@ -665,7 +644,90 @@ cd backend && .venv/bin/python -m scripts.live_check
 
 ## Production notes
 
-- Database: set `DATABASE_URL` to Postgres (install its driver, e.g. `psycopg[binary]`), run
+### Deploy the backend on Render
+
+Use a **Web Service**, branch `main`, root directory `mobile/backend`, Python runtime. The `.python-version`
+file selects Python 3.13. Set:
+
+| Setting | Value |
+|---|---|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1` |
+| Health check | `/health` |
+
+Create a Render Postgres database in the same region and use its **Internal Database URL**. Standard
+`postgres://` and `postgresql://` URLs select the included psycopg 3 driver automatically. The start command
+applies migrations before serving traffic; keep `AUTO_MIGRATE=false` with this command. One worker also keeps
+the MCP transport's in-process session handling on the same worker.
+
+Save these in **Render → backend service → Environment**. A placeholder import template is at
+[`backend/render.env.example`](backend/render.env.example). Fill it in privately; never commit secret values.
+
+| Variable | Value / purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Shared demo Claude key; stays on the backend and pays for shared requests |
+| `AI_PROVIDER` | `auto` (or explicitly `anthropic`); don't leave an old `none` value |
+| `AI_MODEL` | `claude-opus-5-5`, or another Claude model your key can access |
+| `CLERK_PUBLISHABLE_KEY` | The same Clerk instance used by the website/phone |
+| `DATABASE_URL` | Render Postgres Internal Database URL |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | A persistent Fernet key for users' personal Claude/ElevenLabs credentials |
+| `AUTO_MIGRATE` | `false` with the start command above |
+| `WEB_ALLOWED_ORIGINS` | Comma-separated website origins, e.g. `https://rhythm.example.com`; no path or trailing slash |
+| `CLERK_AUTHORIZED_PARTIES` | The same website origins for Clerk session validation |
+| `MCP_PUBLIC_URL` | Optional for the default Render domain; set `https://api.example.com/mcp` for a custom API domain |
+
+Generate the encryption key once in a private terminal and save it in Render and your password manager:
+
+```bash
+python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+```
+
+Keep that encryption key stable across deploys. The ordinary Render filesystem is ephemeral; don't use the
+default local SQLite path for deployed account data. Postgres preserves records across application redeploys.
+If migrating existing account-owned credentials, retain the encryption key that originally encrypted them.
+
+`ANTHROPIC_API_KEY` alone selects shared Claude when `AI_PROVIDER` is unset/`auto`. Signed-in users can open Coach
+and the camera route without bringing a key. Their own verified Claude key takes priority for Coach and video
+notes; removing it restores the shared demo. An invalid personal credential requires reconnecting/removing it
+instead of silently switching keys. No shared secret or hint is sent to the website or phone.
+
+ChatGPT/Claude account connections still use MCP and the assistant's own model. They don't turn a subscription
+into an API key or override the built-in Coach. OpenCode setup is no longer shipped. ElevenLabs remains an
+optional, separate voice connection in Profile → AI connections.
+
+Optional backend settings:
+
+- Agent Memory: `SPECTRON_URL`, `SPECTRON_CONTEXT_ID`, `SPECTRON_API_KEY`, `SPECTRON_OWNER_USER_ID`.
+  The owner binding is per account. Additional users need their own entries in `RHYTHM_MEMORY_CONTEXTS_JSON`;
+  never share one private context between judge accounts. Coach still works without memory.
+- Video search: `YOUTUBE_API_KEY` and `RHYTHM_RECOMMENDATIONS=on` if enabling recommendations. Saved transcript
+  summaries can use shared Claude without a YouTube key.
+- Clerk opaque OAuth tokens only: `CLERK_SECRET_KEY`. Default JWT OAuth verification uses public JWKS.
+- `RHYTHM_MCP_PUBLIC_URL` defaults to the API origin plus `/rhythm/mcp`; configure Clerk OAuth resource audiences
+  for the public MCP URLs when using ChatGPT/Claude connectors.
+
+For the separately deployed website/phone build, use only public settings:
+`EXPO_PUBLIC_API_URL=https://your-backend.onrender.com`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, and
+`EXPO_PUBLIC_WEB_APP_URL=https://your-website.example`. Rebuild the frontend after changing these bundled values,
+and allow the website domain in Clerk. Backend secrets never belong in `EXPO_PUBLIC_*`.
+
+Deploying this API does not deploy the separate pose coach service or add Mac account syncing. Camera workouts
+still require that service and its configured frame URL; the current frame is restricted to a local coach.
+The Mac app remains a local demo with its own Claude-key setup and website handoffs.
+
+After deployment, `/health` should report `clerkConfigured: true`, `aiAvailable: true`, `aiProvider: "anthropic"`.
+This confirms configuration, not a paid Claude request. Sign in on the website, check that AI settings show
+**Demo Claude is ready**, and send a short Coach message to verify the real key. Reopen after a redeploy to
+confirm account data persists.
+
+References: [Render FastAPI deployment](https://render.com/docs/deploy-fastapi),
+[environment variables](https://render.com/docs/configure-environment-variables),
+[Postgres connections](https://render.com/docs/postgresql-creating-connecting), and
+[filesystem persistence](https://render.com/docs/disks).
+
+### Other production settings
+
+- Database: set `DATABASE_URL` to Postgres (the psycopg 3 driver is included), run
   `cd backend && .venv/bin/alembic upgrade head` on deploy and set `AUTO_MIGRATE=false`.
 - Use a Clerk production instance (`pk_live_…`) and register the app's bundle identifier/package.
 - Mint a SurrealDB Agent Memory key limited to `memory:read`, `memory:write`, `memory:forget` and `scope:create` on

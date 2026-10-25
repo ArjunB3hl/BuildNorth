@@ -105,6 +105,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.rhythm_mcp_http = None
         if client is not None:
             client.close()
+        ai_client = getattr(app.state.ai, "_client", None)
+        if ai_client is not None:
+            ai_client.close()
         app.state.rhythm_memory.close()
         engine.dispose()
 

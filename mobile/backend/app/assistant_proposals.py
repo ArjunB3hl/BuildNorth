@@ -1,6 +1,6 @@
 """Changes proposed by external assistants over MCP, and how they get approved and applied.
 
-Assistants (OpenCode, ChatGPT, Claude) bring their own models and send *structured* proposals:
+Assistants (ChatGPT, Claude, ElevenLabs) bring their own models and send *structured* proposals:
 plan changes, a recipe to save, or a preference to remember. Nothing here calls the app's own AI.
 Each proposal is validated with the same rules the app uses, stored for the user who is
 authenticated, and shown back as the exact changes. It is applied only after the user approves

@@ -194,6 +194,9 @@ def client(tmp_path, monkeypatch, memory_client, fake_ai):  # type: ignore[no-un
     monkeypatch.setenv("SPECTRON_OWNER_USER_ID", "")
     monkeypatch.setenv("RHYTHM_MEMORY_CONTEXTS_JSON", "")
     monkeypatch.setenv("YOUTUBE_API_KEY", "")
+    monkeypatch.setenv("AI_PROVIDER", "none")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("AI_API_KEY", "")
     monkeypatch.setenv("RHYTHM_RECOMMENDATIONS", "on")  # off by default; most Rhythm tests cover the video features
     verifier = ClerkVerifier(PUBLISHABLE_KEY)
     public_key = SIGNING_KEY.public_key()

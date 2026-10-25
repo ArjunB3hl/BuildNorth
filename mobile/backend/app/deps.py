@@ -23,7 +23,7 @@ from app.auth import AuthenticatedUser, ClerkVerifier, unauthorized
 from app.mcp_auth import WATCH_TOKEN_PREFIX, hash_token
 from app.memory import MemoryService
 from app.models import ClaudeCredential, WatchToken
-from app.provider_credentials import personal_provider
+from app.provider_credentials import personal_provider, shared_claude
 
 log = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
@@ -133,7 +133,11 @@ def get_coach_ai(request: Request, user: CurrentUser, db: Db) -> Iterator[AIProv
         finally:
             provider._client.close()
     else:
-        raise HTTPException(403, "Connect Claude in AI connections for text Coach, or use your linked ElevenLabs agent.")
+        provider = shared_claude(request.app.state)
+        if provider is None:
+            raise HTTPException(403, "Connect Claude in AI connections for text Coach, or use your linked ElevenLabs agent.")
+        # This is the application-owned client; only lifespan shutdown closes it.
+        yield provider
 
 
 CoachAI = Annotated[AIProvider, Depends(get_coach_ai)]

@@ -1,6 +1,6 @@
 """Rhythm's MCP server: the same records the mobile app uses, for external assistants.
 
-OpenCode, ChatGPT and Claude connect here with their own models; no model runs in this server.
+ChatGPT, Claude and ElevenLabs connect here with their own models; no model runs in this server.
 Reads never change anything. Writes are two-step: an assistant *proposes* (validated with the
 app's own rules, stored for the authenticated user) and the user *approves*, in the app or in the
 assistant's own approval prompt. The user ID always comes from the verified credential.

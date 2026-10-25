@@ -243,5 +243,5 @@ The watch UI, phone linking and fictional Health upload gaps above were covered 
 - **Preference code holds the database lock.** The older preference code (`preferences.py`, `assistant_proposals.py`) has the same lock bug that was fixed in health sync. A concurrent write, including a watch upload, can fail with "database is locked" while memory is slow. A follow-up session to fix it was proposed.
 - **No complication yet.** The watch complication (a watch-face widget) was planned for the first version but not built. It needs a separate `watch-widget` target.
 - **Unexpected `packageManager` field.** `package.json` has `"packageManager": "yarn@4.6.0…"` but the project uses npm (`package-lock.json`). This was not changed here.
-- **OpenCode token.** Create a new connection token for OpenCode in the app, and put it in `.env.opencode`.
+- **OpenCode retired (2026-10-25).** Its local Rhythm token was revoked and its setup files removed. Use ChatGPT or Claude account connections instead.
 - **Mac app not connected.** It still needs to be connected to the backend and Clerk (see the proposed session).

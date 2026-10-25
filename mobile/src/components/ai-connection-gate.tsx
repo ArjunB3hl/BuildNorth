@@ -7,11 +7,11 @@ import { Card, ErrorState, Loading, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/use-api';
 import type { AIAccess } from '@/lib/types';
 
-/** Mount the feature only after a fresh, server-verified connection check. Never trust persisted status. */
+/** Mount only after a fresh server check of a personal connection or shared demo provider. */
 export function AIConnectionGate({ children }: { children: (access: AIAccess) => ReactNode }) {
   const api = useApi(), router = useRouter();
   const query = useQuery({ queryKey: ['ai-access'], queryFn: api.connections.access, staleTime: 0, refetchOnMount: 'always', refetchInterval: 15_000 });
-  if (query.isPending || (query.isFetching && !query.isFetchedAfterMount)) return <Screen><Loading label="Checking your AI connection…" /></Screen>;
+  if (query.isPending || (query.isFetching && !query.isFetchedAfterMount)) return <Screen><Loading label="Checking AI availability…" /></Screen>;
   if (query.isError) return <Screen><ErrorState error={query.error} onRetry={() => query.refetch()} /></Screen>;
   if (!query.data?.linked) return <Screen><Card style={{ gap: 16 }}>
     <Text type="title">Connect your coach first.</Text>
