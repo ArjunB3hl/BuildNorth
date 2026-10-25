@@ -40,6 +40,8 @@ class Settings:
     spectron_owner_user_id: str = ""  # explicit owner when the app Context is private to one account
     ai_credential_key: str = ""  # Fernet key for account-owned Claude credentials
     web_allowed_origins: tuple[str, ...] = ()
+    speech_worker_url: str = ""
+    speech_worker_token: str = ""
 
     @property
     def missing(self) -> list[str]:
@@ -102,6 +104,8 @@ def load_settings() -> Settings:
             party.strip() for party in env("CLERK_AUTHORIZED_PARTIES").split(",") if party.strip()
         ),
         database_url=database_url(env("DATABASE_URL") or DEFAULT_DATABASE_URL),
+        speech_worker_url=env("SPEECH_WORKER_URL").rstrip("/"),
+        speech_worker_token=env("SPEECH_WORKER_TOKEN"),
         auto_migrate=env("AUTO_MIGRATE", "true").lower() not in {"0", "false", "no"},
         ai_provider=provider,
         ai_model=env("AI_MODEL"),

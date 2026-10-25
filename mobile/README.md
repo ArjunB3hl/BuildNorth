@@ -740,6 +740,93 @@ The website's **Camera workout** navigation item embeds the local pose coach. Fi
 sets in Activity with the signed-in account. Named movements, holds, technique results and Mistakes stay in the
 pose page. Native applications have no camera-coach entry point. See [the integration guide](docs/pose-coach.md).
 
+## Parakeet and Kokoro voice architecture
+
+The browser Coach has a short-recording voice path. Parakeet transcribes, the existing Claude Coach reads the
+user's authorized context and creates a reply, and Kokoro speaks the stored reply. These speech models do not
+replace Claude's reasoning. The personal/shared Claude priority described above still applies.
+
+```mermaid
+flowchart LR
+  Device["Browser microphone · phone / Mac / PC"] --> API["Rhythm API · Clerk auth"]
+  API --> Route{"Verified ElevenLabs agent?"}
+  Route -->|Yes| Eleven["Signed ElevenLabs session"]
+  Route -->|No| STT["Private speech service · Parakeet 0.6B v3"]
+  STT -->|Transcript| Coach["Existing Claude Coach · context / Calendar / chat"]
+  Coach -->|Stored reply| TTS["Private speech service · Kokoro 82M"]
+  TTS -->|WAV| Device
+```
+
+**Selection is enforced by the backend:** a usable ElevenLabs account connection selects `elevenlabs`;
+otherwise, a configured speech service plus a usable Claude provider selects `parakeet_kokoro`. Merely creating
+a ChatGPT/Claude MCP token cannot switch speech providers. Disconnecting ElevenLabs restores the default.
+An unavailable chosen service surfaces an error instead of silently starting a second provider. Text chat remains
+available separately. Recheck `/connections/access` when the user's connection settings change.
+
+The first implementation is **turn-based, English voice output**, not continuous streaming: record up to 20 seconds,
+send, wait for the reply, then play it. Browser audio is converted to mono 16 kHz PCM16 WAV; Kokoro returns 24 kHz WAV.
+Long replies stay complete in chat, with the first 600 characters spoken. Stop/navigation cancels requests and
+playback and releases the microphone; late responses cannot begin a new playback. Cancelling after a Coach request
+has reached the server may still leave its text reply saved. A browser lock prevents a voice turn and camera
+workout from running together in cooperating tabs. The worker admits one inference at a time and returns 429 when
+busy rather than accumulating an unbounded queue. Production concurrency needs measured capacity and a queue.
+
+The worker never receives Claude/Clerk keys, account IDs, stored history or health records. It receives only the
+current recording or spoken reply and does not persist audio. The main API verifies the caller owns the stored
+assistant reply before synthesis. HTTPS protects public device traffic; the private worker uses its own bearer
+secret. Phone apps use the browser handoff; Mac remains a local demo and can open the same website. Native recording
+and wiring this speech service into the separate pose-coach iframe are not included in this implementation.
+
+### RAM and deployment budget
+
+These are **planning estimates, not measured RAM or latency on this build**, for short utterances with Claude
+hosted externally. Model-file size is not total process memory.
+
+| Component / use | Budget |
+|---|---|
+| Speech worker, one active inference | **16 GB RAM recommended**, 4 CPU cores as a starting point |
+| Smaller experimental worker | 8 GB RAM may fit; benchmark startup peaks and real utterances before choosing it |
+| Main API, separate from speech | Start with 1–2 GB RAM; measure memory/context traffic under demo load |
+| Phone/browser | No model-weight RAM allocation: only recording, UI and playback buffers |
+| Optional GPU deployment | Start testing with 8 GB VRAM plus 16 GB host RAM; requires a CUDA image instead of the supplied CPU image |
+
+NVIDIA lists at least 2 GB just to load Parakeet; its FP32 checkpoint is about 2.51 GB. Kokoro's checkpoint is about
+327 MB. Python/PyTorch, the ASR frontend, phonemizer, activations and startup copies all add overhead. More RAM alone
+does not guarantee low latency; CPU throughput is a separate limit. Scale from measured concurrent-turn latency,
+peak resident memory and cold-start time, not from checkpoint sizes.
+
+### Deploy the speech service
+
+1. Create a **Render Private Service**, Docker runtime, same region/network as the backend. Root directory:
+   `inference/speech-worker`; Dockerfile: `./Dockerfile`; context: `.`. The image is CPU-only, Python 3.11, and
+   downloads the model/voice weights during its build. Allow several GB of build storage and a longer first build.
+   Keep one Uvicorn worker; multiple workers would each load both models.
+2. Set `PORT=8095`, `SPEECH_DEVICE=cpu`, `SPEECH_CPU_THREADS=4`, and a random `SPEECH_WORKER_TOKEN` of at least
+   32 characters. Generate one privately with `python -c 'import secrets; print(secrets.token_urlsafe(32))'`.
+   `/health` answers after both models and the voice finish loading.
+3. On the existing API service, set `SPEECH_WORKER_URL=http://<private-hostname>:8095` and the same
+   `SPEECH_WORKER_TOKEN`, then redeploy. Keep the API's shared `ANTHROPIC_API_KEY` or a user's own Claude key.
+   Never put the worker token or internal URL in public frontend environment variables.
+4. Sign in, open Coach, and choose **Record message**. A connected ElevenLabs agent takes priority automatically.
+   The frontend needs rebuilding to include these controls. Native phone handoff uses `EXPO_PUBLIC_WEB_APP_URL`.
+
+Local Docker build: `docker build -t rhythm-speech inference/speech-worker` from the repository root.
+Run with a private env file containing `SPEECH_WORKER_TOKEN`:
+`docker run --rm -p 127.0.0.1:8095:8095 --env-file /absolute/private/speech.env rhythm-speech`.
+For local development only, the main API can use `SPEECH_WORKER_URL=http://127.0.0.1:8095`.
+
+API/worker contract and routing tests use fake inference, with no paid requests or model downloads. A headless
+Chromium check uses a synthetic microphone and real MediaRecorder/resampling to verify one turn, reply playback,
+and cancellation of late speech: run `node scripts/voice-browser-check.mjs` from `mobile/` with the extension's
+Vite/Playwright dependencies installed. Its app shell and inference are fixtures, not live account/model tests. The Docker
+engine was unavailable during implementation, so the full image/model startup, speech accuracy, device microphone
+playback and memory/latency benchmark remain deployment checks. Do not describe this as a measured realtime system.
+
+Model attribution and technical references: [NVIDIA Parakeet (CC BY 4.0)](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3),
+[Kokoro by hexgrad (Apache 2.0)](https://huggingface.co/hexgrad/Kokoro-82M),
+[NeMo ASR inference](https://docs.nvidia.com/nemo/speech/nightly/asr/inference.html),
+[Render Private Services](https://render.com/docs/private-services).
+
 ## Later phases (not built yet — no placeholder buttons in the app)
 
 Integration boundaries already in place: all model calls go through `backend/app/ai.py` (`AIProvider.generate_json`),
@@ -748,7 +835,7 @@ backend without changing core screens.
 
 | Capability | Boundary / approach | What's needed |
 |---|---|---|
-| Voice input & spoken replies | New `/coach/voice` endpoint: speech-to-text → existing coach → text-to-speech | `expo-audio` (works in Expo Go) + an STT/TTS provider (none configured) |
+| Native voice recording | Reuse `/voice/transcribe`, existing `/coach/messages`, and `/voice/speech/{messageId}` | Native audio capture/playback; current demo opens browser voice |
 | Recorded exercise analysis | Upload clip → backend job → results saved alongside an activity session | `expo-camera`/`expo-image-picker`; a pose-estimation model for *measured* joint angles/reps, kept separate from any language-model *interpretation*; confidence + "poor camera view" handling |
 | Live coaching (real-time A/V) | Separate streaming service; core screens don't depend on it | A low-latency model endpoint (none available; MiniCPM isn't installed locally) and a WebRTC transport. No live-performance claims until measured |
 | SMPL-X bodies / Blender characters | Export from Blender 5.2.2 (installed) as glTF; render with `expo-gl` + three.js (a development build is likely needed) | SMPL-X requires registering for its research licence (non-commercial terms); no SMPL-X or character assets exist in this repo yet |
@@ -775,7 +862,7 @@ never put a user's bearer token into a publicly shared agent. The app does not a
 an ElevenLabs workspace. Disconnect and account erasure remove stored keys.
 
 Coach and embedded camera check `/connections/access` before mounting and periodically thereafter. Text messages
-also require the caller's own Claude credential on the backend, with no server-provider fallback. A setup link or
+use the caller's own Claude credential or the server's shared demo Claude. A setup link or
 an unused MCP token does not unlock built-in inference. External ChatGPT/Claude usage remains inside those assistants.
 The website supports ElevenLabs text/voice; phone and Mac offer website handoff, with no native voice SDK in this demo.
 Mac remains a local demo and requires its own verified, memory-only Claude key for local Coach.

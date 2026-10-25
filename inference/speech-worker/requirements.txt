@@ -1,0 +1,5 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+nemo_toolkit[asr]==2.4.0
+kokoro==0.9.4
+soundfile>=0.13,<1
