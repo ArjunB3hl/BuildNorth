@@ -238,9 +238,18 @@ class CodeVersion(unittest.TestCase):
         v0 = dev_server.code_version()
         (self.web / "js" / "notes.txt").write_text("not code")
         (self.web / "js" / "moveforms" / "arms.js.bak").write_text("an editor's copy")
-        self.assertEqual(dev_server.code_version(), v0, "only .js files (and index.html) count")
+        self.assertEqual(dev_server.code_version(), v0, "only page code and styles count")
         (self.web / "js" / "moveforms" / "arms.js").rename(self.web / "js" / "arms.js")
         self.assertNotEqual(dev_server.code_version(), v0, "the same file in another folder: another page")
+
+    def test_embed_styles_change_the_version(self):
+        before = dev_server.code_version()
+        css = self.web / "embed.css"
+        css.write_text("body.embed { color: white; }")
+        self.assertNotEqual(dev_server.code_version(), before)
+        before = dev_server.code_version()
+        css.write_text("body.embed { color: black; }")
+        self.assertNotEqual(dev_server.code_version(), before)
 
     def test_the_real_page_has_one(self):
         dev_server.WEB = Path(__file__).resolve().parent.parent / "web"

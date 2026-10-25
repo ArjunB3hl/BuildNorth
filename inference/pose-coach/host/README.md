@@ -1,7 +1,10 @@
-# The camera workout screen for the BuildNorth app (phase 1)
+# Historical phase-1 host template
 
-These files go into `mobile/` once the web app there is committed (docs/INTEGRATION.md, "Coordinate first"). Until
-then they live here, and `tools/try_in_app.sh` runs them in a copy of the app, so the main checkout is never touched.
+The website integration now lives in `mobile/`; see [the website guide](../../../mobile/docs/pose-coach.md).
+Use that implementation for new work. It adds website navigation, a native redirect, stricter URL isolation,
+server-rendering support and BuildNorth appearance. The files below are the original standalone template for
+reference. `tools/try_in_app.sh` intentionally stops if its legacy patch is already applied; it is not needed to
+run the integrated website.
 
 | File | Goes to | What |
 |---|---|---|
@@ -77,5 +80,5 @@ Open http://localhost:8082/activity, sign in, and press **Camera workout**. Pres
   details remain private. Duplicate start, stop-during-start and repeated-summary cases were checked too.
 - Six review rounds (independent reviewers, each finding checked by two others): every confirmed finding is fixed.
 
-Not checked yet: the screen itself in a signed-in browser (saving a session end to end), and the live camera inside
-the frame.
+The integrated website was subsequently verified in a signed-in browser with a saved recording and Activity
+session creation. Live camera and speech checks remain separate; see the website guide for current verification.

@@ -1,3 +1,4 @@
+import { connectAppearance } from './embed-appearance.js';
 // Live coach page: camera (or a test clip in real time) -> MediaPipe pose -> exercise engines -> events.
 // web/js/auto.js counts sets per exercise: "Auto" lets it decide what is being done; an exercise named (in the picker,
 // or by the user when the coach asks at the start) has it count that one alone. Coaching events go to the coach that
@@ -45,6 +46,7 @@ const app = PARENT ? connect(window, PARENT) : null;
 if (embedded(location.search) && !PARENT) console.warn('pose coach: ?parent= must be a page on this machine (http://localhost:<port>); not embedded');
 if (app) {
   document.body.classList.add('embed');
+  connectAppearance(window, app);
   app.on('start', m => {
     if (S.running || S.starting) return;
     if (m.exercise === 'auto' || EXERCISES[m.exercise]) $('exercise').value = m.exercise;

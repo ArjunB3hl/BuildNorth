@@ -24,6 +24,7 @@ export type PoseWorkout = {
   totals: Record<string, { label: string; sets: number; reps: number }>;
 };
 export type PoseMessage =
+  | { type: 'pose-coach/resize'; height: number }
   | { type: 'pose-coach/ready'; version: string | null }
   | { type: 'pose-coach/state'; running: boolean; startedAt: string | null }
   | ({ type: 'pose-coach/progress' } & PoseSet)

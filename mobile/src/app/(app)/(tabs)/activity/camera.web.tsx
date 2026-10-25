@@ -6,10 +6,12 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button, Notice } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
-import { errorMessage, Row } from '@/components/ui';
+import { PageIntro } from '@/components/activity/layout';
+import { errorMessage, Row, Screen, Card } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
 import { useCameraWorkout } from '@/hooks/use-camera-workout';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
 import { localDate } from '@/lib/dates';
@@ -72,6 +74,8 @@ function CameraWorkoutSession() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const [frameHeight, setFrameHeight] = useState(960);
   const { load, save: keep, clear } = useCameraWorkout();
   const frame = useRef<HTMLIFrameElement | null>(null);
   const parentOrigin = useSyncExternalStore(subscribeOrigin, browserOrigin, serverOrigin);
@@ -190,7 +194,7 @@ function CameraWorkoutSession() {
     savingRef.current = true;
     mutate();
   }, [mutate, unsaved]);
-  const post = useCallback((name: string) => frame.current?.contentWindow?.postMessage({ type: `pose-coach/${name}` }, poseOrigin), [poseOrigin]);
+  const post = useCallback((name: string, fields: Record<string, unknown> = {}) => frame.current?.contentWindow?.postMessage({ ...fields, type: `pose-coach/${name}` }, poseOrigin), [poseOrigin]);
   /** "Finish and save" was waiting for the run to end: save now. */
   const finished = useCallback(() => {
     if (!finishingRef.current) return;
@@ -274,6 +278,10 @@ function CameraWorkoutSession() {
     const onMessage = (event: MessageEvent) => {
       const m = poseMessage(event, frame.current?.contentWindow, poseOrigin);
       if (!m) return;
+      if (m.type === 'pose-coach/resize') {
+        if (Number.isFinite(m.height)) setFrameHeight(Math.max(320, Math.min(12000, Math.ceil(m.height))));
+        return;
+      }
       if (m.type === 'pose-coach/state' && m.running && savingRef.current) {
         post('stop');                               // the workout is being saved and this screen is about to close
         return;
@@ -281,6 +289,7 @@ function CameraWorkoutSession() {
       const next = countMessage(countedRef.current, m, now());
       update(next.counted);
       if (m.type === 'pose-coach/ready') {
+        post('theme', { theme: scheme });
         setReady(true);
         setUnreachable(false);
       } else if (m.type === 'pose-coach/error') {
@@ -295,7 +304,11 @@ function CameraWorkoutSession() {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [poseOrigin, update, finished, post, reset]);
+  }, [poseOrigin, update, finished, post, reset, scheme]);
+
+  useEffect(() => {
+    if (ready) post('theme', { theme: scheme });
+  }, [ready, scheme, post]);
 
   useEffect(() => {
     if (ready || !claimed || elsewhere || !src) return;
@@ -394,25 +407,8 @@ function CameraWorkoutSession() {
               : 'Press Start in the camera view, then exercise. Reps and sets are counted automatically.';
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.background }]}>
-      <Stack.Screen
-        options={{
-          headerLeft: () => <Button title="Discard" size="small" variant="quiet" disabled={busy || !loaded} onPress={() => void discard()} />,
-        }}
-      />
-      <View style={styles.fill}>
-        {claimed && !elsewhere && src ? (
-          <iframe
-            key={attempt}
-            ref={frame}
-            src={src}
-            title="Camera coach"
-            allow="camera; microphone; autoplay"
-            style={{ border: 0, width: '100%', height: '100%', display: 'block', background: '#0f1115' }}
-          />
-        ) : null}
-      </View>
-      <View style={[styles.footer, { borderTopColor: theme.border }]}>
+    <Screen wide footer={
+      <View style={styles.footer}>
         {frameConfig.error ? <Notice tone="error">{frameConfig.error}</Notice> : null}
         {elsewhere ? (
           <Notice tone="warning">
@@ -431,7 +427,7 @@ function CameraWorkoutSession() {
         {save.isError ? <Notice tone="error">{`${errorMessage(save.error)} Nothing is lost, so you can try again.`}</Notice> : null}
         <Row style={styles.row}>
           {status ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.fill} numberOfLines={3}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.fill}>
               {status}
             </ThemedText>
           ) : (
@@ -445,12 +441,31 @@ function CameraWorkoutSession() {
           />
         </Row>
       </View>
-    </View>
+    }>
+      <Stack.Screen options={{ title: 'Camera workout' }} />
+      <PageIntro
+        text="Exercise with the camera coach, then save counted sets to Activity. Movement and form reviews stay in this view."
+        primary={<Button title="Discard" size="small" variant="quiet" disabled={busy || !loaded} onPress={() => void discard()} />}
+      />
+      <Card style={styles.cameraCard}>
+        {claimed && !elsewhere && src ? (
+          <iframe
+            key={attempt}
+            ref={frame}
+            src={src}
+            title="Camera coach"
+            allow="camera; microphone; autoplay"
+            style={{ border: 0, width: '100%', height: frameHeight, display: 'block', background: theme.background }}
+          />
+        ) : null}
+      </Card>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, minHeight: 0 },
-  footer: { borderTopWidth: 1, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.two },
-  row: { alignItems: 'center', gap: Spacing.three },
+  fill: { flex: 1, minWidth: 180 },
+  cameraCard: { padding: 0, overflow: 'hidden' },
+  footer: { gap: Spacing.two },
+  row: { alignItems: 'center', flexWrap: 'wrap', gap: Spacing.three },
 });

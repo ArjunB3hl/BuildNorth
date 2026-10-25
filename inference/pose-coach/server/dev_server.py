@@ -89,11 +89,11 @@ BENCH = Path(os.environ.get("POSE_BENCH_DIR", ROOT / ".data" / "dev" / "bench"))
 
 
 def code_version() -> str:
-    """A hash of the page's code (web/index.html and every .js under web/js, its folders too: web/js/moveforms/ holds
+    """A hash of the page's code (web/index.html, web/*.css and every .js under web/js, its folders too: web/js/moveforms/ holds
     the moving movements' checks), so a tab left open over a change can tell it is stale. Each file's path within web/
     goes in with it: a file moved, or one of the same name in another folder, changes it too."""
     h = hashlib.sha1()
-    for f in sorted([WEB / "index.html", *(WEB / "js").rglob("*.js")]):
+    for f in sorted([WEB / "index.html", *WEB.glob("*.css"), *(WEB / "js").rglob("*.js")]):
         h.update(f.relative_to(WEB).as_posix().encode()); h.update(f.read_bytes())
     return h.hexdigest()[:12]
 TYPES = {".mjs": "text/javascript", ".js": "text/javascript", ".wasm": "application/wasm", ".task": "application/octet-stream",

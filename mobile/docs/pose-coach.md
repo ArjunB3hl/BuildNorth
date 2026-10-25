@@ -5,7 +5,9 @@
 Open **Camera workout** in the website navigation. Start inside the camera view. **Finish and save** stops the
 workout, saves its counted sets to Activity, refreshes sessions/progress/today, and opens the saved session.
 Stopping and restarting in the frame adds runs to the same workout. Unsaved counts survive a reload per account;
-only one browser tab holds a camera workout at a time. Ambiguous saves are checked against recent sessions before
+only one browser tab holds a camera workout at a time. Inactive stack screens release the frame and lock.
+A stalled initial frame load is retried once before offering Try again; a frame that has started counting is never
+automatically reloaded. Ambiguous saves are checked against recent sessions before
 retrying. No camera coaching is added to the iPhone, Android, Watch or macOS applications.
 
 The user selected counted sets only for this phase. Named movements, holds, approximate rhythm counts, technique
@@ -50,8 +52,29 @@ or landmark frames. Models, licensed clips, recordings, screenshots and connecti
 
 ## Verification performed
 
-The integration is checked with the pose-coach suites, the host protocol tests, and the website's lint,
-typecheck and library tests. Specific results and browser checks are recorded after verification below.
+- Signed-in replay through the isolated website: progress, summary, save, session page and Activity listing verified.
+  One test session remains in the account. Activity saved only the counted sets reported by the coach.
+- Coach and voice were Off during replay. Live camera, microphone and paid speech were not exercised.
+- Saved Mistakes, You / Like this and See it in 3D opened in the embedded page.
+- Website lint, typecheck and all 68 library tests passed. The historical host's 20 protocol tests passed.
+- Full pose suites: 488 JavaScript tests passed, one optional test skipped; 125 Python tests passed.
+- Static website export passed. Leaving and revisiting the camera route releases and reacquires its frame lock.
+
+## Appearance
+
+The host uses the website's `Screen`, `PageIntro`, `Card`, `Button`, `Notice` and theme hooks. The frame's
+`web/embed.css` maps `WebColors`, the website font stack, 16 px card radii, 12 px controls and spacing. It is scoped
+to `body.embed`; standalone mode retains its original presentation and all page element IDs remain intact.
+
+The frame accepts an initial `theme=light|dark`, with the system preference as a fallback. The host sends
+`pose-coach/theme {theme}` on readiness and whenever its scheme changes, through the exact-origin connection.
+Changing theme does not reload the iframe or reset its workout. `pose-coach/resize {height}` lets the website
+own page scrolling; the host bounds the height. The CSS is part of the server's stale-page version hash.
+
+Private screenshot comparisons are kept under ignored `.data/screenshots/`, never in the public tree. They
+cover Activity and Camera workout at 1440 px and 800 px, in light and dark. Light-mode visual QA uses a temporary
+local theme-hook override, restored before commit; the actual theme-message behavior is covered by a protocol
+test. No global system appearance setting is changed.
 
 ## Remaining checks
 
