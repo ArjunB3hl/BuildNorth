@@ -1,0 +1,35 @@
+// Used only by build-android-release.mjs. Keep credentials outside the repository.
+gradle.beforeProject { project ->
+    // AGP calls Ninja directly, so CMAKE_BUILD_PARALLEL_LEVEL alone does not cap it.
+    // One native compiler per Gradle worker keeps the two-worker build within RAM.
+    ['com.android.application', 'com.android.library'].each { pluginId ->
+        project.pluginManager.withPlugin(pluginId) {
+            project.extensions.getByName('androidComponents').finalizeDsl { android ->
+                android.defaultConfig.externalNativeBuild.cmake.arguments.addAll([
+                    '-DCMAKE_JOB_POOLS=rhythm_native=1',
+                    '-DCMAKE_JOB_POOL_COMPILE=rhythm_native',
+                    '-DCMAKE_JOB_POOL_LINK=rhythm_native'
+                ])
+            }
+        }
+    }
+    project.pluginManager.withPlugin('com.facebook.react') {
+        project.extensions.getByName('react').extraPackagerArgs.addAll(['--max-workers', '2'])
+    }
+    project.pluginManager.withPlugin('com.android.application') {
+        project.extensions.getByName('androidComponents').finalizeDsl { android ->
+            def required = ['RHYTHM_ANDROID_KEYSTORE', 'RHYTHM_ANDROID_STORE_PASSWORD',
+                            'RHYTHM_ANDROID_KEY_ALIAS', 'RHYTHM_ANDROID_KEY_PASSWORD']
+            required.each { name ->
+                if (!System.getenv(name)) throw new GradleException("Missing ${name}")
+            }
+            def signing = android.signingConfigs.maybeCreate('rhythmRelease')
+            signing.storeFile = new File(System.getenv('RHYTHM_ANDROID_KEYSTORE'))
+            signing.storePassword = System.getenv('RHYTHM_ANDROID_STORE_PASSWORD')
+            signing.keyAlias = System.getenv('RHYTHM_ANDROID_KEY_ALIAS')
+            signing.keyPassword = System.getenv('RHYTHM_ANDROID_KEY_PASSWORD')
+            android.buildTypes.getByName('release').signingConfig = signing
+            android.buildTypes.getByName('release').debuggable = false
+        }
+    }
+}

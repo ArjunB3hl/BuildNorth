@@ -12,6 +12,10 @@ A demo version of a personal assistant for meals, activity and the week's plan, 
 
 How both were built, what was checked and what is still open: [mobile/docs/work-log.md](mobile/docs/work-log.md).
 
+Local standalone Release builds for iPhone/Watch simulators, Android, and Mac:
+[build and testing guide](docs/local-release-builds.md). Packaged binaries and the local build catalog live in
+ignored `artifacts/releases/<date>/`; no store submission is needed for computer testing.
+
 ## Quick start
 
 Backend:

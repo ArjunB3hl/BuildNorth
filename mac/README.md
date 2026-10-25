@@ -399,6 +399,21 @@ npx jest
 
 ## What was tested
 
+### Local Release package, 2026-10-25
+
+- Built the current app with Xcode 27.1 in Release for arm64, with ad-hoc signing. Expo bundled 642 modules
+  into the app's embedded Hermes bytecode; no Metro server is required by this configuration.
+- Updated the account-connection website default to `https://rhythm-buildnorth.expo.app` in both app config
+  and the screen fallback. Mac Calendar and Coach context remain local demo data.
+- Verified the packaged app and its Hermes framework with `codesign --verify --deep --strict`, and checked
+  the ZIP's integrity. Version 1.0 (build 1) targets Apple silicon Macs running macOS 14 or later.
+- A separate Release process stayed running during a 12-second smoke test, loaded Hermes, opened the existing
+  demo database, and had no TCP connections. It was stopped after the test; the existing development app
+  stayed running and saved database values were unchanged.
+- TypeScript, ESLint, and all three Jest suites passed. Interactive checks of the new Release package were
+  blocked because the Mac was locked; process startup is not a substitute for visual UI validation.
+- This is a local demo build, without Developer ID signing, notarization, or store distribution.
+
 ### Calendar and connections, 2026-10-25
 
 - Inspected the native Mac UI: Today, recipe details, Calendar month grid, Movement filter, monthly report,
