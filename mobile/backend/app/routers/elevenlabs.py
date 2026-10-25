@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from app.deps import CurrentUser, Db
 from app.models import ClaudeCredential, ElevenLabsCredential
 from app.provider_credentials import seal, shared_claude, unlock_key
+from app.voice import selected_voice
 
 router = APIRouter(tags=["connections"])
 
@@ -50,7 +51,8 @@ def access(request: Request, response: Response, user: CurrentUser, db: Db) -> d
     text_chat = claude or (personal is None and shared)
     eleven = bool(unlock(request, db.get(ElevenLabsCredential, user.user_id)))
     return {"linked": text_chat or eleven, "claude": claude, "sharedClaude": shared, "elevenlabs": eleven,
-            "textChat": text_chat, "camera": text_chat or eleven}
+            "textChat": text_chat, "camera": text_chat or eleven,
+            "voiceProvider": selected_voice(request.app.state, db, user.user_id)}
 
 
 @router.get("/connections/elevenlabs")

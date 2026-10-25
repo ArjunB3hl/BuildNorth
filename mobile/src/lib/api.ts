@@ -78,6 +78,7 @@ export class ApiError extends Error {
 }
 
 function friendlyHttpMessage(status: number, detail: string | undefined, path: string): string {
+  if (path.startsWith('/voice/') && detail && [409, 413, 422, 429, 502, 503, 504].includes(status)) return detail;
   if (path.startsWith('/connections/') && detail && [400, 422, 429, 502, 503].includes(status)) return detail;
   const isAi = path.startsWith('/coach') || path.endsWith('/extract');
   // Planner errors carry a specific, user-facing explanation (what still works without AI, stale plans…).
@@ -180,6 +181,10 @@ export function createApi(getToken: TokenGetter) {
   };
 
   return {
+    voice: {
+      transcribe: (audioBase64: string, signal?: AbortSignal) => send<{ text: string }>('POST', '/voice/transcribe', { audioBase64 }, { timeoutMs: 100_000, signal }),
+      speech: (messageId: string, signal?: AbortSignal) => send<{ audioBase64: string; mimeType: 'audio/wav'; clipped: boolean }>('POST', `/voice/speech/${encodeURIComponent(messageId)}`, undefined, { timeoutMs: 100_000, signal }),
+    },
     rhythm: createRhythmApi((method, path, body) => request(method, path, {
       body, timeoutMs: path.startsWith('/rhythm/saved/') && path.endsWith('/summary') ? AI_TIMEOUT_MS : DEFAULT_TIMEOUT_MS,
     })),

@@ -70,7 +70,7 @@ def test_shared_coach_is_automatic_for_signed_in_users_only(client, shared):
     for user in (ALICE, BOB):
         access = client.get("/connections/access", headers=auth(user)).json()
         assert access == {"linked": True, "claude": False, "sharedClaude": True, "elevenlabs": False,
-                          "textChat": True, "camera": True}
+                          "textChat": True, "camera": True, "voiceProvider": None}
         info = client.get("/connections/claude", headers=auth(user))
         assert info.headers["cache-control"] == "no-store"
         assert info.json()["sharedAvailable"] and not info.json()["configured"]

@@ -1,5 +1,6 @@
 import { AIConnectionGate } from '@/components/ai-connection-gate';
 import { ElevenLabsChat } from '@/components/coach/elevenlabs-chat';
+import { SpeechChat } from '@/components/coach/speech-chat';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useIsFocused, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -32,20 +33,20 @@ import { ApiError } from '@/lib/api';
 import { confirmAction } from '@/lib/confirm';
 import { newKey } from '@/lib/keys';
 import { localDate } from '@/lib/dates';
-import type { CoachMessage } from '@/lib/types';
+import type { AIAccess, CoachMessage } from '@/lib/types';
 
 const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
   const focused = useIsFocused();
-  return focused ? <AIConnectionGate>{access => <ConnectedCoach claude={access.textChat} elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
+  return focused ? <AIConnectionGate>{access => <ConnectedCoach key={access.voiceProvider ?? 'text'} claude={access.textChat} provider={access.voiceProvider} />}</AIConnectionGate> : null;
 }
 
-function ConnectedCoach({ claude, elevenlabs }: { claude: boolean; elevenlabs: boolean }) {
-  const [voice, setVoice] = useState(!claude);
+function ConnectedCoach({ claude, provider }: { claude: boolean; provider: AIAccess['voiceProvider'] }) {
+  const [voice, setVoice] = useState(!!provider);
   return <View style={{ flex: 1 }}>
-    {claude && elevenlabs ? <View style={{ padding: 12 }}><Button title={voice ? 'Switch to Claude chat' : 'Switch to ElevenLabs agent'} variant="secondary" onPress={() => setVoice(!voice)} /></View> : null}
-    {elevenlabs && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}><ElevenLabsChat /></ScrollView> : <ClaudeCoach />}
+    {claude && provider ? <View style={{ padding: 12 }}><Button title={voice ? 'Switch to text chat' : 'Switch to voice Coach'} variant="secondary" onPress={() => setVoice(!voice)} /></View> : null}
+    {provider && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}>{provider === 'elevenlabs' ? <ElevenLabsChat /> : <SpeechChat />}</ScrollView> : <ClaudeCoach />}
   </View>;
 }
 

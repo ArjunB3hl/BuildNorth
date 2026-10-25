@@ -448,5 +448,5 @@ export type MonthlyReport = {
   checkIns: number; energy: ReportMetric; mood: ReportMetric; reportedSleep: ReportMetric;
   plans: { total: number; done: number; skipped: number }; healthDays: HealthDay[]; notes: string[];
 };
-export type AIAccess = { linked: boolean; claude: boolean; sharedClaude: boolean; elevenlabs: boolean; textChat: boolean; camera: boolean };
+export type AIAccess = { linked: boolean; claude: boolean; sharedClaude: boolean; elevenlabs: boolean; textChat: boolean; camera: boolean; voiceProvider: 'elevenlabs' | 'parakeet_kokoro' | null };
 export type ElevenLabsConnection = { configured: boolean; usable: boolean; storageAvailable: boolean; hint: string | null; agentName: string | null };
