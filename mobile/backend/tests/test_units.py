@@ -83,3 +83,40 @@ def test_migrations_create_all_tables(tmp_path) -> None:  # type: ignore[no-unty
     tables = set(inspect(create_engine(url)).get_table_names())
     assert {"profiles", "recipes", "shopping_items", "routines", "activity_sessions", "checkins", "plan_items",
             "coach_messages", "remembered_preferences", "memory_tombstones", "watch_tokens", "health_days"} <= tables
+
+
+def test_private_memory_owner_is_checked_before_every_sdk_operation() -> None:
+    from conftest import ALICE, BOB, FakeMemoryClient
+    client = FakeMemoryClient()
+    memory = MemoryService(client, owner_user_id=ALICE)
+    operations = [
+        lambda: memory.recall(BOB, "preferences"),
+        lambda: memory.remember_preference(BOB, "pref1", "Other user's text"),
+        lambda: memory.remember_health(BOB, "day1", "Other user's health"),
+        lambda: memory.forget_scope(BOB, user_scope(BOB)),
+        lambda: memory.forget_health(BOB),
+        lambda: memory.erase_user(BOB),
+    ]
+    for operation in operations:
+        with pytest.raises(MemoryAPIError) as error:
+            operation()
+        assert error.value.status_code == 403
+    assert client.records == client.lenses == client.forgets == client.scopes.registered == []
+    memory.remember_preference(ALICE, "pref1", "Owner's preference")
+    assert memory.recall(ALICE, "preferences")[0].text == "Owner's preference"
+
+
+def test_memory_routes_other_bound_users_to_their_own_contexts() -> None:
+    from conftest import ALICE, BOB, FakeMemoryClient
+    alice_client, bob_client = FakeMemoryClient(), FakeMemoryClient()
+    bob = MemoryService(bob_client, owner_user_id=BOB)
+    memory = MemoryService(alice_client, owner_user_id=ALICE, user_services={BOB: bob})
+    memory.remember_preference(ALICE, "a1", "Alice's preference")
+    memory.remember_health(BOB, "b1", "Bob's health")
+    assert [f.text for f in memory.recall(ALICE, "anything")] == ["Alice's preference"]
+    assert [f.text for f in memory.recall(BOB, "anything")] == ["Bob's health"]
+    memory.erase_user(BOB)
+    assert alice_client.records and not bob_client.records
+    with pytest.raises(MemoryAPIError):
+        memory.remember_preference("user_Unassigned", "c1", "Unassigned")
+    assert not any("Unassigned" in text for text, _ in alice_client.records)

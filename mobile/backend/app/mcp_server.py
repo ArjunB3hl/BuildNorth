@@ -64,7 +64,9 @@ summaries. You act for the signed-in user only.
   (Today -> Waiting for your approval). Never claim a change was saved until a proposal's status is "applied".
 - Remember, correct or forget a preference only when the user explicitly asks; requests for "tonight" or
   "this week" are one-off requests, not lasting preferences (use them for this answer only).
-- This is not medical advice; don't make health claims or diagnoses. Recipes aren't checked for allergens."""
+- This is not medical advice; don't make health claims or diagnoses. Recipes aren't checked for allergens.
+- Rhythm's video tools use a separate /rhythm/mcp connection. The phone's Profile -> Rhythm videos screen
+  shows its connection address and permissions."""
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 PROPOSE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
@@ -222,6 +224,8 @@ def build(app: FastAPI, settings: Settings, clerk: ClerkVerifier | None) -> tupl
         if token is None or not token.subject:
             raise ToolError("Not authenticated.")
         claims = token.claims or {}
+        if claims.get("via") == "rhythm_token":
+            raise ToolError("This connection is restricted to Rhythm's video tools.")
         label = f"Connection token “{claims['label']}”" if claims.get("via") == "connection_token" else f"OAuth client {token.client_id}"
         return token.subject, label
 

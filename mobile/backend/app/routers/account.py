@@ -12,6 +12,7 @@ from app.deps import CurrentUser, Db, Memory
 from app.models import USER_TABLES, MemoryTombstone
 from app.memory import user_scope
 from app.schemas import DeleteDataOut, StatusOut
+from app.rhythm import data as rhythm_data
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["account"])
@@ -39,11 +40,12 @@ def me(user: CurrentUser) -> dict[str, str]:
 
 
 @router.delete("/account/data")
-def delete_all_data(user: CurrentUser, db: Db, memory: Memory) -> DeleteDataOut:
+def delete_all_data(request: Request, user: CurrentUser, db: Db, memory: Memory) -> DeleteDataOut:
     """Delete every app record and erase Agent Memory for this user. Reports exactly what happened.
 
     The Clerk sign-in account itself is not deleted here.
     """
+    rhythm = rhythm_data.erase(request.app, user.user_id)
     if memory is None:
         memory_status, memory_detail = "not_configured", "Memory isn't configured on this server, so nothing was stored there."
     else:
@@ -55,12 +57,22 @@ def delete_all_data(user: CurrentUser, db: Db, memory: Memory) -> DeleteDataOut:
             memory_status = "failed"
             memory_detail = "Memory couldn't be erased right now. Your app data was deleted; try deleting again later to erase memory."
 
-    deleted: dict[str, int] = {}
+    deleted: dict[str, int] = dict(rhythm.deleted_records or {})
     for table in USER_TABLES:
+        if table in rhythm_data.TABLES:
+            # Private-context erasure markers and today's non-content quota survive until their purpose is complete.
+            continue
         result = db.execute(delete(table).where(table.user_id == user.user_id))  # type: ignore[attr-defined]
         deleted[table.__tablename__] = result.rowcount or 0
     if memory_status == "failed":
         # Keep one marker so a later request can finish the memory erase.
         db.add(MemoryTombstone(user_id=user.user_id, scope=user_scope(user.user_id), text=None))
     db.commit()
+    if rhythm.memory_status == "erase_pending":
+        memory_status = "failed"
+        memory_detail += " Rhythm's private memory erasure is queued for retry."
+    elif memory is None and rhythm.memory_status == "ok":
+        memory_status = "erased"
+        memory_detail = "Rhythm's private memory erasure completed. General BuildNorth memory is not configured."
+    memory_detail += " Today's Rhythm acquisition counter remains until the daily reset."
     return DeleteDataOut(deleted_records=deleted, memory_status=memory_status, memory_detail=memory_detail)

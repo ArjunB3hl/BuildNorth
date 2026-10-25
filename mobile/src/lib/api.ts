@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { createRhythmApi } from '@/lib/rhythm';
 
 import type {
   AcceptResult,
@@ -173,6 +174,7 @@ export function createApi(getToken: TokenGetter) {
   };
 
   return {
+    rhythm: createRhythmApi((method, path, body) => request(method, path, { body })),
     status: () => get<ServiceStatus>('/status', { auth: false }),
 
     profile: {

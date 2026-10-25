@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "rhythm": {
+      "type": "remote",
+      "url": "{env:RHYTHM_MCP_URL}",
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:RHYTHM_MCP_TOKEN}"
+      },
+      "timeout": 20000
+    }
+  }
+}

@@ -30,32 +30,34 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   );
 }
 
+// Web pages carry more text than phone screens, so body text uses a regular weight there.
+const bodyWeight = Platform.OS === 'web' ? 400 : 500;
+
 const styles = StyleSheet.create({
   small: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 500,
+    fontWeight: bodyWeight,
   },
   smallBold: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 700,
+    fontWeight: Platform.OS === 'web' ? 600 : 700,
   },
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: 500,
+    fontWeight: bodyWeight,
   },
   title: {
     fontSize: 48,
     fontWeight: 600,
     lineHeight: 52,
   },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
+  subtitle: Platform.select({
+    web: { fontSize: 26, lineHeight: 34, fontWeight: 600, letterSpacing: -0.4 },
+    default: { fontSize: 32, lineHeight: 44, fontWeight: 600 },
+  }),
   link: {
     lineHeight: 30,
     fontSize: 14,

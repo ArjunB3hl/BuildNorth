@@ -49,6 +49,10 @@ def check_clerk(publishable_key: str) -> bool:
 
 
 def check_memory(settings) -> bool:  # type: ignore[no-untyped-def]
+    if settings.spectron_owner_user_id:
+        print("[memory] This Context belongs to one account. Use scripts.rhythm_memory_check for its scoped check; "
+              "the multi-user fixture check requires a separate test Context.")
+        return False
     client = Memory(settings.spectron_context_id, endpoint=settings.spectron_url, api_key=settings.spectron_api_key)
     memory = MemoryService(client)
     try:

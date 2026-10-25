@@ -1,10 +1,13 @@
-# Work log: Mac app, Apple Watch, the move off iCloud and one repository (19–21 Oct 2026)
+# Work log: Mac app, Apple Watch, repository setup and web app (19–21 Oct 2026)
 
-What was built with Claude Code from 19 to 21 October 2026, where it lives, how it was checked, and what is still
-open. The detailed guides are elsewhere and this page links to them:
+The original entries record work with Claude Code from 19 to 21 October 2026.
+Section 5 records the React Native web work with Codex on 21 October 2026.
+Each entry covers where the work lives, how it was checked, and what is still open.
+The detailed guides are elsewhere and this page links to them:
 
 - the Mac app: [mac/README.md](../../mac/README.md)
 - the watch: the *Apple Watch* section of the main [README](../README.md#apple-watch)
+- the web app: [implementation and verification](web-app.md)
 
 **Nothing has been committed.** Since 21 Oct 2026 both apps live in one git repository at `~/Developer/BuildNorth`
 (`mobile/` and `mac/`), with no commits yet.
@@ -24,6 +27,7 @@ open. The detailed guides are elsewhere and this page links to them:
 | 9 | Option A, with SurrealDB agents able to use watch data | SwiftUI watch app inside the Expo iPhone app; health data reaches Agent Memory, the Coach and MCP assistants |
 | 10 | Stop iCloud syncing the project | Moved from the iCloud Desktop to `~/Developer`; the three build workarounds and the `*.nosync` setup were removed |
 | 11 | Put both apps in one folder and one git repo | `~/Developer/BuildNorth/` with `mobile/` and `mac/`, a fresh git repository at the top, no commits yet |
+| 12 | Make a React Native web app with cookies and extension content access | Expo web layouts and content dashboard, optional display cookie, explicit existing Rhythm page grants, and extension-to-web links |
 
 ## 1. Mac app (`mac/`)
 
@@ -143,9 +147,35 @@ Both apps now live in one folder and one git repository:
   the backend venv (same package versions), the iOS Pods of both apps, and the build output.
 - `EAS_NO_VCS=1` is still used for the Mac app's EAS builds, so only `mac/` is uploaded.
 
+## 5. React Native web app (21 Oct 2026)
+
+Extended the existing Expo app with web-specific authentication, responsive sidebar
+navigation and an overview of recommendations, saved videos, interests and permitted
+pages. The overview can save/unsave videos and revoke page access. Existing Coach,
+Meals, Activity and Profile routes reuse the same account and backend. Browser
+sign-out clears its account cache without unlinking the Apple Watch.
+
+Added an optional host-only display cookie with a 30-day expiry and withdrawal
+control. It only remembers compact padding in the cookie panel. Content sharing
+uses Rhythm's existing explicit per-page permission flow; cookies do not provide
+cross-site history or evidence that a video was watched. The extension now links
+to the web dashboard and interests editor using `WXT_WEB_APP_URL`.
+
+Validation passed: mobile typecheck, lint, 2 cookie tests, static web export;
+extension typecheck, all 4 existing Playwright tests and production build; and
+`git diff --check`. Local frontend and backend HTTP checks returned 200. Browser
+inspection confirmed the sign-in page rendered. The authenticated dashboard and
+web → extension → recommendation journey still need a live-account check. No
+hosted deployment or backend test rerun was performed for this addition.
+
+See [web-app.md](web-app.md) for the source map, commands, privacy/storage behavior,
+verification limits and deployment requirements. Earlier verification records below
+describe the preceding native/backend work, not this web addition.
+
 ## How to run
 
 - **Mac app:** `cd ~/Developer/BuildNorth/mac && npm start`, then `npm run macos`.
+- **Web app:** `cd ~/Developer/BuildNorth/mobile && npm run web`; backend on port 8000, web on 8081. See [web setup](web-app.md#run-locally).
 - **iPhone and watch:** follow the build steps in the README (prebuild, `pod install`, `run:ios`; no extra steps). After building:
   - Start Metro with `npx expo start` from this folder.
   - If the simulator shows **"No script URL provided"**, that is a debug build with no Metro running. Start Metro, then press ⌘R.
