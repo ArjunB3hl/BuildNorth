@@ -86,7 +86,7 @@ function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
       const src = poseFrameUrl(POSE_URL, parentOrigin);
       return { src, origin: new URL(src).origin, error: '' };
     } catch {
-      return { src: '', origin: '', error: 'The camera coach connection is unavailable. Open the website on localhost and check its local coach address.' };
+      return { src: '', origin: '', error: 'The camera coach address is unavailable. Check the configured HTTPS coach address, then reload.' };
     }
   }, [parentOrigin]);
   const { src, origin: poseOrigin } = frameConfig;
@@ -433,7 +433,7 @@ function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
         {unreachable ? (
           <>
             <Notice tone="error">
-              The camera coach isn&apos;t available on this computer. Start your local camera coach, then try again.
+              The camera coach didn&apos;t finish loading. Check your connection and try again. For localhost development, also check that the local coach is running.
             </Notice>
             <Button title="Try again" variant="secondary" size="small" onPress={tryAgain} />
           </>

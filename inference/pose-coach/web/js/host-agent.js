@@ -26,3 +26,10 @@ export function accountConnections(elevenlabs) {
   return { eleven: { connected: elevenlabs, agentId: elevenlabs ? 'rhythm-account' : null, name: 'Your Rhythm agent' },
     claude: { available: false, loggedIn: false }, chatgpt: { available: false, loggedIn: false } };
 }
+
+/** Public hosting needs no local Python formatter: send the same measured event and its engine cue. */
+export function describeHostedEvent(event, cue) {
+  const summary = typeof cue === 'string' && cue.trim()
+    ? cue : `Measured workout event: ${event.kind || 'update'}. Use only the supplied measurements; do not assume good form.`;
+  return { ...event, summary };
+}

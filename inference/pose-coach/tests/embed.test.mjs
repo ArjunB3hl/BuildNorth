@@ -10,6 +10,10 @@ test('only a page on this machine can be the app', () => {
   assert.equal(parentOrigin('?embed=1'), 'http://localhost:8081');
   assert.equal(parentOrigin('?parent=http://localhost:8082'), 'http://localhost:8082');
   assert.equal(parentOrigin('?parent=http%3A%2F%2F127.0.0.1%3A8081'), 'http://127.0.0.1:8081');
+  assert.equal(parentOrigin('?parent=https%3A%2F%2Frhythm-buildnorth.expo.app'), 'https://rhythm-buildnorth.expo.app');
+  for (const bad of ['https://rhythm-buildnorth.expo.app.evil.example', 'https://rhythm-buildnorth.expo.app/',
+    'https://user:pass@rhythm-buildnorth.expo.app', 'http://rhythm-buildnorth.expo.app'])
+    assert.equal(parentOrigin(`?parent=${encodeURIComponent(bad)}`), null);
   for (const bad of ['https://evil.example', 'http://localhost.evil.example', 'http://localhost:8081/x', 'http://localhost:8081@evil.example',
     'https://localhost:8081', 'null', 'http://localhost:'])
     assert.equal(parentOrigin(`?parent=${encodeURIComponent(bad)}`), null, bad);

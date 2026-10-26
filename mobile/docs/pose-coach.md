@@ -93,3 +93,35 @@ state. On Start, `elevenlabs-session-request {requestId}` requests a fresh autho
 only ElevenLabs WSS URLs. Existing session/dialogue serialization remains in use. Standalone local mode is unchanged.
 The website's account gate mounts no iframe until a verified connection is available; revocation or failed rechecks
 unmount the frame. Camera and browser voice chat share the same Web Lock where supported.
+
+## 2026-10-26 — public HTTPS browser deployment
+
+The website can use `https://rhythm-buildnorth--camera.expo.app/web/index.html?embed=1`.
+This is an independent EAS Hosting alias in the existing Expo project, with no Python dev server or local accounts
+exposed. `poseFrameUrl` accepts only this camera origin and the exact production website origin. Local development
+retains the localhost/127.0.0.1 cookie separation. Both message directions still validate origin and window source.
+The camera host sends CSP `frame-ancestors https://rhythm-buildnorth.expo.app`; hosted Start waits for the validated
+parent's AI-connection capability message. The existing signed-in AI gate remains on the website.
+
+Build the public camera export from repository root:
+
+```sh
+python3 inference/pose-coach/tools/build_hosted.py artifacts/pose-coach-https-<new-build-name>
+cd mobile
+npx eas-cli@25.2.0 deploy --export-dir ../artifacts/pose-coach-https-<new-build-name> --alias camera --environment production --non-interactive
+```
+
+Build and deploy the website from `mobile/` with the production EAS environment and
+`EXPO_PUBLIC_POSE_URL=https://rhythm-buildnorth--camera.expo.app/web/index.html?embed=1`.
+Keep the camera deployment on its `camera` alias; never promote it to the main production alias.
+
+The packager explicitly includes browser source, pinned MediaPipe models, and the MediaPipe/ElevenLabs/three.js
+browser dependencies with notices. It never reads `.data`, clips, recordings, local API keys or CLI connections.
+Hosted mode makes no requests to local formatter, recordings, STT or TTS APIs. Engine cues use browser speech;
+ElevenLabs continues through the account-owned short-lived signed-URL handoff. No paid voice session is needed to
+load the page. Camera video remains in the browser. The original 13 exercise engines and counted-set saving are
+unchanged. Private motion-library assets and 3D character references are not in this public bundle, so their controls
+are hidden; current-workout landmark replays and form cues remain available.
+
+Future website releases must include this HTTPS configuration; rebuilding older code restores the local-only
+camera configuration. Physical/live camera and paid ElevenLabs conversations require a separate user session check.

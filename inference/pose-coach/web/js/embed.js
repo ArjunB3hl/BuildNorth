@@ -3,6 +3,7 @@
 // {type: 'pose-coach/<name>', ...}, sent only to the app's exact origin and taken only from it and from the frame's
 // parent window. The app must be a page on this machine, as for the backend's CORS: the pose page has no sign-in.
 const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
+export const PUBLIC_PARENT = 'https://rhythm-buildnorth.expo.app';
 export const DEFAULT_PARENT = 'http://localhost:8081';
 
 export const embedded = search => new URLSearchParams(search).get('embed') === '1';
@@ -10,7 +11,7 @@ export const embedded = search => new URLSearchParams(search).get('embed') === '
 /** The app's origin from ?parent= (default: the Expo web app), or null if it is not a page on this machine. */
 export function parentOrigin(search) {
   const p = new URLSearchParams(search).get('parent') || DEFAULT_PARENT;
-  return LOCAL.test(p) ? p : null;
+  return LOCAL.test(p) || p === PUBLIC_PARENT ? p : null;
 }
 
 /**

@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hostAgent, accountConnections } from '../web/js/host-agent.js';
+import { hostAgent, accountConnections, describeHostedEvent } from '../web/js/host-agent.js';
+
+test('hosted agent receives measured events without depending on a local formatter', () => {
+  const event = { kind: 'set_end', exercise: 'squat', reps: 8, summary: 'ignored incoming summary' };
+  assert.deepEqual(describeHostedEvent(event, 'Eight repetitions counted.'),
+    { ...event, summary: 'Eight repetitions counted.' });
+  assert.match(describeHostedEvent(event, null).summary, /do not assume good form/);
+  assert.equal(event.summary, 'ignored incoming summary');
+});
 
 test('one authorization request at a time, stale replies ignored, secrets never requested from the host', async () => {
   const handlers = {}, sent = [];

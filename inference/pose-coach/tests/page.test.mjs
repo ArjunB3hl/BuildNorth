@@ -479,7 +479,7 @@ function formPage({ demos = {}, library = new Map(), fetch = null } = {}) {
   let n = 0;
   const S = { running: true, trail: [], demos, aspect: 16 / 9, form: null, demoTimer: null, lastFrameT: 0, t0: 0,
     libByKey: library, rec: null, poseMetrics: null, startedAt: '2026-01-15T12:00:00.000Z' };
-  const env = { S, $, document: { createElement: tag => new El(null, tag) },
+  const env = { HOSTED: false, S, $, document: { createElement: tag => new El(null, tag) },
     Option: class { constructor(text, value) { this.text = text; this.value = value; } },
     RepReplay: class extends Replay { constructor(c) { super(c); replays.push(this); } },
     modelFor: () => '/demos/ybot.glb', log: (m, cls) => logs.push([m, cls]), performance: { now: () => clock.now },
@@ -1601,7 +1601,7 @@ test('the movement library: tried again after a failure, a 404 said at once, a l
       if (typeof a === 'number') return { ok: false, status: a };
       return { ok: true, status: 200, json: async () => a };
     };
-    const env = { S, fetch, document, $: id => els[id], setTimeout: f => f(),
+    const env = { HOSTED: false, S, fetch, document, $: id => els[id], setTimeout: f => f(),
       movesJs: Promise.resolve({ TRACK_OF_KIND: { hold: 'hold' } }), TRACK_LABEL: {}, isCounted: () => false,
       movementNames: l => l.map(m => m.key) };
     const { loadLibrary } = new Function(...Object.keys(env),

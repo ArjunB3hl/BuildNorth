@@ -71,3 +71,4 @@ body.embed #v3dClose { background: #232328; color: #EDEDEF; border-color: #27272
   body.embed aside { display: flex; }
   body.embed .card { padding: 16px; }
 }
+html[data-hosted="true"] [hidden] { display: none !important; }

@@ -1,4 +1,4 @@
-import { hostAgent, accountConnections } from './host-agent.js';
+import { hostAgent, accountConnections, describeHostedEvent } from './host-agent.js';
 import { connectAppearance } from './embed-appearance.js';
 // Live coach page: camera (or a test clip in real time) -> MediaPipe pose -> exercise engines -> events.
 // web/js/auto.js counts sets per exercise: "Auto" lets it decide what is being done; an exercise named (in the picker,
@@ -42,8 +42,26 @@ for (const [key, ex] of Object.entries(EXERCISES)) $('exercise').add(new Option(
 $('exercise').value = 'auto';
 // inside the BuildNorth app (?embed=1, web/js/embed.js): the app is told about each set and saves the workout itself
 const QS = new URLSearchParams(location.search);
+const HOSTED = document.documentElement.dataset.hosted === 'true';
 const PARENT = embedded(location.search) ? parentOrigin(location.search) : null;
 const app = PARENT ? connect(window, PARENT) : null;
+let hostAuthorized = !HOSTED;
+if (HOSTED) {
+  $('start').disabled = true;
+  $('record').checked = false;
+  $('record').disabled = true;
+  $('record').closest('label').hidden = true;
+  // Public hosting contains no personal recordings, licensed reference assets or local speech workers.
+  $('demo3d').hidden = true;
+  $('library').hidden = true;
+  $('connections').hidden = true;
+  for (const option of $('voiceKind').options) if (option.value === 'kokoro') option.disabled = true;
+  for (const option of $('voiceKind').options) if (option.value === 'mac') option.textContent = 'Browser voice';
+  if (!app || window.parent === window) {
+    document.body.textContent = 'Open Camera workout from the signed-in Rhythm website.';
+    throw new Error('Hosted camera requires its authorized website parent.');
+  }
+}
 const accountSession = app ? hostAgent(app) : null;
 let accountElevenLabs = false;
 if (embedded(location.search) && !PARENT) console.warn('pose coach: ?parent= must be a page on this machine (http://localhost:<port>); not embedded');
@@ -51,11 +69,13 @@ if (app) {
   document.body.classList.add('embed');
   connectAppearance(window, app);
   app.on('ai-connection', message => {
+    hostAuthorized = true;
+    if (!S.running && !S.starting) $('start').disabled = false;
     accountElevenLabs = message.elevenlabs === true;
     void loadConnections();
   });
   for (const option of $('coachKind').options) {
-    if (['claude', 'chatgpt'].includes(option.value)) option.disabled = true;
+    if (['claude', 'chatgpt'].includes(option.value)) { option.disabled = true; if (HOSTED) option.hidden = true; }
   }
   $('coachKind').value = 'auto';
   app.on('start', m => {
@@ -70,16 +90,19 @@ if (app) {
     else if (S.workout) app.send('summary', S.workout);
   });
 }
-fetch('/api/demos').then(r => (r.ok ? r.json() : {})).then(d => { S.demos = d; }).catch(() => {});
+const optionalJSON = (path, empty) => HOSTED ? Promise.resolve(empty)
+  : fetch(path).then(r => r.ok ? r.json() : empty).catch(() => empty);
+optionalJSON('/api/demos', {}).then(d => { S.demos = d; });
 // the code this page was loaded with: a tab left open over a change says it needs a reload (live: a test ran old code)
-const codeVersion = () => fetch('/api/version', { cache: 'no-store' }).then(r => (r.ok ? r.json() : {})).then(v => v.version).catch(() => null);
+const codeVersion = () => HOSTED ? Promise.resolve(document.documentElement.dataset.version)
+  : fetch('/api/version', { cache: 'no-store' }).then(r => (r.ok ? r.json() : {})).then(v => v.version).catch(() => null);
 codeVersion().then(v => { S.code = v; app?.send('ready', { version: v }); });
-fetch('/api/eval-set').then(r => (r.ok ? r.json() : [])).then(set => {
+optionalJSON('/api/eval-set', []).then(set => {
   for (const c of set) if (c.exercise) $('source').add(new Option(`Clip: ${c.name || c.id}`, JSON.stringify(c)));
 }).catch(() => {});
 // saved sets (landmarks only), replayed through the page as if live: for checking what the page did with a session
 // (and in the Workout card, to review a saved workout's mistakes: savedWorkouts())
-fetch('/api/recordings').then(r => (r.ok ? r.json() : [])).then(list => {
+optionalJSON('/api/recordings', []).then(list => {
   for (const x of list) $('source').add(new Option(`Recording: ${x.id}`, `rec:${x.id}`));
   savedWorkouts(list);
   // ?source=rec:<id>: start with a saved set instead of the camera (for checking the page, also inside the app)
@@ -144,7 +167,7 @@ const choice = () => ({ coach: coachChoice(), voice: voiceChoice(), failed: S.fa
  */
 async function ensureVoice() {
   const v0 = S.plan?.voice ?? voiceChoice();
-  const kind = v0 === 'eleven' ? 'off' : v0 === 'auto' ? 'kokoro' : v0;
+  const kind = v0 === 'eleven' ? 'off' : HOSTED && ['auto', 'kokoro'].includes(v0) ? 'mac' : v0 === 'auto' ? 'kokoro' : v0;
   if (S.voiceFor === kind) return S.voiceOut;
   const load = S.voiceLoad = {};                        // this load: a later one makes it moot
   S.voiceFor = kind;
@@ -206,6 +229,11 @@ ensureVoice();                       // Kokoro loads with the page (on the serve
 function replan() {
   const before = S.plan;
   S.plan = resolve(S.conns ?? null, choice());
+  if (HOSTED && S.plan.voice === 'kokoro') {
+    S.plan.voice = 'mac';
+    S.plan.why = S.plan.why.replaceAll('Kokoro', 'browser speech');
+    S.plan.label = S.plan.label.replaceAll('Kokoro', 'browser speech');
+  }
   if (!before || before.brain !== S.plan.brain || before.voice !== S.plan.voice) log(`coach: ${S.plan.why}`);
   $('coachState').title = S.plan.why;
   renderConnections();
@@ -607,7 +635,8 @@ async function coachEvent(ev, fallbackText, { t0 = null, wait = FALLBACK_MS } = 
   if (S.eleven || waking) {
     S.elevenLast = at; armIdle();
     try {
-      const { event_id: _, ...described } = await post('/api/coach/describe', { event });   // what Claude would read
+      const { event_id: _, ...described } = HOSTED ? describeHostedEvent(event, fallbackText)
+        : await post('/api/coach/describe', { event });   // what Claude would read
       if (ev.withdrawn) return;                                                       // (answered meanwhile)
       const coach = S.eleven;
       if (!coach) { standInFor(); return; }                                           // (it ended, or did not start)
@@ -745,7 +774,7 @@ function renderConnections() {
   opt.claude.text = brainLabel(S.conns, 'claude');
   opt.chatgpt.text = brainLabel(S.conns, 'chatgpt');
   const agentVoice = resolve(S.conns ?? null, { ...choice(), voice: 'auto' }).voice === 'eleven';
-  $('voiceKind').options[0].text = `Auto (${agentVoice ? "the agent's" : 'Kokoro'})`;
+  $('voiceKind').options[0].text = `Auto (${agentVoice ? "the agent's" : HOSTED ? 'browser voice' : 'Kokoro'})`;
 }
 /** The agent form shows the agent set up now (not while it is being edited). */
 function fillAgentForm() {
@@ -992,6 +1021,7 @@ function movesDone(shown = false) {
 const LIB_TRIES = 6, LIB_WAIT_MS = [500, 1000, 2000, 3000, 4000];
 S.libState = { status: 'loading', why: '' };   // loading | ok | none (404) | failed (why)
 async function fetchLibrary() {
+  if (HOSTED) return { status: 'none', lib: null };
   for (let i = 0; ; i++) {
     try {
       const r = await fetch('/moves/library.json', { cache: 'no-store' });
@@ -1477,6 +1507,7 @@ S.listenStats = [];                // each utterance: when the user stopped, whe
 
 /** Is Parakeet set up and ready? Asked at load and at Start, then every second while it loads (about 10 s). */
 async function loadStt() {
+  if (HOSTED) { S.stt = { available: false, ready: false }; return S.stt; }
   if (S.sttLoading) return S.sttLoading;
   S.sttLoading = (async () => {
     for (let i = 0; i < 180; i++) {
@@ -2035,7 +2066,8 @@ function renderMistakes() {
       () => pinMistake(m));
     const d3 = mini('3D', three ? 'On a 3D character next to the right form' : 'Not tracked in 3D',
       () => open3D(threeOf(m)));
-    d3.disabled = !three;
+    d3.disabled = HOSTED || !three;
+    if (HOSTED) d3.hidden = true;
     acts.className = 'm-acts'; acts.append(show, d3);
     row.append(when, text, acts);
     box.append(row);
@@ -2370,6 +2402,7 @@ function replayLoop(gen) {
 }
 
 async function start() {
+  if (!hostAuthorized) return;
   if (S.running || S.starting) return;            // one start at a time (the button, or the app's start message)
   S.starting = true; S.cancelStart = false;
   $('start').disabled = true;

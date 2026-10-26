@@ -6,7 +6,9 @@ import type { SessionInput } from '@/lib/types';
  * (inference/pose-coach/docs/INTEGRATION.md). The page never gets the sign-in: only this app calls the API.
  * 127.0.0.1, not localhost: cookies ignore ports, so on localhost the page would get this app's Clerk cookies.
  */
-export const POSE_URL = process.env.EXPO_PUBLIC_POSE_URL || 'http://127.0.0.1:8765/web/index.html?embed=1';
+export const PUBLIC_POSE_ORIGIN = 'https://rhythm-buildnorth--camera.expo.app';
+export const PUBLIC_WEBSITE_ORIGIN = 'https://rhythm-buildnorth.expo.app';
+export const POSE_URL = process.env.EXPO_PUBLIC_POSE_URL || `${PUBLIC_POSE_ORIGIN}/web/index.html?embed=1`;
 
 export type PoseSet = {
   exercise: string;
@@ -34,13 +36,17 @@ export type PoseMessage =
 
 /** The page's address with this app's origin, so the page answers only to this window. */
 export function poseFrameUrl(base: string, parentOrigin: string): string {
-  const url = new URL(base);
-  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname) || url.username || url.password)
-    throw new Error('The camera coach must use a local HTTP address without credentials.');
   const parent = new URL(parentOrigin);
-  if (parent.origin !== parentOrigin || parent.protocol !== 'http:' || parent.hostname !== 'localhost')
-    throw new Error('Open the website on localhost to keep its cookies separate from the camera coach.');
-  url.hostname = '127.0.0.1';
+  const localParent = parent.origin === parentOrigin && parent.protocol === 'http:' && parent.hostname === 'localhost';
+  const hostedParent = parentOrigin === PUBLIC_WEBSITE_ORIGIN;
+  if (!localParent && !hostedParent) throw new Error('This website origin is not allowed to embed the camera coach.');
+  // Keep the existing local development flow; production uses a separate HTTPS cookie origin.
+  const url = new URL(localParent && base === `${PUBLIC_POSE_ORIGIN}/web/index.html?embed=1`
+    ? 'http://127.0.0.1:8765/web/index.html' : base);
+  if (url.username || url.password) throw new Error('The camera URL cannot contain credentials.');
+  if (localParent && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)) url.hostname = '127.0.0.1';
+  else if (!hostedParent || url.origin !== PUBLIC_POSE_ORIGIN || url.pathname !== '/web/index.html')
+    throw new Error('Use the configured HTTPS camera origin, or a local coach for localhost development.');
   // Allow replay settings only. Account details, tokens, hashes and unrelated query fields never enter the frame.
   const source = url.searchParams.get('source');
   const speed = url.searchParams.get('replay_speed');
