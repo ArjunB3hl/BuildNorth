@@ -49,6 +49,7 @@
 .sectionHeading h2 { font-size: 26px; font-weight: 600; line-height: 1.25; letter-spacing: -.6px; margin-top: 8px; }
 .sectionHeading > p { max-width: 370px; color: var(--download-muted); font-size: 13px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.appsGrid { grid-template-columns: repeat(3, 1fr); }
 .card { border: 1px solid var(--download-border); border-radius: 19px; background: var(--download-surface); padding: 27px; display: flex; flex-direction: column; min-width: 0; }
 .card.recommended { border-color: #208aef80; }
 .cardMain { flex: 1; }
@@ -90,6 +91,7 @@
   .header, .main, .footer { padding-left: 24px; padding-right: 24px; }
   .heroVisual { transform: scale(.88); transform-origin: right center; }
   .hero { grid-template-columns: 1.4fr 1fr; }
+  .appsGrid { grid-template-columns: 1fr 1fr; }
   .featured { gap: 28px; }
   .card { padding: 22px; }
 }

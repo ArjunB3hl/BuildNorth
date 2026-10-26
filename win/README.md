@@ -139,8 +139,9 @@ packaging project makes a signed MSIX with Visual Studio's install script.
    `Version` in `Package.appxmanifest` for each release.
 4. **Ship** the `.msix`, `.cer`, `Install.ps1`, `Add-AppDevPackage.ps1`, `Add-AppDevPackage.resources/` and
    `Dependencies/x64/` together. The first release left out the other CPU types, the debug symbols and Visual Studio's
-   `TelemetryDependencies` folder, so its install script sends no telemetry. The website's Downloads page links a
-   Windows build through `EXPO_PUBLIC_DOWNLOAD_WINDOWS_URL` (`mobile/.env`).
+   `TelemetryDependencies` folder, so its install script sends no telemetry. The website's Downloads page links the
+   release's zip from its `windows` entry in `mobile/src/lib/demo-downloads.ts`; update its `releaseUrl`, `bytes` and
+   steps for a new release.
 
 To try a Release build on the development PC without trusting the certificate, register its folder instead of
 installing the MSIX (Developer Mode): run `Remove-AppxPackage -PreserveApplicationData` on the Debug registration, then
