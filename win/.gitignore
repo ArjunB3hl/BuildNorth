@@ -36,3 +36,7 @@ tools/local-backend/.data/
 .env
 .env.local
 .env.*.local
+
+# Release packages (windows/AppPackages) and the Release JS bundle, both built by msbuild
+windows/AppPackages/
+windows/NorthAssistant/Bundle/

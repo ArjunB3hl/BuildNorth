@@ -21,6 +21,18 @@ workout libraries under Calendar), design tokens, components and data types.
 | Native code | `windows/` from the `cpp-app` template (C++, Visual Studio solution), plus the app's own `NorthWin` module |
 | Dev server | Expo CLI (Metro) on port **8091** (the phone app uses 8081, the Mac app 8090) |
 
+## Install the test build
+
+Test builds are on the repository's [Releases](https://github.com/ArjunB3hl/BuildNorth/releases) page, tagged
+`windows-v…`. Download `Rhythm-Windows-x64-test.zip`, unzip it, then right-click `Install.ps1` › *Run with
+PowerShell*. It asks to trust the test certificate (one administrator prompt; it goes into Local Machine › Trusted
+People), installs the Windows App Runtime 1.8 and VC++ runtime if they're missing, then installs **Rhythm**. The zip's
+`INSTALL.txt` has the same steps and how to uninstall.
+
+The package is signed with a **self-signed test certificate** (publisher `CN=arjun`), which is why the trust step is
+needed; a commercial code-signing certificate (or the Microsoft Store) would remove it. The build has the deployed API
+(`https://buildnorth.onrender.com`) and the development Clerk instance built in, and needs no dev server.
+
 ## Requirements
 
 Windows 10 or 11 and the dependencies React Native for Windows 0.85 checks for in its
@@ -100,6 +112,40 @@ npm run windows
 
 The app loads JavaScript from `localhost:8091` (`SourceBundlePort` in `windows\NorthAssistant\NorthAssistant.cpp`).
 `run-windows` gives the package a loopback exemption so a packaged app may reach `localhost`.
+
+## Build a release package
+
+The Release configuration bundles the JavaScript (Expo CLI's `export:embed`, set as `BundleCliCommand` in
+`windows/NorthAssistant/NorthAssistant.vcxproj`, so `win/.env` is built in), compiles it to Hermes bytecode, and the
+packaging project makes a signed MSIX with Visual Studio's install script.
+
+1. **Settings:** `win/.env` with the Clerk key and the API URL the build should use, and no `.env.local`.
+2. **Certificate**, once per signing PC. Its subject must equal the manifest's `Publisher` (`CN=arjun`). The test
+   certificate used for the first release lives in this PC's *Current User › Personal* store (friendly name "Rhythm for
+   Windows test signing", valid to 2027-10-25); later builds must be signed with the same one so they install as
+   updates. To make one elsewhere:
+
+   ```powershell
+   New-SelfSignedCertificate -Type Custom -Subject 'CN=arjun' -KeyUsage DigitalSignature -FriendlyName 'Rhythm for Windows test signing' -CertStoreLocation 'Cert:\CurrentUser\My' -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') -NotAfter (Get-Date).AddYears(1)
+   ```
+
+3. **Build** from `win/` (about 3 minutes here), with the certificate's thumbprint:
+
+   ```powershell
+   & 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\amd64\MSBuild.exe' windows\NorthAssistant.sln /restore /m /p:Configuration=Release /p:Platform=x64 /p:RestorePackagesConfig=true /p:RunAutolinkCheck=false /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true /p:PackageCertificateThumbprint=<thumbprint> /p:GenerateAppxPackageOnBuild=true /p:AppxPackageDir=C:\dev\BuildNorth\win\windows\AppPackages\
+   ```
+
+   The package lands in `windows/AppPackages/NorthAssistant.Package_<version>_x64_Test/` (git-ignored). Bump
+   `Version` in `Package.appxmanifest` for each release.
+4. **Ship** the `.msix`, `.cer`, `Install.ps1`, `Add-AppDevPackage.ps1`, `Add-AppDevPackage.resources/` and
+   `Dependencies/x64/` together. The first release left out the other CPU types, the debug symbols and Visual Studio's
+   `TelemetryDependencies` folder, so its install script sends no telemetry. The website's Downloads page links a
+   Windows build through `EXPO_PUBLIC_DOWNLOAD_WINDOWS_URL` (`mobile/.env`).
+
+To try a Release build on the development PC without trusting the certificate, register its folder instead of
+installing the MSIX (Developer Mode): run `Remove-AppxPackage -PreserveApplicationData` on the Debug registration, then
+`Add-AppxPackage -Register windows\NorthAssistant.Package\bin\x64\Release\AppxManifest.xml`. `npm run windows` puts the
+Debug build back.
 
 ## Signing in and the backend
 
@@ -317,5 +363,13 @@ The Jest screen walk renders every section and pushed page, as in the Mac app.
 Windows app against the deployed API with a real session. The recipe library couldn't be clicked in the live check
 (another window covered it); the Jest account test covers that flow.
 
-**Not tested:** a Release build or MSIX package for another PC, ARM64, Windows 10, light mode, and running two
+### Release package (25 Oct 2026)
+
+- The Release build (`windows-v1.0.0-test.1`) was built and signed as in *Build a release package*. Registered from its
+  folder on this PC with no dev server running, it started and rendered the app; its Hermes bundle has the Clerk key
+  and the deployed API built in, and no development token.
+- **Not tested:** installing the signed MSIX with `Install.ps1` (that trusts the certificate on the machine), and any
+  other PC.
+
+**Not tested:** an MSIX install on another PC, ARM64, Windows 10, light mode, and running two
 instances at once (both write the same file).

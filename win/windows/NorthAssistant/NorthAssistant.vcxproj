@@ -3,6 +3,9 @@
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(SolutionDir)\ExperimentalFeatures.props" Condition="Exists('$(SolutionDir)\ExperimentalFeatures.props')" />
   <PropertyGroup Label="Globals">
+    <!-- Release bundles come from Expo CLI (same arguments as the React Native CLI's bundle command), which loads
+         win/.env so the EXPO_PUBLIC_* settings (Clerk key, API URL) are built into the app; see src/config.ts. -->
+    <BundleCliCommand>npx expo export:embed</BundleCliCommand>
     <CppWinRTOptimized>true</CppWinRTOptimized>
     <!-- Prevent MSB4006 circular dependency in CppWinRT during parallel builds (https://github.com/microsoft/cppwinrt/issues/950) -->
     <CppWinRTGenerateWindowsMetadata>true</CppWinRTGenerateWindowsMetadata>
