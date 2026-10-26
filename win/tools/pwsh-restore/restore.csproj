@@ -1,0 +1,10 @@
+<!-- Restores Microsoft's PowerShell 7 NuGet package into the NuGet cache, where the React Native for Windows
+     CLI looks for pwsh.exe (~/.nuget/packages/powershell/7.6.1). Run: dotnet restore tools/pwsh-restore -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageDownload Include="PowerShell" Version="[7.6.1]" />
+  </ItemGroup>
+</Project>

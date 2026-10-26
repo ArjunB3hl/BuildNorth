@@ -1,0 +1,48 @@
+{
+  "name": "NorthAssistant",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "expo start --port 8091",
+    "windows": "react-native run-windows --no-packager --arch x64 --no-telemetry",
+    "lint": "eslint .",
+    "test": "jest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "babel-preset-expo": "~56.0.20",
+    "expo": "~56.0.24",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-windows": "^0.85.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native/babel-preset": "0.85.3",
+    "@react-native/eslint-config": "0.85.3",
+    "@react-native/metro-config": "0.85.3",
+    "@react-native/typescript-config": "0.85.3",
+    "@types/jest": "^29.5.13",
+    "@types/react": "~19.2.14",
+    "@types/react-test-renderer": "^19.1.0",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "jest-expo": "~56.0.6",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">= 22.14.0"
+  },
+  "react-native-windows": {
+    "init-windows": {
+      "name": "NorthAssistant",
+      "namespace": "NorthAssistant",
+      "template": "cpp-app"
+    }
+  }
+}

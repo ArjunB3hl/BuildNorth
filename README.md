@@ -1,16 +1,18 @@
 # Rhythm — Demo version
 
 A demo version of a personal assistant for meals, activity and the week's plan, with an AI Coach, shared long-term memory
-(SurrealDB Agent Memory) and access for AI assistants over MCP. One repository, two apps and a Chrome companion:
+(SurrealDB Agent Memory) and access for AI assistants over MCP. One repository, three apps and a Chrome companion:
 
 | Folder | What | Guide |
 |---|---|---|
 | [`mobile/`](mobile/) | The Expo app (iPhone, Android, and an Apple Watch app in SwiftUI) plus the FastAPI backend in `mobile/backend/` | [mobile/README.md](mobile/README.md) |
 | [`mac/`](mac/) | The native macOS app: React Native for macOS with parts of Expo SDK 55 (project name `NorthAssistant`) | [mac/README.md](mac/README.md) |
+| [`win/`](win/) | The native Windows app: React Native for Windows with Expo SDK 56's tooling, ported from the Mac app; local demo data, or your account through the backend once signed in (project name `NorthAssistant`) | [win/README.md](win/README.md) |
 | [`extension/`](extension/) | Rhythm, a Chrome side panel for phone-controlled video interests and user-chosen MCP agents | [extension/README.md](extension/README.md) (backend side: [Rhythm guide](mobile/docs/rhythm.md)) |
 | [`inference/pose-coach/`](inference/pose-coach/) | Browser camera coach, embedded in the website; counted sets save to Activity | [Website integration](mobile/docs/pose-coach.md) |
 
-How both were built, what was checked and what is still open: [mobile/docs/work-log.md](mobile/docs/work-log.md).
+How the mobile and Mac apps were built, what was checked and what is still open:
+[mobile/docs/work-log.md](mobile/docs/work-log.md). The Windows app's equivalent is in [win/README.md](win/README.md).
 
 Local standalone Release builds for iPhone/Watch simulators, Android, and Mac:
 [build and testing guide](docs/local-release-builds.md). Packaged binaries and the local build catalog live in
@@ -50,6 +52,16 @@ cd mac && npm start
 cd mac && npm run macos
 ```
 
+Windows app (Expo CLI on 8091, then build, deploy and open the app; needs Visual Studio 2026, see its README):
+
+```powershell
+cd win; npm start
+```
+
+```powershell
+cd win; npm run windows
+```
+
 Rhythm's unpacked Chrome extension:
 
 ```bash
@@ -62,14 +74,18 @@ agents, browsers and memory. The existing backend also serves Rhythm at
 `/rhythm/mcp`, separately from the original `/mcp` endpoint.
 
 Setup for each app (env files, installs, native builds) is in its own README. Use Node 20.19 or newer
-for the existing apps and Node 22+ for the extension. The [Rhythm guide](mobile/docs/rhythm.md)
+for the existing apps and Node 22+ for the extension (22.14+ for the Windows app). The [Rhythm guide](mobile/docs/rhythm.md)
 distinguishes verified behavior, labelled fixtures, required credentials and remaining live checks.
 
 ## Repository notes
 
-- The two apps don't share code or packages yet. Each has its own `package.json`, `node_modules` and native projects.
-  The Mac app mirrors the mobile app's screens and API types, but isn't connected to the backend yet.
+- The apps don't share code or packages yet. Each has its own `package.json`, `node_modules` and native projects.
+  The Mac app mirrors the mobile app's screens and API types, but isn't connected to the backend yet. The Windows
+  app is ported from the Mac app and can also sign in (Clerk over its Frontend API) to use the backend with your
+  account.
 - Rhythm shares the phone's pure TypeScript API contract and the backend's metadata vocabulary, with its own extension dependencies.
 - Secrets stay out of git: every `.env` file is ignored, and only `.env.example` templates are committed. The
   backend's local SQLite database (`mobile/backend/var/`) is ignored too.
-- Generated native folders are ignored: `mobile/ios`, `mobile/android`, and the Pods and build output under `mac/`.
+- Generated native folders are ignored: `mobile/ios`, `mobile/android`, the Pods and build output under `mac/`, and
+  the msbuild output under `win/windows/`. Unlike the Expo phone app, `win/windows/` itself is committed: React
+  Native for Windows has no prebuild, so its Visual Studio projects are source.

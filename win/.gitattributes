@@ -1,0 +1,6 @@
+# Keep LF in JavaScript sources even with core.autocrlf on Windows; Prettier (through ESLint) expects LF.
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
