@@ -131,7 +131,7 @@ export default function MemoryScreen() {
         <SectionCard
           title="Search memory"
           icon={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-          description="See what long-term memory recalls about you, including anything remembered before saved preferences existed.">
+          description="Search the preferences and shared health summaries saved for your account.">
           <Row style={styles.searchRow}>
             <View style={styles.fill}>
               <TextField

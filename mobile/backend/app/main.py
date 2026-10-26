@@ -84,7 +84,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         bound_services.pop(settings.spectron_owner_user_id, None)
     if client is not None or bound_services:
         app.state.memory = MemoryService(client, owner_user_id=settings.spectron_owner_user_id,
-                                         user_services=bound_services)
+                                         user_services=bound_services,
+                                         shared_context=not bool(settings.spectron_owner_user_id))
 
     app.state.ai, app.state.ai_unavailable_reason = build_provider(settings)
     if app.state.ai is not None:

@@ -436,7 +436,7 @@ def test_memory_write_race_keeps_erase_marker_and_never_holds_database_lock(clie
     from conftest import FakeMemoryClient
     from app.rhythm.memory import PrivateContext, synchronize
     fake = FakeMemoryClient()
-    service = PrivateContext(fake)
+    service = PrivateContext(fake, owner_user_id=ALICE)
     app.state.rhythm_memory.services = {ALICE: ("private-alice", service)}
     client.put("/rhythm/interests", headers=auth(), json=interests(
         consent={"metadata": True, "transcripts": True, "agent": True, "memory": True}))
