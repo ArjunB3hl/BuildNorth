@@ -37,7 +37,7 @@ class Settings:
     mcp_oauth_client_hosts: tuple[str, ...]  # hosts whose CIMD client IDs may use Clerk OAuth at /mcp
     mcp_oauth_client_ids: tuple[str, ...]  # extra exact client IDs allowed (e.g. a pre-registered Clerk OAuth app)
     mcp_require_resource_audience: bool  # OAuth tokens must name MCP_PUBLIC_URL in `aud` (RFC 8707)
-    spectron_owner_user_id: str = ""  # explicit owner when the app Context is private to one account
+    spectron_owner_user_id: str = ""  # empty: shared Context with user scopes; set: only this account
     ai_credential_key: str = ""  # Fernet key for account-owned Claude credentials
     web_allowed_origins: tuple[str, ...] = ()
     speech_worker_url: str = ""

@@ -11,7 +11,7 @@ import uuid
 from surrealdb.memory import MemoryAPIError, MemoryServiceError
 
 from app.config import load_settings
-from app.memory import preference_scope
+from app.memory import MemoryService, preference_scope
 from app.rhythm.config import RhythmSettings
 from app.rhythm.memory import Registry
 
@@ -23,16 +23,19 @@ def main():
     settings = load_settings()
     rhythm = RhythmSettings.load()
     user = args.user or settings.spectron_owner_user_id
+    if not user:
+        raise SystemExit("Supply --user for an existing account, or run scripts.shared_memory_check for two temporary fixture identities.")
     registry = Registry(
         rhythm.memory_contexts_json, settings.spectron_url, settings.spectron_context_id,
         app_api_key=settings.spectron_api_key, app_user_id=settings.spectron_owner_user_id,
     )
     try:
-        binding = registry.services.get(user)
+        binding = registry.for_user(user)
         if binding is None:
             raise SystemExit("No Context is assigned to the requested account.")
         service = binding[1]
-        legacy = registry.legacy_services[user]
+        legacy = registry.legacy_services.get(user) or MemoryService(
+            service._client, owner_user_id=user, shared_context=True)
         marker_id = uuid.uuid4().hex
         marker = f"Rhythm connection verification marker {marker_id}."
         scope = preference_scope(user, marker_id, root=service.scope_root)

@@ -179,6 +179,7 @@ def _recall(
     if memory is None:
         return MemoryState(status="not_configured", detail="Long-term memory isn't configured on this server."), {}, [], set()
     try:
+        memory = memory.bound_to(user_id)
         hits = memory.recall(user_id, query[:500], k=k)
     except (MemoryServiceError, ValueError) as exc:
         log.warning("Memory recall failed for %s: %s", user_id, type(exc).__name__)
@@ -204,13 +205,15 @@ def _recall(
             recalled_days.add(days[_norm(hit.text)])
         elif health.is_health_text(hit.text):
             continue  # a health summary no current day accounts for: the numbers come from the database only
-        elif suspect:
-            withheld += 1  # can't tell it apart from a fact derived from a deleted preference or health summary
+        elif suspect or memory.shared_context:
+            # Shared Context results must match this user's authoritative records;
+            # unowned/generated text is never exposed to the Coach or MCP client.
+            withheld += 1
         else:
             notes.append(MemoryNote(text=hit.text, score=hit.score))
     detail = "Long-term memory was checked for this request."
     if withheld:
-        detail += f" {withheld} recalled note(s) were withheld while an earlier deletion finishes erasing."
+        detail += f" {withheld} recalled note(s) were withheld because current ownership or deletion state could not be verified."
     return MemoryState(status="ok", detail=detail), recalled, notes, recalled_days
 
 
