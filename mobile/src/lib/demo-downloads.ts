@@ -1,8 +1,12 @@
-export const DEMO_RELEASE_URL = 'https://github.com/ArjunB3hl/BuildNorth/releases/download/rhythm-demo-2026-10-25';
+const RELEASES_URL = 'https://github.com/ArjunB3hl/BuildNorth/releases/download';
+export const DEMO_RELEASE_URL = `${RELEASES_URL}/rhythm-demo-2026-10-25`;
+export const WINDOWS_RELEASE_URL = `${RELEASES_URL}/windows-v1.0.0-test.1`;
 
-export type DemoDownloadId = 'chrome' | 'mac' | 'android' | 'ios' | 'watchos';
+export type DemoDownloadId = 'chrome' | 'mac' | 'windows' | 'android' | 'ios' | 'watchos';
 export type DemoDownload = {
   id: DemoDownloadId;
+  /** The GitHub release holding the file; DEMO_RELEASE_URL when left out. */
+  releaseUrl?: string;
   title: string;
   description: string;
   compatibility: string;
@@ -38,6 +42,19 @@ export const demoDownloads: DemoDownload[] = [
       'Download and unzip the archive to find Rhythm.app. You can move it to Applications.',
       'Open Rhythm. If macOS blocks it, review System Settings → Privacy & Security → Open Anyway. Approve only if you trust this download.',
       'Explore the local demo. To use Coach with your own Claude API key, open Profile → AI connections.',
+    ],
+  },
+  {
+    id: 'windows', releaseUrl: WINDOWS_RELEASE_URL, title: 'Rhythm for Windows',
+    description: 'Your Calendar, meals, movement and Coach in a native Windows app.',
+    compatibility: 'x64 · Windows 10 1809 or later / Windows 11',
+    filename: 'Rhythm-Windows-x64-test.zip', bytes: 72635544, format: 'ZIP', label: 'Download for Windows',
+    note: 'A test build signed with a self-signed certificate, not a Microsoft Store app. Windows asks you to trust the certificate once. It signs in to your Rhythm account.',
+    steps: [
+      'Download and unzip the archive. Keep the extracted folder together.',
+      'Right-click Install.ps1, then choose Run with PowerShell.',
+      'Allow the administrator prompt, then type Y to trust the test certificate. Approve only if you trust this download. The script adds any missing Windows runtimes, then installs Rhythm.',
+      'Open Rhythm from Start and sign in with your website account. INSTALL.txt in the archive repeats these steps and explains how to uninstall.',
     ],
   },
   {
@@ -79,7 +96,7 @@ export const demoDownloads: DemoDownload[] = [
 ];
 
 export function demoDownloadUrl(download: DemoDownload) {
-  return `${DEMO_RELEASE_URL}/${download.filename}`;
+  return `${download.releaseUrl ?? DEMO_RELEASE_URL}/${download.filename}`;
 }
 
 export function downloadSize(bytes: number) {

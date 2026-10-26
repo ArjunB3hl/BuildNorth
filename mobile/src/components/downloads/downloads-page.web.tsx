@@ -8,7 +8,7 @@ import { DEMO_RELEASE_URL, demoDownloads, demoDownloadUrl, downloadSize, type De
 import type { DownloadDevice } from '@/lib/device-download';
 import s from './downloads-page.module.css';
 
-type IconName = DemoDownloadId | 'download' | 'arrow' | 'calendar' | 'spark' | 'windows';
+type IconName = DemoDownloadId | 'download' | 'arrow' | 'calendar' | 'spark' | 'web';
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -22,6 +22,7 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 11h18m-13 4h2m4 0h2" /></>,
     spark: <><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4L12 3Z" /></>,
     windows: <><path d="m3 5 8-1v7H3V5Zm10-1 8-1v8h-8V4ZM3 13h8v7l-8-1v-6Zm10 0h8v8l-8-1v-7Z" /></>,
+    web: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3Z" /></>,
   };
   return <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -30,7 +31,7 @@ const deviceHints: Record<DownloadDevice, string> = {
   mac: 'Detected: Mac. The Mac app is for Apple silicon. You can also use the Chrome extension or stay on the website.',
   android: 'Detected: Android. Use the ARM64 APK on a compatible device, or keep using Rhythm in your browser.',
   iphone: 'Detected: iPhone or iPad. Use Rhythm in your browser. The simulator downloads below run on a Mac, not on your phone.',
-  windows: 'Detected: Windows. Use Rhythm on the website and add the Chrome extension. A Windows app is not available yet.',
+  windows: 'Detected: Windows. Try the Windows test build on an x64 PC, or use the website with the Chrome extension.',
   other: 'Pick your platform below, or open Rhythm on the website. The browser works without installing an app.',
 };
 
@@ -74,7 +75,7 @@ export default function DownloadsPage() {
     '--download-border': theme.border,
   } as CSSProperties;
   return <div className={s.page} style={colors}>
-    <Head><title>Download Rhythm · Demo version</title><meta name="description" content="Try Rhythm on the web, Mac and Android. Download the Chrome extension and explore iPhone and Apple Watch simulator demos." /></Head>
+    <Head><title>Download Rhythm · Demo version</title><meta name="description" content="Try Rhythm on the web, Mac, Windows and Android. Download the Chrome extension and explore iPhone and Apple Watch simulator demos." /></Head>
     <a className={s.skip} href="#download-options">Skip to downloads</a>
     <header className={s.header}>
       <Link href="/" asChild><a className={s.brand} aria-label="Rhythm home"><Wordmark /></a></Link>
@@ -103,15 +104,15 @@ export default function DownloadsPage() {
       <div className={s.deviceHint}><Icon name={device === 'mac' ? 'mac' : device === 'android' ? 'android' : device === 'iphone' ? 'ios' : device === 'windows' ? 'windows' : 'spark'} /><p>{deviceHints[device]}</p></div>
       <section className={s.section} id="download-options" aria-labelledby="apps-title">
         <div className={s.sectionHeading}><div><p className={s.eyebrow}>MAKE IT YOURS</p><h2 id="apps-title">Apps & browser extension</h2></div><p>Choose how Rhythm fits into your day.</p></div>
-        <div className={s.grid}>{demoDownloads.filter(item => item.id !== 'ios' && item.id !== 'watchos').map(item => <DownloadCard key={item.id} item={item} recommended={item.id === device} />)}</div>
+        <div className={`${s.grid} ${s.appsGrid}`}>{demoDownloads.filter(item => item.id !== 'ios' && item.id !== 'watchos').map(item => <DownloadCard key={item.id} item={item} recommended={item.id === device} />)}</div>
       </section>
       <section className={s.section} aria-labelledby="simulators-title">
         <div className={s.sectionHeading}><div><p className={s.eyebrow}>FOR EXPLORING IN XCODE</p><h2 id="simulators-title">A preview on your Mac</h2></div><p>These packages run in simulators. They do not install on a physical iPhone or Apple Watch.</p></div>
         <div className={s.grid}>{demoDownloads.filter(item => item.id === 'ios' || item.id === 'watchos').map(item => <DownloadCard key={item.id} item={item} recommended={false} />)}</div>
       </section>
       <section className={s.browserCard} aria-labelledby="browser-title">
-        <span className={s.iconTile}><Icon name="windows" /></span>
-        <div><h2 id="browser-title">On Windows? You’re already in the right place.</h2><p>A Windows app is not available yet. Use the Rhythm website, with the Chrome extension if you like.</p></div>
+        <span className={s.iconTile}><Icon name="web" /></span>
+        <div><h2 id="browser-title">Prefer not to install anything? You’re already in the right place.</h2><p>Rhythm works on the website in your browser, with the Chrome extension if you like.</p></div>
         <Link href="/" asChild><a className={s.secondaryButton}>Open Rhythm <Icon name="arrow" /></a></Link>
       </section>
     </main>
