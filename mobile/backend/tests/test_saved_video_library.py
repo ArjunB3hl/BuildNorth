@@ -186,3 +186,51 @@ def test_invalid_model_output_is_not_published(client, fake_ai):
     fake_ai.video_notes = {"kind": "cooking", "overview": "", "sections": []}
     save_video(client)
     assert row().summary is None and row().summary_requested_at is None
+
+
+def test_summary_repairs_too_many_sections_once_without_losing_source(client, fake_ai, monkeypatch):
+    setup_library(client)
+    save_video(client)
+    clear_notes()
+    valid = fake_ai.video_notes
+    invalid = {**valid, "sections": valid["sections"] * 6}
+    generate = Mock(side_effect=[invalid, valid])
+    monkeypatch.setattr(fake_ai, "generate_json", generate)
+    response = client.post(f"/rhythm/saved/{VIDEO_ID}/summary", headers=auth()).json()
+    assert response["status"] == "ok" and row().summary
+    assert generate.call_count == 2
+    first, second = [call.kwargs for call in generate.call_args_list]
+    assert "sections: 1 to 5" in first["system"]
+    assert "at most 500 characters" in first["system"]
+    assert "previous attempt failed output validation" in second["system"]
+    assert first["messages"] == second["messages"]
+    assert "Simmer for 20 minutes" in second["messages"][0]["content"]
+
+
+def test_summary_retry_is_bounded_and_format_errors_do_not_blame_connections(client, fake_ai, monkeypatch, caplog):
+    setup_library(client)
+    save_video(client)
+    clear_notes()
+    invalid = {**fake_ai.video_notes, "sections": fake_ai.video_notes["sections"] * 6}
+    generate = Mock(return_value=invalid)
+    monkeypatch.setattr(fake_ai, "generate_json", generate)
+    response = client.post(f"/rhythm/saved/{VIDEO_ID}/summary", headers=auth()).json()
+    assert generate.call_count == 2
+    assert response["status"] == "provider_error" and "could not be formatted" in response["message"]
+    assert "connections" not in response["message"].lower()
+    assert row().summary is None and row().summary_requested_at is None
+    assert "bad_output (ValidationError)" in caplog.text
+    assert "lentils" not in caplog.text and "Missing details" not in caplog.text
+
+
+@pytest.mark.parametrize("kind", ["timeout", "rate_limited", "upstream", "unavailable", "refused"])
+def test_summary_does_not_retry_provider_failures(client, fake_ai, monkeypatch, kind):
+    setup_library(client)
+    save_video(client)
+    clear_notes()
+    generate = Mock(side_effect=AIError(kind, "Do not log private provider details"))
+    monkeypatch.setattr(fake_ai, "generate_json", generate)
+    response = client.post(f"/rhythm/saved/{VIDEO_ID}/summary", headers=auth()).json()
+    assert response["status"] == "provider_error"
+    generate.assert_called_once()
+    assert row().summary is None and row().summary_requested_at is None
