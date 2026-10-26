@@ -1,7 +1,46 @@
 # Rhythm — Demo version
 
-A demo version of a personal assistant for meals, activity and the week's plan, with an AI Coach, shared long-term memory
-(SurrealDB Agent Memory) and access for AI assistants over MCP. One repository, three apps and a Chrome companion:
+Your health, connected: meals, movement, saved video ideas and useful assistant context across your devices.
+
+**[Open the live Rhythm demo](https://rhythm-buildnorth.expo.app)** · **[Download the apps and Chrome extension](https://rhythm-buildnorth.expo.app/downloads)**
+
+Rhythm is a **demo version**. Sign in on the website to explore the Calendar, Coach, Content library and AI connections.
+Shared Claude is included for the demo; you can also connect your own Claude API key or authorized assistants over MCP.
+
+## What you can explore
+
+- **Calendar:** a single timeline for meals and activity, Watch sleep/workout summaries when linked, and monthly reports. Sample entries are labeled and kept separate from real health totals.
+- **Coach and memory:** account-scoped preferences and context through SurrealDB Agent Memory, with server-enforced user isolation.
+- **Content library and Chrome extension:** save a selected YouTube video with its original link and turn an available captured transcript into cooking instructions, exercise steps or useful takeaways.
+- **Website camera coach:** supported movement tracking, counted sets, prototype form feedback and 3D reference comparisons. Camera tracking runs in the browser; the pose service needs to be running.
+- **Voice and assistant connections:** ElevenLabs agents and authorized ChatGPT/Claude MCP connections. The alternative Parakeet/Kokoro voice worker needs a separate deployment.
+
+## Screenshots
+
+Actual demo captures; the Calendar shown contains sample entries.
+
+| Calendar | Saved video notes | Apple Watch simulator |
+| --- | --- | --- |
+| [![Rhythm Calendar](docs/images/rhythm-calendar.png)](docs/images/rhythm-calendar.png) | [![Rhythm Content library](docs/images/rhythm-content-library.png)](docs/images/rhythm-content-library.png) | [![Rhythm Watch app](docs/images/rhythm-watch.png)](docs/images/rhythm-watch.png) |
+
+## Download and demo availability
+
+Use the [Downloads page](https://rhythm-buildnorth.expo.app/downloads) for the available packages and installation steps.
+
+| Experience | Demo availability |
+| --- | --- |
+| Website | Live at [rhythm-buildnorth.expo.app](https://rhythm-buildnorth.expo.app) |
+| Windows | x64 Windows 10 1809+ / Windows 11 test build; self-signed certificate and account sign-in |
+| Android | ARM64 signed APK; emulator launch verified |
+| Mac | Apple silicon app with local demo data; ad-hoc signed and not notarized |
+| iPhone and Apple Watch | Apple silicon Xcode simulator packages; physical-device installation needs your own Xcode signing setup |
+| Chrome extension | Prepared ZIP; unzip and load through Chrome Developer mode |
+
+Simulator screenshots demonstrate the interface; real Watch heart-rate and sleep measurements require physical hardware.
+
+## Repository layout
+
+One repository, three app projects, a website and a Chrome companion:
 
 | Folder | What | Guide |
 |---|---|---|
@@ -38,8 +77,7 @@ React Native web app (same backend and Clerk account):
 cd mobile && npm run web
 ```
 
-Open `http://localhost:8081`. The web overview brings together fitness video recommendations,
-saved content, interests and per-page sharing controls. Build a static export with `npm run build:web`.
+Open `http://localhost:8081`. The website brings together Calendar, Coach, saved content, interests and sharing controls. Build a static export with `npm run build:web`.
 See [web setup](mobile/README.md#web-app) for the extension link and cookie behavior.
 
 Mac app (Metro on 8090, then build and open the app):
