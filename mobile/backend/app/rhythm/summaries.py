@@ -66,6 +66,38 @@ SUMMARY_SCHEMA = {
 }
 
 
+OUTPUT_GUIDANCE = """Return the requested JSON within these formatting limits:
+- overview: 1 to 500 characters.
+- sections: 1 to 5 sections total, including any Missing details section. Group related techniques together.
+- each section: heading of 1 to 80 characters, numbered boolean, and 1 to 16 nonempty items.
+- each item: at most 500 characters.
+- all rendered notes, including headings, numbering and spacing: at most 6,000 characters.
+Be concise without inventing details or dropping important source cautions."""
+
+
+def generate_notes(provider: AIProvider, source: dict[str, Any]) -> str:
+    """One bounded formatting retry; never publish invalid or silently truncated notes."""
+    system = GUIDANCE + "\n" + OUTPUT_GUIDANCE
+    for attempt in range(2):
+        try:
+            raw = provider.generate_json(
+                system=system,
+                messages=[{"role": "user", "content": json.dumps(source, ensure_ascii=False)}],
+                schema=SUMMARY_SCHEMA, temperature=0.1, max_tokens=2400)
+            return render_notes(VideoNotes.model_validate(raw))
+        except (AIError, ValidationError) as exc:
+            if isinstance(exc, AIError) and exc.kind != "bad_output":
+                raise
+            if attempt:
+                raise
+            # Do not log model output, validation inputs, transcript text or credentials.
+            log.info("Retrying saved-video summary after invalid formatting")
+            system += ("\nThe previous attempt failed output validation. Re-create concise notes from the source, "
+                       "strictly respecting every limit above. Combine related steps into at most five sections, "
+                       "keep items short, and return only the requested JSON.")
+    raise AssertionError("unreachable")
+
+
 def render_notes(notes: VideoNotes) -> str:
     labels = {"cooking": "Cooking notes", "exercise": "Exercise notes", "ideas": "Key ideas"}
     blocks = [labels[notes.kind], notes.overview]
@@ -117,18 +149,17 @@ def summarize(app: Any, user_id: str, video_id: str, fallback: AIProvider | None
         if provider is None:
             raise AIError("unavailable", "Connect Claude in Profile → AI connections, then try Generate summary again.")
         source = {k: snapshot[k] for k in ("title", "description", "transcript")}
-        raw = provider.generate_json(
-            system=GUIDANCE + "\nReturn the requested JSON. Keep all notes together below 6,000 characters.",
-            messages=[{"role": "user", "content": json.dumps(source, ensure_ascii=False)}],
-            schema=SUMMARY_SCHEMA, temperature=0.1, max_tokens=2400)
-        summary = render_notes(VideoNotes.model_validate(raw))
+        summary = generate_notes(provider, source)
     except (AIError, ValidationError, HTTPException) as exc:
-        kind = exc.kind if isinstance(exc, AIError) else "bad_output"
+        kind = exc.kind if isinstance(exc, AIError) else "unavailable" if isinstance(exc, HTTPException) else "bad_output"
+        log.warning("Saved-video summary failed: %s (%s)", kind, type(exc).__name__)
         message = {
             "unavailable": "AI isn't available. Connect Claude in AI connections, then try Generate summary again.",
             "timeout": "The summary took too long. Your video is saved; try again shortly.",
             "rate_limited": "Your AI service is busy. Your video is saved; try again shortly.",
-        }.get(kind, "The summary could not be prepared. Check AI connections and try again.")
+            "bad_output": "The AI returned notes that could not be formatted. Your video is saved; try again.",
+            "refused": "The AI declined to summarize this source. Your video and transcript are still saved.",
+        }.get(kind, "The AI service could not complete the summary. Your video is saved; try again shortly.")
         failure = Result(status="provider_error", message=message)
     except Exception as exc:
         # A failed background summary must not undo the saved video. Never log source text or credentials.
