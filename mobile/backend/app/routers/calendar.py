@@ -1,11 +1,12 @@
 """Authenticated personal calendar. Demo data is opt-in and belongs only to its caller."""
+from calendar import monthrange
 from datetime import date, datetime, time, timedelta
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import delete, select
 
 from app.calendar import DemoIn, EntryCreate, EntryIn, EntryOut, entry_out, feed, insert_once, zone
 from app.deps import CurrentUser, Db, WatchUser, not_found
-from app.models import CalendarEntry
+from app.models import CalendarEntry, utcnow
 
 router = APIRouter(tags=["calendar"])
 
@@ -68,10 +69,18 @@ def remove(entry_id: str, user: CurrentUser, db: Db) -> Response:
 def demo(body: DemoIn, user: CurrentUser, db: Db) -> dict[str, int]:
     tz = zone(body.timezone)
     end = date.fromisoformat(body.date)
-    # A reproducible week for this signed-in account; never write a hardcoded account ID.
+    days = 7
+    if body.period == "month":
+        first = end.replace(day=1)
+        today = utcnow().astimezone(tz).date()
+        if first > today:
+            raise HTTPException(422, "Choose this month or an earlier month for demo history.")
+        end = min(first.replace(day=monthrange(first.year, first.month)[1]), today)
+        days = (end - first).days + 1
+    # Reproducible, retryable history for this signed-in account only. Existing rows win.
     meals = ["Greek yogurt & berries", "Avocado toast", "Overnight oats", "Eggs on sourdough"]
     lunches = ["Chicken caesar wrap", "Chickpea grain bowl", "Tofu veggie stir fry"]
-    for offset in range(7):
+    for offset in range(days):
         day = end - timedelta(days=offset)
         samples = [("meal", meals[offset % len(meals)], "08:15", None),
                    ("meal", lunches[offset % len(lunches)], "12:30", None),
@@ -84,7 +93,7 @@ def demo(body: DemoIn, user: CurrentUser, db: Db) -> dict[str, int]:
                                            notes="Sample entry for your demo. You can edit or remove it.")
             insert_once(db, user.user_id, f"demo:{day}:{i}", "demo", entry)
     db.commit()
-    return {"entries": 28}
+    return {"entries": days * 4}
 
 
 @router.delete("/calendar/demo/all", status_code=204)

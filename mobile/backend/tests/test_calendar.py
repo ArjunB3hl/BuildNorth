@@ -51,6 +51,43 @@ def test_demo_scoped_and_cleanup_preserves_real(client):
     assert len(rows) == 1 and rows[0]['source'] == 'manual'
 
 
+def test_demo_month_is_retryable_owned_and_reported_separately(client, monkeypatch):
+    monkeypatch.setattr('app.monthly_report.utcnow', lambda: datetime(2026, 10, 25, 16, tzinfo=UTC))
+    # Existing week, a real entry in September, and October samples must all survive.
+    client.post('/calendar/demo', headers=auth(), json={'date': '2026-09-30'})
+    old = client.get('/calendar?start=2026-09-24&days=7', headers=auth()).json()
+    real = client.post('/calendar', headers=auth(), json=entry(occurredAt='2026-09-12T12:15:00Z')).json()
+    client.post('/calendar/demo', headers=auth(), json={'date': '2026-10-25'})
+    for _ in range(2):
+        response = client.post('/calendar/demo', headers=auth(), json={'date': '2026-09-14', 'period': 'month'})
+        assert response.status_code == 200 and response.json()['entries'] == 120
+    rows = client.get('/calendar?start=2026-09-01&days=30', headers=auth()).json()
+    assert len(rows) == 121 and {r['id'] for r in old} <= {r['id'] for r in rows}
+    assert next(r for r in rows if r['id'] == real['id'])['title'] == 'Oats & berries'
+    assert len(client.get('/calendar?start=2026-10-01&days=31', headers=auth()).json()) == 28
+    report = client.get('/calendar/report?month=2026-09', headers=auth()).json()
+    assert report['status'] == 'monthEnded' and report['reportDate'] == '2026-09-30'
+    assert report['demoSummary'] == {'entries': 120, 'recordedDays': 30, 'meals': 90, 'workouts': 30, 'minutes': 855}
+    assert report['demoEntriesExcluded'] == 120 and report['meals'] == 1 and report['recordedDays'] == 1
+    assert report['watchDays'] == 0 and report['sleep']['average'] is None
+    other = client.get('/calendar/report?month=2026-09', headers=auth('user_other')).json()
+    assert other['demoSummary']['entries'] == 0 and other['recordedDays'] == 0
+    assert client.post('/calendar/demo', json={'date': '2026-09-01', 'period': 'month'}).status_code == 401
+    assert client.post('/calendar/demo', headers=auth(), json={
+        'date': '2026-09-01', 'period': 'month', 'userId': 'user_other'}).status_code == 422
+
+
+def test_demo_month_stops_at_today_and_rejects_future_months(client, monkeypatch):
+    monkeypatch.setattr('app.routers.calendar.utcnow', lambda: datetime(2026, 10, 25, 2, tzinfo=UTC))
+    response = client.post('/calendar/demo', headers=auth(), json={
+        'date': '2026-10-31', 'period': 'month', 'timezone': 'America/Toronto'})
+    assert response.json()['entries'] == 24 * 4  # still October 24 in Toronto
+    rows = client.get('/calendar?start=2026-10-01&days=31&timezone=America/Toronto', headers=auth()).json()
+    assert max(r['localDate'] for r in rows) == '2026-10-24'
+    assert client.post('/calendar/demo', headers=auth(), json={'date': '2026-11-01', 'period': 'month'}).status_code == 422
+    assert client.post('/calendar/demo', headers=auth(), json={'date': '2026-09-01', 'period': 'year'}).status_code == 422
+
+
 def test_session_automatically_projects(client):
     from app.models import ActivitySession
     with client.app.state.session_factory() as db:
