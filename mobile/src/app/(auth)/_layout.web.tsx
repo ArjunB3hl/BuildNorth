@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/expo';
-import { Redirect, Stack } from 'expo-router';
+import { Link, Redirect, Stack } from 'expo-router';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { AiOrb } from '@/components/ai-orb';
 import { LoadingScreen } from '@/components/form';
@@ -37,10 +37,16 @@ export default function WebAuthLayout() {
             </ThemedText>
           </FadeIn>
         </View>
-        <ThemedText type="small" themeColor="textSecondary">Use the same account as the phone app and the extension.</ThemedText>
+        <View style={{ gap: Spacing.two }}>
+          <ThemedText type="small" themeColor="textSecondary">Use the same account as the phone app and the extension.</ThemedText>
+          <Link href="/downloads"><ThemedText type="linkPrimary">Download apps &amp; Chrome extension ↗</ThemedText></Link>
+        </View>
       </View>
     ) : (
-      <View style={s.narrowHeader}><Wordmark /></View>
+      <View style={s.narrowHeader}>
+        <Wordmark />
+        <Link href="/downloads"><ThemedText type="linkPrimary">Download apps &amp; Chrome extension ↗</ThemedText></Link>
+      </View>
     )}
     <View style={[s.form, wide && s.formWide]}><Stack screenOptions={{ headerShown: false }} /></View>
   </View>;
@@ -53,7 +59,7 @@ const s = StyleSheet.create({
   storyBody: { gap: Spacing.three, maxWidth: 440 },
   orbWrap: { width: 56, height: 56, marginBottom: Spacing.two },
   halo: { position: 'absolute', width: 180, height: 180, left: -62, top: -62 },
-  narrowHeader: { paddingHorizontal: Spacing.four, paddingTop: Spacing.four },
+  narrowHeader: { gap: Spacing.two, paddingHorizontal: Spacing.four, paddingTop: Spacing.four },
   form: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
   formWide: { alignSelf: 'auto', marginHorizontal: 'auto', paddingTop: Spacing.six },
 });

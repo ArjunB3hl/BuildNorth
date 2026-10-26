@@ -905,10 +905,13 @@ gemma3n, qwen3 (0.6b–4b), mistral. No paid GPU services are provisioned.
 ## Device downloads, ElevenLabs and monthly health reports
 
 The website navigation detects Windows, macOS, Android and iPhone/iPad locally and opens **Download for …**.
-The download screen has a manual platform choice and browser shortcut instructions while builds are unavailable.
-Set `EXPO_PUBLIC_DOWNLOAD_WINDOWS_URL`, `EXPO_PUBLIC_DOWNLOAD_MAC_URL`, `EXPO_PUBLIC_DOWNLOAD_ANDROID_URL` and
-`EXPO_PUBLIC_DOWNLOAD_IPHONE_URL` to real HTTPS release/store links when ready. Blank or invalid URLs offer no
-fake download. `EXPO_PUBLIC_WEB_APP_URL` is the public HTTPS website used by phone voice-Coach handoff.
+The public `/downloads` page offers the prepared Chrome extension ZIP, Apple silicon Mac ZIP, ARM64 Android APK,
+and Apple silicon iPhone/Watch **simulator** ZIPs, with installation steps and compatibility labels. It is linked
+from website navigation and sign-in; native apps do not display these controls. `/profile/downloads` remains a
+compatible website entry point. Files are versioned GitHub Release assets, not bundled into the website or Git.
+Windows remains unavailable. iPhone/Watch downloads do not install on physical devices; use the website on a phone.
+See [local Release builds and website downloads](../docs/local-release-builds.md) for packaging and limitations.
+`EXPO_PUBLIC_WEB_APP_URL` is the public HTTPS website used by phone voice-Coach handoff.
 
 **Profile → AI connections** accepts an ElevenLabs API key and agent ID. The backend checks agent access and
 signed-session permission without starting a paid conversation, then encrypts the account-owned key with the same

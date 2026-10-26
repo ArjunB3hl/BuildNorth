@@ -1,6 +1,9 @@
 # Rhythm local Release builds
 
-These builds are for demo testing on a computer. No TestFlight, store submission, or public binary hosting is involved.
+These Release builds are for demo testing. Prepared packages are also available from the website's
+[downloads page](https://rhythm-buildnorth.expo.app/downloads), backed by the repository's
+[demo release assets](https://github.com/ArjunB3hl/BuildNorth/releases/tag/rhythm-demo-2026-10-25).
+No TestFlight or app store submission is involved. Download controls appear only on the website.
 The phone apps use the deployed API and Clerk account. The Mac app keeps its existing local demo database.
 
 | Target | Artifact | Test on this computer |
@@ -33,9 +36,36 @@ or Android emulator first; the helper preserves existing app data and never unin
 The Mac option starts the packaged Release as a separate instance, so an open development copy cannot intercept it.
 Both Mac copies use the same local demo database; close the one you are not testing before making edits.
 Verify the packaged files with `shasum -a 256 -c SHA256SUMS` from the release directory.
-The website's download URLs remain empty until there is an actual HTTPS distribution destination.
+The public website links to five versioned release assets: the Chrome ZIP, Mac ZIP, Android APK,
+iPhone simulator ZIP and Watch simulator ZIP. The Android AAB remains in the local artifact library;
+it is not directly installable. Windows has no build and remains unavailable.
 The extension's verification record includes its stable ID and required Clerk/Render origin setup. The separate
 production package does not replace the user's installed development extension automatically.
+
+## Website downloads
+
+The public `/downloads` route does not require sign-in. The website's sign-in page and navigation link to it;
+the old `/profile/downloads` link remains supported. Native routes redirect without displaying download controls.
+Downloading a package does not install it automatically or publish it to an app store.
+
+- **Chrome:** unzip, open `chrome://extensions`, enable Developer mode, then **Load unpacked** and select the
+  directory containing `manifest.json`. Pin Rhythm and use its website sign-in button. The packaged `SETUP.txt`
+  describes the Clerk/Render origin prerequisites; signed-in extension synchronization still needs verification.
+- **Mac:** Apple silicon, macOS 14 or later. Unzip and open `Rhythm.app`. This demo uses local data and is ad-hoc
+  signed, without notarization. macOS may require explicit approval in System Settings > Privacy & Security.
+  See [Apple's guidance](https://support.apple.com/en-us/102445); do not disable Gatekeeper globally.
+- **Android:** ARM64, Android 7 or later. Download the APK on a compatible device and approve installation from
+  the browser if prompted, or drag it onto an ARM64 emulator. Emulator launch is verified; physical-device and
+  authenticated account testing remain outstanding.
+- **iPhone / Watch:** Apple silicon Xcode Simulator builds only. They cannot install on a physical iPhone or
+  Watch. Use the website on a physical iPhone for this demo. Physical Apple builds require separate signing and
+  provisioning. Watch sensors and HealthKit readings require real hardware.
+
+Only the five reviewed packages and `SHA256SUMS` are uploaded as release assets. Logs, screenshots, signing keys,
+account state and local verification records stay in the local artifact library. Packages are hosted on GitHub
+Releases rather than committed to Git or bundled into the Expo website. The release is marked as a demo prerelease.
+For a future package refresh, publish a new versioned release, verify its anonymous download URLs and checksums,
+update the web download catalog, then export and deploy the website. Do not replace files under existing links.
 
 ## Rebuild iPhone and Watch
 
