@@ -192,6 +192,7 @@ def client(tmp_path, monkeypatch, memory_client, fake_ai):  # type: ignore[no-un
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     # Real local bindings/keys must never turn an isolated test into live memory or video IO.
     monkeypatch.setenv("SPECTRON_OWNER_USER_ID", "")
+    monkeypatch.setenv("SPECTRON_API_KEY", "")
     monkeypatch.setenv("RHYTHM_MEMORY_CONTEXTS_JSON", "")
     monkeypatch.setenv("YOUTUBE_API_KEY", "")
     monkeypatch.setenv("AI_PROVIDER", "none")

@@ -57,6 +57,7 @@ class EntryOut(ApiModel):
 class DemoIn(InputModel):
     date: LocalDate
     timezone: Annotated[str, Field(max_length=80)] = "UTC"
+    period: Literal["week", "month"] = "week"
 
 
 def zone(name: str) -> ZoneInfo:

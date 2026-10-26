@@ -88,16 +88,20 @@ class MemoryService:
     def __init__(
         self, client: MemoryClient | None, *, owner_user_id: str = "",
         user_services: dict[str, MemoryService] | None = None,
+        shared_context: bool = False,
     ) -> None:
         if owner_user_id and not CLERK_USER_ID.fullmatch(owner_user_id):
             raise ValueError("Memory owner must be a valid Clerk user ID.")
         self._client = client
         self.owner_user_id = owner_user_id
+        self.shared_context = shared_context
         self._user_services = user_services or {}
         self._registered: set[str] = set()
         self._lock = threading.Lock()
 
     def _check_owner(self, user_id: str) -> None:
+        if not CLERK_USER_ID.fullmatch(user_id):
+            raise ValueError("Memory requires a verified Clerk user ID.")
         if self.owner_user_id and user_id != self.owner_user_id:
             raise MemoryAPIError(403, "No memory Context is assigned to this account.")
         if self._client is None:
@@ -110,6 +114,19 @@ class MemoryService:
             return service
         self._check_owner(user_id)
         return self
+
+    def bound_to(self, user_id: str) -> MemoryService:
+        """Bind a service to a server-verified identity, never a request-body user ID.
+
+        Syntax validation is defense in depth, not authentication. HTTP/MCP callers
+        must verify the session before supplying this identity.
+        """
+        service = self._for_user(user_id)
+        if service.owner_user_id:
+            return service
+        bound = type(service)(service._client, owner_user_id=user_id, shared_context=service.shared_context)
+        bound._registered, bound._lock = service._registered, service._lock
+        return bound
 
     def _ensure_registered(self, scope: str) -> None:
         """Register the path and its ancestors (Agent Memory requires registration before first write)."""
@@ -132,7 +149,8 @@ class MemoryService:
             return service.remember_preference(user_id, preference_id, text)
         scope = preference_scope(user_id, preference_id, root=self.scope_root)
         self._ensure_registered(scope)
-        self._client.remember(text, scopes=[[scope]])
+        # Shared Contexts must not synthesize a Context-wide persona from different users.
+        self._client.remember(text, scopes=[[scope]], **({"infer": "none"} if self.shared_context else {}))
         return scope
 
     def remember_health(self, user_id: str, revision: str, text: str) -> str:
@@ -141,7 +159,7 @@ class MemoryService:
             return service.remember_health(user_id, revision, text)
         scope = health_scope(user_id, revision, root=self.scope_root)
         self._ensure_registered(scope)
-        self._client.remember(text, scopes=[[scope]])
+        self._client.remember(text, scopes=[[scope]], **({"infer": "none"} if self.shared_context else {}))
         return scope
 
     def forget_scope(self, user_id: str, scope: str) -> int:

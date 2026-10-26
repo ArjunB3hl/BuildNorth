@@ -1,4 +1,4 @@
-"""Opt-in memory in explicitly provisioned private Contexts. SQL always wins over recall.
+"""Opt-in memory in user scopes of a shared Context or explicit private Contexts.
 
 Network calls happen outside DB transactions. In-flight writes retain their deletion
 marker; a late write is erased again before the marker can be removed. Recall only
@@ -44,6 +44,7 @@ class Registry:
         self.services: dict[str, tuple[str, PrivateContext]] = {}
         self.legacy_services: dict[str, MemoryService] = {}
         self.clients: list[Memory] = []
+        self.shared: tuple[str, PrivateContext] | None = None
         try:
             if app_user_id and not CLERK_USER_ID.fullmatch(app_user_id):
                 raise ValueError()
@@ -74,12 +75,33 @@ class Registry:
                 self.clients.append(client)
                 self.services[user] = (context, PrivateContext(client, owner_user_id=user))
                 self.legacy_services[user] = MemoryService(client, owner_user_id=user)
+            if not app_user_id and endpoint and shared_context_id and app_api_key:
+                if not endpoint.startswith("https://"):
+                    raise ValueError()
+                client = Memory(shared_context_id, endpoint=endpoint, api_key=app_api_key,
+                                timeout=20, max_retries=0)
+                self.clients.append(client)
+                self.shared = (shared_context_id, PrivateContext(client, shared_context=True))
         except (ValueError, TypeError, KeyError):
             self.close()
             raise ValueError(
                 "Memory bindings must map valid users to distinct private HTTPS Contexts. "
                 "Only SPECTRON_OWNER_USER_ID may reuse the existing app Context."
             ) from None
+
+    def for_user(self, user_id: str) -> tuple[str, PrivateContext] | None:
+        """Resolve only identities authenticated by the REST/MCP boundary.
+
+        Reuses the existing Context; does not create Contexts, keys, or accounts.
+        A returned service rejects every operation for a different identity.
+        """
+        if not CLERK_USER_ID.fullmatch(user_id):
+            raise ValueError("Memory requires a verified Clerk user ID.")
+        binding = self.services.get(user_id) or self.shared
+        if binding is None:
+            return None
+        context_id, service = binding
+        return context_id, service.bound_to(user_id)
 
     def close(self):
         for client in self.clients:
@@ -182,7 +204,7 @@ def request_forget(p: Policy, memory_id: str) -> Result:
 
 
 def synchronize(app, user_id: str) -> str:
-    binding = app.state.rhythm_memory.services.get(user_id)
+    binding = app.state.rhythm_memory.for_user(user_id)
     if not binding:
         return "not_configured"
     context_id, service = binding
@@ -255,7 +277,7 @@ def context(app, actor: Actor) -> Result:
     if before.status != "ok" or not before.profile or not before.profile.consent.memory:
         return before.model_copy(update={"memory_status": "disabled"})
     memory_status = synchronize(app, actor.user_id)
-    binding = app.state.rhythm_memory.services.get(actor.user_id)
+    binding = app.state.rhythm_memory.for_user(actor.user_id)
     recalled = set()
     if binding and memory_status == "ok":
         try:

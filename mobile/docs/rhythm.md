@@ -199,43 +199,41 @@ server's secret manager; do not put them into chat, extension source, or a clien
    `YOUTUBE_API_KEY` in `mobile/backend/.env`. It is never sent to the extension or
    agent. Missing configuration returns `provider_error`, with no invented results.
    Selected-page metadata and user-supplied text work independently of this key.
-3. **Private memory, optional:** for the account that owns the existing Context,
-   set `SPECTRON_OWNER_USER_ID` to its verified Clerk user ID. The backend
-   automatically binds the existing `SPECTRON_URL`, `SPECTRON_CONTEXT_ID` and
-   `SPECTRON_API_KEY` to that account for Rhythm. No key is copied into the
-   extension or a second configuration entry. This owner binding is configured
-   for the existing local app account in this workspace.
+3. **Memory in the existing Build_north Context:** set these on the backend:
 
    ```dotenv
-   SPECTRON_OWNER_USER_ID=user_REPLACE_WITH_YOUR_CLERK_ID
+   SPECTRON_URL=https://your-context-host
+   SPECTRON_CONTEXT_ID=your-existing-context-id
+   SPECTRON_API_KEY=your-context-key
+   SPECTRON_OWNER_USER_ID=
    ```
 
-   For **additional accounts**, provision distinct private Contexts and set
-   `RHYTHM_MEMORY_CONTEXTS_JSON` on the backend:
+   An empty or unset `SPECTRON_OWNER_USER_ID` enables the existing Context for
+   **all authenticated Clerk users**. No Contexts, API keys or accounts are created.
+   A nonempty owner ID restricts this default Context to that one account. Keep
+   `RHYTHM_MEMORY_CONTEXTS_JSON` unset for the shared-Context deployment.
 
-   ```json
-   {
-     "user_REPLACE": {
-       "contextId": "private-context-id",
-       "apiKey": "private-context-key",
-       "endpoint": "https://your-context-host"
-     }
-   }
-   ```
+   The server verifies the Clerk session (or an explicitly authorized assistant /
+   Watch token) and derives the user scope itself. Request-body IDs, scopes, lenses
+   and Context IDs cannot select another account. Every recall has a user lens;
+   writes and erases target only that user's subtree. Case-sensitive Clerk IDs
+   have collision-free scope encoding. Rhythm's returned memory service is bound
+   to the verified account and rejects operations for another ID before SDK access.
 
-   Repeated Context IDs are rejected. Only `SPECTRON_OWNER_USER_ID` may reuse the
-   default app Context; another account cannot fall back to that Context through
-   either BuildNorth or Rhythm. Additional bindings are also used by BuildNorth's
-   memory operations for those accounts. Keys need scoped
+   Scopes alone are not credentials or permissions. The Context key remains on the
+   backend; users never receive direct SurrealDB access. Shared-Context writes use
+   `infer="none"`; no Context-wide persona or chat endpoint is used. Recalled text
+   must also match the authenticated account's current SQL preferences, permitted
+   health summaries, or confirmed interests before being returned or used by AI.
+   Unattributed historical / generated notes are withheld, not deleted. Operators
+   holding the Context key remain privileged; keep it out of apps and extensions.
+
+   Optional `RHYTHM_MEMORY_CONTEXTS_JSON` bindings still support manually assigned,
+   distinct private Contexts for selected accounts. Repeated Context IDs and
+   conflicting owner assignments are rejected. These explicit bindings override
+   the shared default. Changing a Context ID with outstanding copies requires
+   restoring the original binding to finish erasure. Keys need scoped
    remember/recall/forget and scope-registration permissions.
-
-   Unassigned accounts keep their app records in SQL and Rhythm reports
-   `not_configured`. New signups **do not yet provision Cloud Contexts automatically**:
-   Context creation and key issuance require SurrealDB Cloud organisation/admin
-   authentication, separate from the Context-bound `sp-…` memory key. No such
-   Cloud credential is configured in this workspace. The existing account is
-   usable without it. Changing a Context ID with outstanding copies requires
-   restoring the original binding to finish erasure.
 4. **Your model:** configure it in the chosen agent host. Rhythm supplies tools,
    data, and policy; connecting an agent does not transfer a subscription or API key.
 
@@ -380,15 +378,15 @@ for a visible card can produce `displayed`; it does not mean the user read it.
 
 SQL holds the authoritative versioned profile (learned interests and switches),
 confirmed context, explicit feedback, tasks and results. Only confirmed
-context/feedback is mirrored into private Agent Memory, using `infer="none"`.
+context/feedback is mirrored into user-scoped Agent Memory, using `infer="none"`.
 Recall annotates exact still-confirmed SQL facts; unmatched recall notes and
 historical claims never replace the saved profile.
 
-One user's existing Context can serve both features. BuildNorth retains its
+The existing Context can serve every signed-in user and both features. BuildNorth retains its
 `buildnorth/user/<user>/…` scopes; Rhythm uses
 `buildnorth/rhythm/user/<user>/…`. This keeps their recall and feature-specific
-erase controls independent while preserving Context ownership. The application
-checks ownership before every memory read, write, scope registration or erasure.
+erase controls independent. The server derives scopes from authenticated identities,
+checks SQL ownership, and never accepts a client-selected memory namespace.
 
 Agent suggestions are pending until a trusted phone action. Profile changes mark
 pending interest suggestions stale. `request_forget` requests confirmation and
@@ -632,11 +630,19 @@ To check a configured memory binding against the live service:
 
 ```sh
 cd mobile/backend
-.venv/bin/python -m scripts.rhythm_memory_check
+.venv/bin/python -m scripts.shared_memory_check
+# Owner-only deployment (or one existing account in shared mode):
+.venv/bin/python -m scripts.rhythm_memory_check --user user_YOUR_CLERK_ID
 ```
 
-This creates and removes one temporary marker in its own unique scope, does not
-change a profile or consent, and prints only verification outcomes. The older
+The shared check uses two unique fixture identities, tests save/recall, rejects
+foreign identities on bound services, and proves erasing one leaves the other
+intact. It removes only its own temporary marker scopes. It does not create Clerk
+accounts or change profiles or consent, and prints no credentials or existing
+memory content. Use `--shared-preview` to test before clearing an owner setting.
+Clerk authentication, forged tokens, payload overrides and MCP isolation are
+covered separately by the backend suite. The single-account check creates and
+removes one unique marker. The older
 multi-user `scripts.live_check` refuses to place fictional users in a Context
 that has an explicit owner; run it only against a separate test Context.
 
@@ -680,9 +686,8 @@ not a substitute for the phone/browser sign-in demonstration.
   transcript available, including language and long/virtualized layouts.
 - Exercise the signed-in search-to-three-recommendations journey. Live API search
   and details are verified; quota-error handling is covered with automated fixtures.
-- Configure Cloud organisation/admin access before implementing automatic Context
-  creation for additional users. Existing-account binding and live memory
-  write/recall/erasure are verified.
+- Automatic Context creation is intentionally out of scope. The configured shared
+  Context supports authenticated users without Cloud organisation/admin credentials.
 - Exercise a second agent host with a working model. Forced native worker
   suspension is not claimed as a live manual check; lease expiry/recovery is
   covered at the service boundary.

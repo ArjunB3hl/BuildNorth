@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 25.2.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "base": {
+      "environment": "production",
+      "node": "24.20.0",
+      "env": {
+        "EXPO_NO_DOTENV": "1"
+      }
+    },
+    "demo-android": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "demo-simulator": {
+      "extends": "base",
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Release"
+      }
+    }
+  }
+}

@@ -20,7 +20,7 @@ const KEY_ICON = { ios: 'key', android: 'key', web: 'key' } as const;
 // Browsers without the Web Share API would reject Share.share, so the web only offers it where it exists.
 const canShare = Platform.OS !== 'web' || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
 
-/** Connect AI assistants (OpenCode, ChatGPT, Claude) to Rhythm over MCP. */
+/** Connect AI assistants to Rhythm over MCP. */
 export default function ConnectionsScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -96,7 +96,7 @@ export default function ConnectionsScreen() {
             title="Create a connection token"
             description="Tokens expire after 90 days. Revoke one here at any time."
             icon={KEY_ICON}>
-            <TextField label="Name this connection" value={label} onChangeText={setLabel} maxLength={80} placeholder="e.g. OpenCode on my laptop" />
+            <TextField label="Name this connection" value={label} onChangeText={setLabel} maxLength={80} placeholder="e.g. Claude on my laptop" />
             {create.isError ? <Notice tone="error">{errorMessage(create.error)}</Notice> : null}
             <FormActions>
               <Button title="Create token" onPress={() => create.mutate()} loading={create.isPending} disabled={create.isPending} />

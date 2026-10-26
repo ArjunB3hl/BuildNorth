@@ -1,0 +1,132 @@
+.page {
+  --download-accent: #126dc3;
+  height: 100%; overflow-y: auto; background: var(--download-bg); color: var(--download-text);
+  font-family: var(--font-display), sans-serif; line-height: 1.55; scroll-behavior: smooth;
+}
+.page *, .page *::before, .page *::after { box-sizing: border-box; }
+.page a { color: inherit; text-decoration: none; }
+.page a:focus-visible, .page summary:focus-visible { outline: 3px solid #208aef; outline-offset: 5px; }
+.page h1, .page h2, .page h3, .page p { margin: 0; }
+.header, .main, .footer { max-width: 1320px; margin: 0 auto; padding-left: 40px; padding-right: 40px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 26px; padding-bottom: 26px; }
+.brand { display: inline-flex; border-radius: 8px; }
+.headerLink { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+.headerLink svg, .footer svg { width: 18px; height: 18px; }
+.skip { position: absolute; top: -100px; left: 24px; padding: 12px 20px; background: var(--download-surface); z-index: 2; border-radius: 8px; }
+.skip:focus { top: 12px; }
+.hero { display: grid; grid-template-columns: 1.3fr 1fr; align-items: center; gap: 20px; padding: 66px 0 58px; }
+.eyebrow { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--download-muted); }
+.eyebrow > span { width: 7px; height: 7px; background: #208aef; border-radius: 50%; box-shadow: 0 0 0 4px #208aef12; }
+.hero h1 { font-size: clamp(36px, 4.3vw, 58px); line-height: 1.13; letter-spacing: -2.1px; font-weight: 650; margin-top: 19px; }
+.hero h1 span { color: #208aef; }
+.heroDescription { max-width: 500px; font-size: 17px; color: var(--download-muted); margin-top: 22px !important; }
+.heroActions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 28px; }
+.primaryButton, .secondaryButton, .downloadButton { display: inline-flex; justify-content: center; align-items: center; gap: 10px; min-height: 46px; padding: 11px 18px; font-size: 14px; font-weight: 600; line-height: 1.35; border-radius: 11px; transition: background-color 160ms, transform 160ms; }
+.page .primaryButton, .page .downloadButton { background: #1477d3; color: #fff; border: 1px solid transparent; }
+.page .primaryButton:hover, .page .downloadButton:hover { background: #0968bd; transform: translateY(-1px); }
+.secondaryButton { border: 1px solid var(--download-border); background: var(--download-surface); }
+.secondaryButton:hover { background: var(--download-raised); }
+.primaryButton svg, .downloadButton svg, .secondaryButton svg { width: 18px; height: 18px; flex-shrink: 0; }
+.heroFootnote { font-size: 11px; color: var(--download-muted); margin-top: 18px !important; }
+.heroVisual { height: 330px; position: relative; max-width: 450px; width: 100%; justify-self: end; }
+.orbit, .orbitInner { position: absolute; left: 50%; top: 50%; border: 1px solid #208aef20; border-radius: 50%; transform: translate(-50%, -50%); }
+.orbit { width: 320px; height: 320px; background: radial-gradient(circle, #208aef10, transparent 70%); }
+.orbitInner { width: 210px; height: 210px; border-style: dashed; }
+.centerMark { display: grid; place-items: center; width: 74px; height: 74px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 25px; background: linear-gradient(145deg, #51abfa, #1676dd); box-shadow: 0 12px 50px #208aef30; color: #fff; }
+.centerMark svg { width: 35px; height: 35px; }
+.floatingCard { position: absolute; display: flex; gap: 12px; align-items: center; padding: 14px 18px; background: var(--download-surface); border: 1px solid var(--download-border); border-radius: 15px; box-shadow: 0 8px 28px #00000007; }
+.floatingCard strong { display: block; font-size: 13px; font-weight: 600; }
+.floatingCard div > span { display: block; font-size: 10px; color: var(--download-muted); margin-top: 2px; }
+.ideaCard { top: 18px; left: 20px; transform: rotate(-5deg); }
+.dayCard { top: 125px; right: -8px; transform: rotate(4deg); }
+.rhythmCard { bottom: 20px; left: 14px; transform: rotate(-3deg); }
+.miniIcon { width: 34px; height: 34px; display: grid; place-items: center; background: #208aef12; border-radius: 10px; color: #208aef; }
+.miniIcon svg { width: 19px; height: 19px; }
+.deviceHint { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--download-border); border-bottom: 1px solid var(--download-border); padding: 18px 0; font-size: 13px; color: var(--download-muted); }
+.deviceHint > svg { color: #208aef; width: 20px; height: 20px; flex-shrink: 0; }
+.section { padding-top: 48px; scroll-margin-top: 24px; }
+.sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 23px; }
+.sectionHeading h2 { font-size: 26px; font-weight: 600; line-height: 1.25; letter-spacing: -.6px; margin-top: 8px; }
+.sectionHeading > p { max-width: 370px; color: var(--download-muted); font-size: 13px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.card { border: 1px solid var(--download-border); border-radius: 19px; background: var(--download-surface); padding: 27px; display: flex; flex-direction: column; min-width: 0; }
+.card.recommended { border-color: #208aef80; }
+.cardMain { flex: 1; }
+.cardTop { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 19px; }
+.iconTile { display: grid; place-items: center; width: 45px; height: 45px; color: #208aef; background: #208aef12; border-radius: 13px; flex-shrink: 0; }
+.tag, .blueTag { font-size: 10px; letter-spacing: .2px; font-weight: 600; border: 1px solid var(--download-border); border-radius: 6px; padding: 4px 8px; color: var(--download-muted); white-space: nowrap; }
+.blueTag { color: var(--download-accent); background: #208aef0b; border-color: #208aef24; }
+.card h3 { font-size: 23px; font-weight: 600; line-height: 1.3; letter-spacing: -.5px; }
+.description { font-size: 14px; color: var(--download-muted); margin-top: 10px !important; max-width: 440px; }
+.compatibility { font-size: 11px; font-weight: 500; color: var(--download-muted); margin-top: 20px !important; }
+.downloadRow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 11px; }
+.fileMeta { color: var(--download-muted); font-size: 10px; white-space: nowrap; }
+.cardDetails { margin-top: 24px; }
+.note { font-size: 12px; line-height: 1.65; color: var(--download-muted); }
+.install { border-top: 1px solid var(--download-border); margin-top: 18px; padding-top: 14px; }
+.install summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 12px; font-weight: 600; gap: 12px; border-radius: 3px; list-style: none; }
+.install summary::-webkit-details-marker { display: none; }
+.install summary span { color: #208aef; font-size: 19px; font-weight: 400; line-height: 1; }
+.install[open] summary span { transform: rotate(45deg); }
+.install ol { margin: 15px 0 0; padding-left: 19px; font-size: 12px; line-height: 1.75; color: var(--download-muted); }
+.install li { padding-left: 3px; margin-top: 9px; }
+.install li::marker { color: var(--download-accent); font-weight: 600; }
+.featured { grid-column: 1 / -1; display: grid; grid-template-columns: 1.1fr 1fr; gap: 50px; background: linear-gradient(110deg, #208aef07, transparent 65%), var(--download-surface); }
+.featured .cardDetails { align-self: center; margin: 0; border-left: 1px solid var(--download-border); padding-left: 32px; }
+.featured .cardTop { justify-content: flex-start; }
+.browserCard { display: flex; align-items: center; gap: 21px; padding: 25px 27px; border: 1px solid var(--download-border); border-radius: 17px; margin-top: 32px; }
+.browserCard > div { flex: 1; }
+.browserCard h2 { font-size: 17px; font-weight: 600; line-height: 1.4; }
+.browserCard p { color: var(--download-muted); font-size: 12px; margin-top: 6px; }
+.browserCard .secondaryButton { white-space: nowrap; }
+.footer { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-top: 36px; padding-bottom: 35px; font-size: 11px; color: var(--download-muted); }
+.footer p > span { display: block; margin-top: 3px; font-size: 10px; }
+.footer a { display: inline-flex; align-items: center; gap: 7px; }
+.footer a:hover, .headerLink:hover { color: var(--download-accent); }
+@media (prefers-color-scheme: dark) {
+  .page { --download-accent: #65b4ff; }
+}
+@media (max-width: 1000px) {
+  .header, .main, .footer { padding-left: 24px; padding-right: 24px; }
+  .heroVisual { transform: scale(.88); transform-origin: right center; }
+  .hero { grid-template-columns: 1.4fr 1fr; }
+  .featured { gap: 28px; }
+  .card { padding: 22px; }
+}
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; padding-top: 38px; padding-bottom: 36px; }
+  .heroVisual { display: none; }
+  .hero h1 { font-size: 44px; }
+  .heroDescription { max-width: 530px; }
+  .sectionHeading { display: block; }
+  .sectionHeading > p { margin-top: 10px; max-width: 100%; }
+  .featured { display: flex; gap: 0; }
+  .featured .cardDetails { align-self: auto; border-left: 0; padding-left: 0; margin-top: 24px; }
+  .browserCard { flex-wrap: wrap; }
+  .browserCard > div { min-width: 200px; }
+}
+@media (max-width: 540px) {
+  .header, .main, .footer { padding-left: 18px; padding-right: 18px; }
+  .header { gap: 14px; padding-top: 20px; padding-bottom: 18px; }
+  .headerLink { font-size: 12px; gap: 5px; white-space: nowrap; }
+  .hero { padding-top: 25px; }
+  .hero h1 { font-size: 36px; letter-spacing: -1.5px; }
+  .heroDescription { font-size: 15px; }
+  .heroActions { gap: 9px; }
+  .primaryButton, .secondaryButton, .downloadButton { font-size: 12px; padding-left: 14px; padding-right: 14px; }
+  .heroFootnote { font-size: 10px; }
+  .deviceHint { align-items: flex-start; font-size: 12px; }
+  .deviceHint > svg { margin-top: 2px; }
+  .section { padding-top: 34px; }
+  .sectionHeading h2 { font-size: 24px; }
+  .grid { grid-template-columns: 1fr; gap: 14px; }
+  .card { padding: 21px; border-radius: 16px; }
+  .card h3 { font-size: 22px; }
+  .browserCard { padding: 21px; gap: 15px; }
+  .browserCard > .iconTile { display: none; }
+  .footer { align-items: flex-start; flex-direction: column; gap: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page { scroll-behavior: auto; }
+  .primaryButton, .secondaryButton, .downloadButton { transition: none; }
+}

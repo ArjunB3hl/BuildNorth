@@ -441,6 +441,7 @@ export type ReportMetric = { average: number | null; min: number | null; max: nu
 export type MonthlyReport = {
   month: string; through: string; reportDate: string; timezone: string; status: 'monthEnded' | 'inProgress'; generatedAt: string;
   recordedDays: number; daysInPeriod: number; demoEntriesExcluded: number;
+  demoSummary?: { entries: number; recordedDays: number; meals: number; workouts: number; minutes: number };
   meals: number; appWorkouts: number; appMinutes: number; recordedSets: number;
   watchWorkouts: number; watchMinutes: number; watchDays: number; completeWatchDays: number;
   workoutTypes: { type: string; count: number; minutes: number; heartRate: ReportMetric }[];

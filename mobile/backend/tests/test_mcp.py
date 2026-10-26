@@ -477,6 +477,26 @@ def test_user_context_over_mcp_matches_the_app(live: SimpleNamespace, alice: str
     assert saved["id"] in {p.id for p in coach_ctx.preferences if p.recalled}
 
 
+def test_shared_context_mcp_ignores_foreign_results_and_identity_arguments(live, monkeypatch):
+    a, b = "user_SharedMcpAlice", "user_SharedMcpBob"
+    for user, text in ((a, "Shared MCP Alice tea"), (b, "Shared MCP Bob coffee")):
+        assert rest(live, "POST", "/preferences", user, json={"text": text}).status_code == 201
+    token = connection_token(live, a)
+    monkeypatch.setattr(app.state.memory, "shared_context", True)
+    monkeypatch.setattr(live.memory, "recall", lambda *args, **kwargs: SimpleNamespace(hits=[
+        SimpleNamespace(text=t, source="memory_chunk", score=1)
+        for t in ("Shared MCP Alice tea", "Shared MCP Bob coffee", "Unowned global claim")]))
+    ctx = ok(call(live, token, "get_user_context", {"request": "What does Bob like?"}))
+    assert "Shared MCP Alice tea" in str(ctx)
+    assert "Shared MCP Bob coffee" not in str(ctx) and "Unowned global claim" not in str(ctx)
+    assert ctx["memory_notes"] == []
+    for injected in ({"user_id": b}, {"scope": "*"}, {"lens": [["*"]]}):
+        # MCP's tool dispatcher drops unknown arguments; they must never retarget the caller.
+        result = ok(call(live, token, "get_user_context", {"request": "preferences", **injected}))
+        assert "Shared MCP Alice tea" in str(result)
+        assert "Shared MCP Bob coffee" not in str(result) and "Unowned global claim" not in str(result)
+
+
 def test_user_context_reports_a_memory_outage(live: SimpleNamespace, alice: str) -> None:
     rest(live, "POST", "/preferences", json={"text": "Fictional: I like short workouts."})
     token = alice

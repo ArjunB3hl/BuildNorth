@@ -52,7 +52,10 @@ export default function CalendarScreen() {
     queryFn: () => api.calendar.list(start, dates.length, timezone),
     refetchInterval: 30_000,
   });
-  const refresh = () => cache.invalidateQueries({ queryKey: ['calendar'] });
+  const refresh = () => Promise.all([
+    cache.invalidateQueries({ queryKey: ['calendar'] }),
+    cache.invalidateQueries({ queryKey: ['monthly-report'] }),
+  ]);
   const demo = useMutation({
     mutationFn: () => api.calendar.demo(today, timezone),
     onSuccess: () => {
@@ -60,6 +63,10 @@ export default function CalendarScreen() {
       setMonth(today);
       refresh();
     },
+  });
+  const demoMonth = useMutation({
+    mutationFn: (date: string) => api.calendar.demo(date, timezone, 'month'),
+    onSuccess: refresh,
   });
   const clearDemo = useMutation({ mutationFn: api.calendar.clearDemo, onSuccess: refresh });
   const all = query.data ?? [];
@@ -390,16 +397,27 @@ export default function CalendarScreen() {
             ? 'Demo entries are samples and are excluded from your daily totals.'
             : 'Trying it out? Add a sample week to this account.'}
         </Text>
-        <Button
-          title={hasDemo ? 'Remove demo entries' : 'Load demo week'}
-          size="small"
-          variant="quiet"
-          loading={demo.isPending || clearDemo.isPending}
-          onPress={() => (hasDemo ? clearDemo.mutate() : demo.mutate())}
-        />
+        <View style={s.actions}>
+          {month.slice(0, 7) <= today.slice(0, 7) ? <Button
+            title={`Load ${dateAtNoon(month).toLocaleDateString(undefined, { month: 'long' })} demo`}
+            size="small"
+            variant="secondary"
+            loading={demoMonth.isPending}
+            disabled={demo.isPending || clearDemo.isPending}
+            onPress={() => demoMonth.mutate(month)}
+          /> : null}
+          <Button
+            title={hasDemo ? 'Remove demo entries' : 'Load demo week'}
+            size="small"
+            variant="quiet"
+            loading={demo.isPending || clearDemo.isPending}
+            disabled={demoMonth.isPending}
+            onPress={() => (hasDemo ? clearDemo.mutate() : demo.mutate())}
+          />
+        </View>
       </View>
-      {demo.isError || clearDemo.isError ? (
-        <Notice tone="error">{errorMessage(demo.error || clearDemo.error)}</Notice>
+      {demo.isError || demoMonth.isError || clearDemo.isError ? (
+        <Notice tone="error">{errorMessage(demo.error || demoMonth.error || clearDemo.error)}</Notice>
       ) : null}
       {editor ? (
         <CalendarEditor entry={editor === 'new' ? undefined : editor} day={selected} onClose={() => setEditor(null)} />

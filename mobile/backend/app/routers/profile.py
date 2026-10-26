@@ -9,7 +9,7 @@ from surrealdb.memory import MemoryServiceError
 from app import health
 from app import preferences as prefs
 from app.deps import CurrentUser, Db, Memory, not_found
-from app.models import Profile, RememberedPreference
+from app.models import HealthDay, Profile, RememberedPreference
 from app.schemas import MemoryHit, MemorySearchOut, PreferenceIn, PreferenceOut, PreferencesOut, ProfileIn, ProfileOut
 
 router = APIRouter(tags=["profile"])
@@ -92,9 +92,19 @@ def search_memory(
     if memory is None:
         raise memory_unavailable("Memory isn't configured on the server.")
     try:
+        memory = memory.bound_to(user.user_id)
         facts = memory.recall(user.user_id, q, k=8)
     except MemoryServiceError as exc:
         raise memory_unavailable() from exc
+    if memory.shared_context:
+        # A lens is not the authorization boundary. Even if an upstream result is
+        # unscoped or synthesized, only this account's authoritative text may leave
+        # our server. No client-provided owner, lens, or scope participates here.
+        allowed = set(db.scalars(select(RememberedPreference.text).where(
+            RememberedPreference.user_id == user.user_id)))
+        allowed.update(text for text in db.scalars(select(HealthDay.memory_text).where(
+            HealthDay.user_id == user.user_id)) if text)
+        facts = [fact for fact in facts if fact.text in allowed]
     facts = prefs.filter_stale(facts, prefs.stale_texts(db, user.user_id))
     if health.erase_pending(db, user.user_id):  # health sharing was turned off; the erase is still being retried
         facts = [f for f in facts if not health.is_health_text(f.text)]
