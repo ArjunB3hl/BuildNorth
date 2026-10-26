@@ -246,7 +246,7 @@ export function createApi(getToken: TokenGetter) {
       create: (body: CalendarInput & { clientKey: string }) => send<CalendarEntry>('POST', '/calendar', body),
       update: (id: string, body: CalendarInput) => send<CalendarEntry>('PUT', `/calendar/${id}`, body),
       remove: (id: string) => send<void>('DELETE', `/calendar/${id}`),
-      demo: (date: string, timezone: string) => send<{ entries: number }>('POST', '/calendar/demo', { date, timezone }),
+      demo: (date: string, timezone: string, period: 'week' | 'month' = 'week') => send<{ entries: number }>('POST', '/calendar/demo', { date, timezone, period }),
       clearDemo: () => send<void>('DELETE', '/calendar/demo/all'),
     },
 

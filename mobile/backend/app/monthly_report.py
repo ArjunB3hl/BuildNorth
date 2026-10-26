@@ -33,6 +33,7 @@ def report(db: Session, user_id: str, month: str, timezone: str) -> dict:
     end = min(last, today)
     entries = feed(db, user_id, first.isoformat(), (end - first).days + 1, timezone)
     real = [e for e in entries if e.source != "demo"]
+    demo = [e for e in entries if e.source == "demo"]
     health = list(db.scalars(select(HealthDay).where(HealthDay.user_id == user_id,
         HealthDay.date >= first.isoformat(), HealthDay.date <= end.isoformat()).order_by(HealthDay.date)))
     complete = [h for h in health if h.complete]
@@ -58,6 +59,12 @@ def report(db: Session, user_id: str, month: str, timezone: str) -> dict:
         "status": "monthEnded" if today > last else "inProgress", "generatedAt": utcnow().isoformat(),
         "recordedDays": len({e.local_date for e in real} | {h.date for h in health} | {c.date for c in checkins}),
         "daysInPeriod": (end - first).days + 1, "demoEntriesExcluded": len(entries) - len(real),
+        "demoSummary": {
+            "entries": len(demo), "recordedDays": len({e.local_date for e in demo}),
+            "meals": sum(e.kind == "meal" for e in demo),
+            "workouts": sum(e.kind == "activity" for e in demo),
+            "minutes": sum(e.duration_minutes or 0 for e in demo if e.kind == "activity"),
+        },
         "meals": len([e for e in real if e.kind == "meal"]),
         # App sessions and Watch workouts may describe the same exercise. Never sum their minutes together.
         "appWorkouts": len([e for e in real if e.kind == "activity" and e.source != "watch"]),

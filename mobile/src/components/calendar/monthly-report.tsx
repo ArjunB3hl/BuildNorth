@@ -29,6 +29,19 @@ export function MonthlyHealthReport({ month, selected }: { month: string; select
     </View>
     {query.isPending ? <Loading /> : query.isError ? <ErrorState error={query.error} onRetry={() => query.refetch()} /> : null}
     {r ? <>
+      {r.demoSummary && r.demoSummary.entries > 0 ? <View style={{ gap: 14, padding: 20, borderRadius: 16, backgroundColor: '#8C78D31A', borderWidth: 1, borderColor: '#8C78D366' }}>
+        <Text type="smallBold" style={{ color: '#A68BFA', letterSpacing: 1 }}>DEMO MONTH SUMMARY</Text>
+        <Text type="subtitle">{new Date(`${key}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} in rhythm</Text>
+        <Text type="small">{r.demoSummary.recordedDays} of {r.daysInPeriod} days filled · {r.demoSummary.entries} sample entries</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          {[[r.demoSummary.meals, 'MEALS'], [r.demoSummary.workouts, 'WORKOUTS & WALKS'], [r.demoSummary.minutes, 'MOVEMENT MINUTES']].map(([value, label]) =>
+            <View key={label} style={{ flex: 1, minWidth: 130, borderRadius: 12, backgroundColor: theme.background, padding: 14, gap: 8 }}>
+              <Text type="subtitle">{value}</Text><Text type="small" themeColor="textSecondary">{label}</Text>
+            </View>)}
+        </View>
+        <Text type="small" themeColor="textSecondary">Sample meals and movement for the demo. These entries are excluded from your real health totals.</Text>
+      </View> : null}
+      {r.demoSummary && r.demoSummary.entries > 0 ? <Text type="smallBold">Your recorded health data</Text> : null}
       <Text type="small">{r.recordedDays} of {r.daysInPeriod} days have records · {r.meals} meals · {r.watchWorkouts} Watch workouts · {r.recordedSets} app sets</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {[['AVERAGE SLEEP', minutesLabel(r.sleep.average)], ['WATCH MOVEMENT', r.watchDays ? `${r.watchMinutes} min` : 'Not recorded'], ['CHECK-INS', `${r.checkIns}`]].map(([label, value]) =>
