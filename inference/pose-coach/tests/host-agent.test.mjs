@@ -4,8 +4,8 @@ import { hostAgent, accountConnections, describeHostedEvent } from '../web/js/ho
 
 test('hosted agent receives measured events without depending on a local formatter', () => {
   const event = { kind: 'set_end', exercise: 'squat', reps: 8, summary: 'ignored incoming summary' };
-  assert.deepEqual(describeHostedEvent(event, 'Eight repetitions counted.'),
-    { ...event, summary: 'Eight repetitions counted.' });
+  assert.match(describeHostedEvent(event, 'Eight repetitions counted.').summary, /may be resting.*do not ask them to reposition/i);
+  assert.match(describeHostedEvent({ kind: 'confirm_set_end' }, 'Is your set done?').summary, /may be resting/i);
   assert.match(describeHostedEvent(event, null).summary, /do not assume good form/);
   assert.equal(event.summary, 'ignored incoming summary');
 });

@@ -68,11 +68,13 @@ test('the default camera host is HTTPS and separate from website cookies; local 
   assert.equal(new URL(poseFrameUrl(POSE_URL, 'http://localhost:8081')).hostname, '127.0.0.1');
   const publicFrame = new URL(poseFrameUrl(POSE_URL, 'https://rhythm-buildnorth.expo.app'));
   assert.equal(publicFrame.protocol, 'https:');
+  assert.equal(publicFrame.origin, 'https://rhythm-buildnorth--yq3ktflhn1.expo.app');
   assert.equal(publicFrame.searchParams.get('parent'), 'https://rhythm-buildnorth.expo.app');
   for (const parent of ['https://evil.example', 'https://rhythm-buildnorth.expo.app.evil.example', 'https://rhythm-buildnorth.expo.app/'])
     assert.throws(() => poseFrameUrl(POSE_URL, parent));
   for (const base of ['http://127.0.0.1:8765/web/index.html', 'https://rhythm-buildnorth.expo.app/web/index.html',
-    'https://evil.example/web/index.html', 'https://rhythm-buildnorth--camera.expo.app/unexpected.html'])
+    'https://evil.example/web/index.html', 'https://rhythm-buildnorth--untrusted.expo.app/web/index.html',
+    'https://rhythm-buildnorth--camera.expo.app/unexpected.html'])
     assert.throws(() => poseFrameUrl(base, 'https://rhythm-buildnorth.expo.app'));
 });
 

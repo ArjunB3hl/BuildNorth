@@ -7,6 +7,8 @@ import type { SessionInput } from '@/lib/types';
  * 127.0.0.1, not localhost: cookies ignore ports, so on localhost the page would get this app's Clerk cookies.
  */
 export const PUBLIC_POSE_ORIGIN = 'https://rhythm-buildnorth--camera.expo.app';
+// Pin the tested release: cached modules on the mutable camera alias can belong to an older build.
+export const PUBLIC_POSE_RELEASE_ORIGIN = 'https://rhythm-buildnorth--yq3ktflhn1.expo.app';
 export const PUBLIC_WEBSITE_ORIGIN = 'https://rhythm-buildnorth.expo.app';
 export const POSE_URL = process.env.EXPO_PUBLIC_POSE_URL || `${PUBLIC_POSE_ORIGIN}/web/index.html?embed=1`;
 
@@ -45,8 +47,9 @@ export function poseFrameUrl(base: string, parentOrigin: string): string {
     ? 'http://127.0.0.1:8765/web/index.html' : base);
   if (url.username || url.password) throw new Error('The camera URL cannot contain credentials.');
   if (localParent && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)) url.hostname = '127.0.0.1';
-  else if (!hostedParent || url.origin !== PUBLIC_POSE_ORIGIN || url.pathname !== '/web/index.html')
+  else if (!hostedParent || ![PUBLIC_POSE_ORIGIN, PUBLIC_POSE_RELEASE_ORIGIN].includes(url.origin) || url.pathname !== '/web/index.html')
     throw new Error('Use the configured HTTPS camera origin, or a local coach for localhost development.');
+  if (hostedParent) url.host = new URL(PUBLIC_POSE_RELEASE_ORIGIN).host;
   // Allow replay settings only. Account details, tokens, hashes and unrelated query fields never enter the frame.
   const source = url.searchParams.get('source');
   const speed = url.searchParams.get('replay_speed');

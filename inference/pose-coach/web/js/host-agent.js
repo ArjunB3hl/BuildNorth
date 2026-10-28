@@ -31,5 +31,7 @@ export function accountConnections(elevenlabs) {
 export function describeHostedEvent(event, cue) {
   const summary = typeof cue === 'string' && cue.trim()
     ? cue : `Measured workout event: ${event.kind || 'update'}. Use only the supplied measurements; do not assume good form.`;
-  return { ...event, summary };
+  const restContext = ['set_end', 'confirm_set_end'].includes(event.kind)
+    ? ' The person may be resting. Do not ask them to reposition during a break; help with framing when they resume or request it.' : '';
+  return { ...event, summary: summary + restContext };
 }

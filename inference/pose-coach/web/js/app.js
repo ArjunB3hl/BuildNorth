@@ -1,5 +1,6 @@
 import { hostAgent, accountConnections, describeHostedEvent } from './host-agent.js';
 import { connectAppearance } from './embed-appearance.js';
+import { isResting } from './rest-state.js';
 // Live coach page: camera (or a test clip in real time) -> MediaPipe pose -> exercise engines -> events.
 // web/js/auto.js counts sets per exercise: "Auto" lets it decide what is being done; an exercise named (in the picker,
 // or by the user when the coach asks at the start) has it count that one alone. Coaching events go to the coach that
@@ -2158,7 +2159,7 @@ function coaching(e, who, repsLabel) {
     setTimeout(() => { if ($('repsLabel').textContent.startsWith('not counted')) $('repsLabel').textContent = repsLabel; }, 2000);
     log(`partial rep (not counted): legs folded to ${(e.fold * 100).toFixed(0)}% of standing height`);
   } else if (e.type === 'visibility') {
-    coachEvent({ kind: 'visibility', parts: e.parts, ...who }, FALLBACK.visibility());
+    if (!isResting(S.auto, e.t)) coachEvent({ kind: 'visibility', parts: e.parts, ...who }, FALLBACK.visibility());
   }
 }
 
@@ -2292,6 +2293,9 @@ function showFraming() {
     b.className = 'ready'; b.textContent = MOVE_HINT[S.move.entry.track];
     return;
   }
+  if (!S.tentative && isResting(S.auto, S.lastFrameT)) {
+    b.className = 'ready'; b.textContent = 'Resting. When you are ready, return to view to continue.'; return;
+  }
   const note = S.tentative?.text ?? (S.lapse && performance.now() < S.lapse.until ? S.lapse.text : null);
   if (S.auto && !eng) {                 // auto mode, between sets: is enough of the body in view to recognise anything?
     const v = S.auto.vis;
@@ -2354,7 +2358,11 @@ function processPose(r, t, w, h) {
       if (S.rec) S.rec.events.push(...evs);
       handleAuto(evs);
     }
-    $('banner').className = 'wait'; $('banner').textContent = "I can't see you. Step into the picture.";
+    if (!S.move && isResting(S.auto, t)) {
+      $('banner').className = 'ready'; $('banner').textContent = 'Resting. When you are ready, return to view to continue.';
+    } else {
+      $('banner').className = 'wait'; $('banner').textContent = "I can't see you. Step into the picture.";
+    }
   }
   S.frames += 1;
   const now = performance.now();
