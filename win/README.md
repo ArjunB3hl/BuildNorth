@@ -220,7 +220,7 @@ the change.
 | Coach | `GET /coach/messages`, `GET /connections/access` | `POST /coach/messages` (`localDate`, `clientKey`, `timezone`), `DELETE /coach/messages` |
 | Profile, memory | `GET /profile`, `GET /preferences`, `GET /progress` | `PUT /profile` (welcome step, Edit preferences & goals), `POST`/`PATCH`/`DELETE /preferences`, `DELETE /memory` |
 | Overview | `GET /rhythm/interests`, `GET /rhythm/learned` (plus Today's reads) | (Today's writes) |
-| Content library | `GET /rhythm/saved` (polled every 5 s while notes are being prepared), `GET /rhythm/connections` | `POST /rhythm/saved/{videoId}/summary` (Prepare notes), `DELETE /rhythm/agents/{id}` (Disconnect) |
+| Content library (cards with the start of each video's notes; *Read notes* opens them whole on their own page) | `GET /rhythm/saved` (polled every 5 s while notes are being prepared), `GET /rhythm/connections` | `POST /rhythm/saved/{videoId}/summary` (Prepare notes), `DELETE /rhythm/agents/{id}` (Disconnect) |
 | Interests & sharing | `GET /rhythm/interests`, `GET /rhythm/learned` | `PUT /rhythm/settings` (each switch, with `expectedRevision`; a stale revision is refetched and retried once), `PUT /rhythm/choices` (keep, not interested, undo, add, level, length, equipment, quick picks), `POST /rhythm/forget` |
 
 Still only on the phone and website: the weekly planner and plan changes in your own words, assistant approvals,
@@ -427,11 +427,17 @@ Debug build against the deployed API, signed in with a real account (the owner's
   yet: both said so and offered the next step); Downloads with the Windows card marked; Camera workout explained that
   the local camera coach wasn't running; the Coach said the account's ElevenLabs voice Coach is on the website; Profile
   grouped as on the website.
-- Not seen with real data: saved videos with notes (this account has none), and a real *Prepare notes*.
+- Signed in with the owner's main account: Overview showed Learning on, three interests and YouTube sharing on; the
+  Content library showed its two saved videos, each card with the start of Rhythm's notes and their length ("5
+  sections · 27 steps"); *Read notes* opened each video's notes on their own page (the overview, then one card per
+  section with its numbered steps or bullets, then the video's description and YouTube link), and *← Content library*
+  went back.
+- Not seen with real data: a real *Prepare notes* (both saved videos already had notes).
 
 Automated (`__tests__/website-screens.test.tsx`, against a stand-in for the API): the navigation on a wide and a narrow
-window; Overview's cards from the account; saved videos with notes, their YouTube links (a saved link to another site is
-never shown or opened), *Prepare notes*; connections without Codex; no Memory tab; the four switches showing the saved
+window; Overview's cards from the account; saved videos with a short preview of their notes on the card and the whole
+notes on the *Read notes* page, their YouTube links (a saved link to another site is never shown or opened), *Prepare
+notes*; connections without Codex; no Memory tab; the four switches showing the saved
 settings and a switch saved as the website saves it; *Keep* saved as a choice; no "Rhythm noticed" prompt; Camera
 workout unavailable; the ElevenLabs label; Profile's groups. The sign-in, account-switching and isolation tests still
 pass with the new layout.

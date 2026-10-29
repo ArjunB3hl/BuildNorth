@@ -26,8 +26,10 @@ import {
   type SavedVideo,
 } from '../lib/rhythm';
 import { useLoad } from '../lib/use-load';
+import { notesPreview, notesSize } from '../lib/video-notes';
 import { useNav } from '../navigation';
 import { Spacing } from '../theme';
+import { rememberVideos } from './video-notes';
 
 // Content library: the website's (mobile/src/app/(app)/(tabs)/profile/videos.tsx, with recommendations off). Saved
 // videos — saved with Save to Rhythm in the Chrome extension — with Rhythm's notes and their YouTube links; and the
@@ -63,6 +65,7 @@ export function LibraryScreen() {
     { everyMs: 5000, poll: preparing },
   );
   const videos = saved.data?.savedVideos ?? [];
+  rememberVideos(videos);
   const generating = videos.some(v => v.summaryState === 'generating');
   useEffect(() => setPreparing(generating), [generating]);
 
@@ -174,8 +177,8 @@ function VideoCard({
 }) {
   const { api } = useStore();
   const [preparing, setPreparing] = useState(false);
+  const nav = useNav();
   const [message, setMessage] = useState<string | null>(null);
-  const [showDescription, setShowDescription] = useState(false);
   const link = youtubeLink(video);
   const meta = [
     video.channel,
@@ -221,9 +224,16 @@ function VideoCard({
       <View style={styles.notes}>
         <ThemedText type="smallBold">Notes</ThemedText>
         {video.summaryState === 'ready' && video.summary ? (
-          <ThemedText type="small" selectable>
-            {video.summary}
-          </ThemedText>
+          <>
+            <ThemedText type="small">
+              {notesPreview(video.summary) ?? 'Notes are ready.'}
+            </ThemedText>
+            {notesSize(video.summary) ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {notesSize(video.summary)}
+              </ThemedText>
+            ) : null}
+          </>
         ) : video.summaryState === 'generating' || preparing ? (
           <ThemedText type="small" themeColor="textSecondary">
             Rhythm is preparing notes from the transcript…
@@ -253,34 +263,21 @@ function VideoCard({
         {message ? <Notice tone="error">{message}</Notice> : null}
       </View>
 
-      {video.description ? (
-        <View style={styles.gap}>
-          <View style={styles.start}>
-            <Button
-              title={showDescription ? 'Hide description' : 'Show description'}
-              size="small"
-              variant="quiet"
-              onPress={() => setShowDescription(s => !s)}
-            />
-          </View>
-          {showDescription ? (
-            <ThemedText type="small" themeColor="textSecondary" selectable>
-              {video.description}
-            </ThemedText>
-          ) : null}
-        </View>
-      ) : null}
-
       <View style={styles.row}>
+        {video.summaryState === 'ready' && video.summary ? (
+          <Button
+            title="Read notes"
+            size="small"
+            onPress={() => nav.push({ name: 'video', id: video.videoId })}
+          />
+        ) : null}
         <Button
-          title="Open on YouTube ↗"
+          title="Watch on YouTube ↗"
           size="small"
+          variant="secondary"
           onPress={() => Linking.openURL(link)}
         />
       </View>
-      <ThemedText type="small" themeColor="textSecondary" selectable>
-        {link}
-      </ThemedText>
     </Card>
   );
 }

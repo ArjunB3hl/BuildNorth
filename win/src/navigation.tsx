@@ -33,6 +33,7 @@ export type Route =
   | { name: 'memory' }
   | { name: 'connections' }
   | { name: 'edit-profile' }
+  | { name: 'video'; id: string }
   | { name: 'account' };
 
 export type NavGroup = 'main' | 'discover' | 'bottom';
@@ -69,6 +70,7 @@ const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
   memory: 'Memory',
   connections: 'AI connections',
   'edit-profile': 'Preferences & goals',
+  video: 'Saved video',
   account: 'Rhythm account',
 };
 

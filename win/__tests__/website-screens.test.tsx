@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Text } from 'react-native';
+import { Linking, Text } from 'react-native';
 import ReactTestRenderer, {
   type ReactTestInstance,
   type ReactTestRenderer as Renderer,
@@ -187,7 +187,20 @@ beforeEach(() => {
       durationSeconds: 1230,
       topics: ['gym'],
       description: 'A full-body session.',
-      summary: 'Warm up, then three circuits of squats, rows and presses.',
+      summary: [
+        'Exercise notes',
+        '',
+        'A full-body dumbbell session: a short warm-up, then three circuits of squats, rows and presses with a minute',
+        'of rest between circuits, finishing with a stretch for the hips and shoulders.',
+        '',
+        'Warm-up',
+        '1. March on the spot for a minute.',
+        '2. Ten slow bodyweight squats.',
+        '',
+        'Circuits',
+        '• Goblet squats, 12 reps.',
+        '• Bent-over rows, 10 reps each side.',
+      ].join('\n'),
       hasTranscript: true,
       summaryState: 'ready',
       summarizedAt: '2026-10-28T10:00:00Z',
@@ -245,10 +258,10 @@ async function waitFor(check: () => boolean, what: string) {
   throw new Error(`Timed out waiting for ${what}`);
 }
 
-async function press(renderer: Renderer, label: string) {
+async function press(renderer: Renderer, label: string, index = 0) {
   const target = renderer.root.findAll(
     n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function',
-  )[0];
+  )[index];
   if (!target) {
     throw new Error(`Nothing to press labelled "${label}"`);
   }
@@ -309,16 +322,38 @@ test('Overview shows the website’s cards from the account’s data, then today
 });
 
 test('Content library: saved videos with notes and YouTube links; connections without Codex; no Memory tab', async () => {
+  const opened = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   const { renderer, text } = await start();
   await press(renderer, 'Content library');
   await waitFor(() => text().includes('20-minute dumbbell workout'), 'the saved videos');
-  expect(text()).toContain('Warm up, then three circuits of squats, rows and presses.');
   expect(text()).toContain('Coach Kim · 20:30');
-  expect(text()).toContain('https://www.youtube.com/watch?v=vid1');
+  // the card shows the start of the notes and how long they are, not all of them
+  expect(text()).toContain('A full-body dumbbell session: a short warm-up');
+  expect(text()).toContain('2 sections · 4 steps');
+  expect(text()).not.toContain('March on the spot');
+  expect(text()).not.toContain('Memory');
+
   // a link that isn't YouTube's is never shown or opened: the video's own YouTube address instead
   expect(text()).not.toContain('evil.example');
-  expect(text()).toContain('https://www.youtube.com/watch?v=vid2');
-  expect(text()).not.toContain('Memory');
+  renderer.root
+    .findAll(n => n.props.accessibilityLabel === 'Watch on YouTube ↗' && typeof n.props.onPress === 'function')
+    .forEach(n => n.props.onPress());
+  const links = opened.mock.calls.map(([url]) => url);
+  expect(links).toContain('https://www.youtube.com/watch?v=vid1');
+  expect(links).toContain('https://www.youtube.com/watch?v=vid2');
+  expect(links.join(' ')).not.toContain('evil.example');
+
+  // the whole notes open on their own page: the overview, then each section with its steps
+  await press(renderer, 'Read notes');
+  await waitFor(() => text().includes('March on the spot'), 'the notes page');
+  expect(text()).toContain('EXERCISE NOTES');
+  expect(text()).toContain('Warm-up');
+  expect(text()).toContain('Circuits');
+  expect(text()).toContain('Bent-over rows, 10 reps each side.');
+  expect(text()).toContain('https://www.youtube.com/watch?v=vid1');
+  await press(renderer, '← Content library');
+  await waitFor(() => text().includes('2 sections · 4 steps'), 'the library again');
+  opened.mockRestore();
 
   await press(renderer, 'Prepare notes');
   await waitFor(() => text().includes('Three rounds: jab, cross, slip.'), 'the prepared notes');

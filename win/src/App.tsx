@@ -22,6 +22,7 @@ import { DownloadsScreen } from './screens/downloads';
 import { InterestsScreen } from './screens/interests';
 import { LibraryScreen } from './screens/library';
 import { OverviewScreen } from './screens/overview';
+import { VideoNotesScreen } from './screens/video-notes';
 import { MemoryScreen, ProfileScreen } from './screens/profile';
 import { SignInScreen } from './screens/sign-in';
 import {
@@ -143,6 +144,8 @@ function CurrentPage() {
       return <ConnectionsScreen />;
     case 'edit-profile':
       return <EditProfileScreen />;
+    case 'video':
+      return <VideoNotesScreen key={route.id} id={route.id} />;
     case 'account':
       return <AccountScreen />;
     case 'root':
