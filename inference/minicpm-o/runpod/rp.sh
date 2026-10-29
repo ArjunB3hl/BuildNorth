@@ -10,6 +10,8 @@
 #                                  (gives up after READY_TIMEOUT_S, default 2400; with TORCH_COMPILE=1 use >= 3600)
 #   rp.sh stop     [POD_ID]        stop the Pod (GPU released; network volume kept), then verify-stopped
 #   rp.sh start    [POD_ID]        resume a stopped Pod (restart test; Runpod may have no free GPU on that host)
+#   rp.sh set-image POD_ID         switch a Pod to IMAGE_REF in place (same GPU host and volume; the Pod restarts and
+#                                  loads the model again): every other Pod setting is sent back unchanged
 #   rp.sh verify-stopped [POD_ID]  exit 0 only if the Pod is EXITED or gone
 #   rp.sh terminate [POD_ID]       delete the Pod (asks first), then verify it is gone
 #   rp.sh running                  list every Pod on the account that is not stopped (should be empty after a test)
@@ -26,7 +28,8 @@ api() {   # api METHOD PATH [JSON_BODY]: prints the body; exits non-zero on HTTP
   out=$(mktemp)
   code=$(curl -sS -o "$out" -w '%{http_code}' -X "$method" "$API$path" \
     -K <(printf 'header = "Authorization: Bearer %s"\n' "$RUNPOD_API_KEY") \
-    -H 'content-type: application/json' ${body:+--data "$body"}) || { rm -f "$out"; return 1; }
+    -H 'content-type: application/json' ${body:+--data-binary @-} <<<"$body") || { rm -f "$out"; return 1; }
+    # (the body goes on stdin, not the command line: a Pod's env can hold values such as Runpod's JUPYTER_PASSWORD)
   if (( code >= 400 )); then
     echo "Runpod API $method $path -> HTTP $code: $(head -c 500 "$out")" >&2
     rm -f "$out"
@@ -70,6 +73,50 @@ sys.exit(1 if pods else 0)
 EOF
 )
 show() { python3 -c "$PYSHOW"; }
+PYSETIMAGE_BODY=$(cat <<'EOF'
+import json, os, sys
+p = json.load(sys.stdin)
+body = {"imageName": os.environ["IMAGE_REF"], "env": p.get("env") or {}, "ports": p.get("ports") or [],
+        "containerDiskInGb": p.get("containerDiskInGb"), "volumeInGb": p.get("volumeInGb") or 0,
+        "volumeMountPath": p.get("volumeMountPath") or "/workspace", "name": p.get("name"),
+        "dockerEntrypoint": p.get("dockerEntrypoint") or [], "dockerStartCmd": p.get("dockerStartCmd") or []}
+auth = p.get("containerRegistryAuthId") or os.environ.get("RUNPOD_REGISTRY_AUTH_ID")
+if auth:
+    body["containerRegistryAuthId"] = auth
+if not body["ports"] or body["containerDiskInGb"] is None:
+    sys.exit("the Pod did not report its ports or container disk; not sending a PATCH that could reset them")
+print(json.dumps(body))
+EOF
+)
+PYSETIMAGE_SHOW=$(cat <<'EOF'
+import json, os, sys
+p = json.load(sys.stdin)
+g = p.get
+print("pod %s (%s), desiredStatus=%s, $%s/h" % (g("id"), g("name"), g("desiredStatus"), g("costPerHr")))
+print("  image now: %s" % g("imageName"))
+print("  image new: %s" % os.environ["IMAGE_REF"])
+print("  kept: env keys %s, ports %s, disk %s GB, network volume %s at %s"
+      % (sorted(g("env") or {}), g("ports"), g("containerDiskInGb"), g("networkVolumeId"), g("volumeMountPath")))
+EOF
+)
+PYSETIMAGE_CHECK=$(cat <<'EOF'
+import hashlib, json, os, sys
+b, a = json.loads(sys.argv[1]), json.loads(sys.argv[2])
+digest = lambda env: {k: hashlib.sha256(str(v).encode()).hexdigest() for k, v in (env or {}).items()}
+problems = []
+if a.get("imageName") != os.environ["IMAGE_REF"]:
+    problems.append("image is %s" % a.get("imageName"))
+for k in ("ports", "containerDiskInGb", "volumeMountPath", "networkVolumeId", "containerRegistryAuthId"):
+    if a.get(k) != b.get(k):
+        problems.append("%s changed: %s -> %s" % (k, b.get(k), a.get(k)))
+if digest(a.get("env")) != digest(b.get("env")):
+    problems.append("env changed (keys %s -> %s; values not shown)" % (sorted(b.get("env") or {}), sorted(a.get("env") or {})))
+print("pod %s: desiredStatus=%s image=%s" % (a.get("id"), a.get("desiredStatus"), a.get("imageName")))
+if problems:
+    sys.exit("CHECK: " + "; ".join(problems))
+print("verified: only the image changed (env values compared by hash, not shown)")
+EOF
+)
 
 case ${1:-} in
   template)
@@ -141,6 +188,24 @@ case ${1:-} in
     date -u +%FT%TZ > "$HERE/.pod-created"
     echo "start requested at $(cat "$HERE/.pod-created"); next: $0 wait-ready"
     out=$(api GET "/pods/$id") && show <<<"$out"
+    ;;
+  set-image)
+    id=${2:-}; [[ -n $id ]] || { echo "usage: $0 set-image POD_ID" >&2; exit 2; }
+    need IMAGE_REF
+    [[ $IMAGE_REF == *@sha256:* ]] || { echo "IMAGE_REF must be pinned by digest (ghcr.io/...@sha256:...)" >&2; exit 2; }
+    before=$(api GET "/pods/$id")
+    # PATCH /pods/{id} resets the Pod, and fields left out may fall back to defaults (ports 8888/http,22/tcp, empty env):
+    # every setting is sent back as it is, with only the image changed. Env values are never printed.
+    body=$(python3 -c "$PYSETIMAGE_BODY" <<<"$before")
+    python3 -c "$PYSETIMAGE_SHOW" <<<"$before"
+    echo "The Pod restarts with the new image (pull + model load, about 5 min) and stays billed while it does."
+    read -r -p "Type 'switch image' to continue: " answer
+    [[ $answer == "switch image" ]] || { echo "not changed"; exit 1; }
+    api PATCH "/pods/$id" "$body" >/dev/null
+    date -u +%FT%TZ > "$HERE/.pod-created"
+    after=$(api GET "/pods/$id")
+    python3 -c "$PYSETIMAGE_CHECK" "$before" "$after"
+    echo "switched at $(cat "$HERE/.pod-created"); next: $0 wait-ready $id"
     ;;
   verify-stopped)
     id=$(pod_id "${2:-}"); [[ -n $id ]] || { echo "no POD_ID" >&2; exit 2; }
