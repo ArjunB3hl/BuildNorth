@@ -3,9 +3,11 @@ import { readSecret, writeSecret } from '../../modules/north-win';
 // Clerk sign-in for Windows. Clerk has no SDK for React Native for Windows, so this talks to the instance's
 // Frontend API directly, the way @clerk/expo does on iPhone: requests carry `_is_native=1`, and the client
 // token travels in the Authorization header (Clerk returns a new one in the response's Authorization header)
-// instead of in cookies. The phone app's flow is the reference (mobile/src/app/(auth)/sign-in.tsx): email and
-// password, then an emailed code when Clerk asks for a new-device check or a second factor. Session tokens
-// for the BuildNorth API come from POST /client/sessions/{id}/tokens and last about a minute.
+// instead of in cookies. The website's and phone app's flows are the reference (mobile/src/app/(auth)/sign-in.tsx
+// and sign-up.tsx): a code emailed to you (or a password, then an emailed code when Clerk asks for a new-device
+// check or a second factor), and a new account from an email address, a password and an emailed code. Session
+// tokens for the BuildNorth API come from POST /client/sessions/{id}/tokens and last about a minute. The app holds
+// only the publishable key: never a secret key, and never a browser's cookies.
 //
 // The client token is kept encrypted for the Windows user by NorthWin (DPAPI), like expo-secure-store's
 // token cache on iPhone, so the app stays signed in across launches.
@@ -23,9 +25,29 @@ export class ClerkError extends Error {
 }
 
 export type SignInResult =
-  | { step: 'complete' }
+  /** `isNew`: the account was created just now, in this app. */
+  | { step: 'complete'; isNew?: boolean }
   | { step: 'code'; sentTo: string }
   | { step: 'unsupported'; status: string };
+
+/** Clerk's error codes, said for people. Anything else shows Clerk's own message. */
+const MESSAGES: Record<string, string> = {
+  form_code_incorrect:
+    'That code isn’t right. Check the newest email from Rhythm and try again.',
+  verification_expired: 'That code has expired. Send a new code.',
+  form_code_expired: 'That code has expired. Send a new code.',
+  verification_failed: 'Too many wrong codes. Send a new code.',
+  form_identifier_not_found:
+    'There’s no Rhythm account for that email address.',
+  form_password_incorrect: 'That password isn’t right.',
+  form_identifier_exists:
+    'There’s already a Rhythm account for that email address. Sign in instead.',
+  form_password_pwned:
+    'That password has appeared in a data breach. Choose a different one.',
+  form_password_length_too_short: 'That password is too short.',
+  form_param_format_invalid: 'Check the email address.',
+  too_many_requests: 'Too many attempts. Wait a minute, then try again.',
+};
 
 export type ClerkUser = {
   id: string;
@@ -49,15 +71,26 @@ type ClientResource = {
   last_active_session_id: string | null;
 };
 
+type Factor = {
+  strategy: string;
+  email_address_id?: string;
+  safe_identifier?: string;
+};
+
 type SignInResource = {
   id: string;
   status: string;
   created_session_id: string | null;
-  supported_second_factors?: {
-    strategy: string;
-    email_address_id?: string;
-    safe_identifier?: string;
-  }[];
+  supported_first_factors?: Factor[] | null;
+  supported_second_factors?: Factor[] | null;
+};
+
+type SignUpResource = {
+  id: string;
+  status: string;
+  created_session_id: string | null;
+  missing_fields?: string[];
+  unverified_fields?: string[];
 };
 
 /** The Frontend API host inside a publishable key (same rules as the backend's auth.py). */
@@ -79,6 +112,11 @@ export class ClerkClient {
   private clientToken: string | null;
   private sessionId: string | null = null;
   private signIn: SignInResource | null = null;
+  /** Which code the sign-in waits for: the emailed sign-in code, or a second factor / new-device check. */
+  private factor: 'first' | 'second' = 'first';
+  private signUp: SignUpResource | null = null;
+  private codeAddressId: string | undefined;
+  private sessionEnded: (() => void) | null = null;
   private cached: { jwt: string; expiresAt: number } | null = null;
   private user: ClerkUser | null = null;
 
@@ -94,6 +132,11 @@ export class ClerkClient {
     return this.user;
   }
 
+  /** Called when Clerk says the session is over (expired, revoked, or signed out elsewhere) while the app runs. */
+  onSessionEnded(listener: (() => void) | null): void {
+    this.sessionEnded = listener;
+  }
+
   /** Restores the session saved by an earlier launch. Returns whether one is active. */
   async restore(): Promise<boolean> {
     if (!this.clientToken) {
@@ -104,11 +147,47 @@ export class ClerkClient {
     return this.signedIn;
   }
 
-  /** Step one: email and password. */
+  /** Sign in with a code emailed to `email` (Clerk's email_code first factor): sends the code. */
+  async sendEmailCode(email: string): Promise<SignInResult> {
+    this.resetSignIn();
+    let signIn: SignInResource;
+    try {
+      ({ response: signIn } = await this.request<SignInResource>(
+        'POST',
+        '/client/sign_ins',
+        { identifier: email },
+      ));
+    } catch (error) {
+      if (await this.alreadySignedIn(error)) {
+        return { step: 'complete' };
+      }
+      throw error;
+    }
+    if (signIn.status === 'complete') {
+      return this.continueSignIn(signIn);
+    }
+    const factor = signIn.supported_first_factors?.find(
+      f => f.strategy === 'email_code',
+    );
+    if (!factor) {
+      throw new ClerkError(
+        'This account can’t sign in with an emailed code. Use its password instead.',
+        'no_email_code',
+      );
+    }
+    this.signIn = signIn;
+    this.factor = 'first';
+    this.codeAddressId = factor.email_address_id;
+    await this.prepareCode();
+    return { step: 'code', sentTo: factor.safe_identifier ?? email };
+  }
+
+  /** Email and password (then an emailed code if Clerk asks for one). */
   async signInWithPassword(
     email: string,
     password: string,
   ): Promise<SignInResult> {
+    this.resetSignIn();
     let response: SignInResource;
     try {
       ({ response } = await this.request<SignInResource>(
@@ -117,34 +196,76 @@ export class ClerkClient {
         { identifier: email, password, strategy: 'password' },
       ));
     } catch (error) {
-      // Single-session instances refuse a second sign-in while one session is active on this client.
-      if (error instanceof ClerkError && error.code === 'session_exists') {
-        await this.restore();
-        if (this.signedIn) {
-          return { step: 'complete' };
-        }
+      if (await this.alreadySignedIn(error)) {
+        return { step: 'complete' };
       }
       throw error;
     }
     return this.continueSignIn(response);
   }
 
-  /** Step two, when Clerk asked for it: the code it emailed. */
+  /** A new account: email address and password, then the code Clerk emails to confirm the address. */
+  async signUpWithEmail(
+    email: string,
+    password: string,
+  ): Promise<SignInResult> {
+    this.resetSignIn();
+    let signUp: SignUpResource;
+    try {
+      ({ response: signUp } = await this.request<SignUpResource>(
+        'POST',
+        '/client/sign_ups',
+        { email_address: email, password },
+      ));
+    } catch (error) {
+      if (await this.alreadySignedIn(error)) {
+        return { step: 'complete' };
+      }
+      throw error;
+    }
+    this.signUp = signUp;
+    if (signUp.status === 'complete') {
+      return this.continueSignUp(signUp);
+    }
+    await this.prepareCode();
+    return { step: 'code', sentTo: email };
+  }
+
+  /** The emailed code, for whichever step is waiting for one. */
   async verifyEmailCode(code: string): Promise<SignInResult> {
+    if (this.signUp) {
+      const { response } = await this.request<SignUpResource>(
+        'POST',
+        `/client/sign_ups/${this.signUp.id}/attempt_verification`,
+        { strategy: 'email_code', code },
+      );
+      return this.continueSignUp(response);
+    }
     if (!this.signIn) {
       throw new ClerkError('Start over and sign in again.');
     }
     const { response } = await this.request<SignInResource>(
       'POST',
-      `/client/sign_ins/${this.signIn.id}/attempt_second_factor`,
+      `/client/sign_ins/${this.signIn.id}/attempt_${this.factor}_factor`,
       { strategy: 'email_code', code },
     );
     return this.continueSignIn(response);
   }
 
-  /** Forgets an unfinished sign-in (Start over). */
+  /** Emails a new code (the one before stops working). */
+  async resendCode(): Promise<void> {
+    if (!this.signUp && !this.signIn) {
+      throw new ClerkError('Start over and sign in again.');
+    }
+    await this.prepareCode();
+  }
+
+  /** Forgets an unfinished sign-in or sign-up (Start over). */
   resetSignIn(): void {
     this.signIn = null;
+    this.signUp = null;
+    this.factor = 'first';
+    this.codeAddressId = undefined;
   }
 
   /**
@@ -184,6 +305,7 @@ export class ClerkClient {
         (error.status === 401 || error.status === 404)
       ) {
         this.clearSession();
+        this.sessionEnded?.();
         return null;
       }
       throw error;
@@ -193,6 +315,7 @@ export class ClerkClient {
   async signOut(): Promise<void> {
     const sessionId = this.sessionId;
     this.clearSession();
+    this.resetSignIn();
     try {
       if (sessionId) {
         await this.request('POST', `/client/sessions/${sessionId}/remove`, {});
@@ -204,15 +327,70 @@ export class ClerkClient {
     }
   }
 
+  /** Single-session instances refuse a second sign-in while one session is active on this client. */
+  private async alreadySignedIn(error: unknown): Promise<boolean> {
+    if (error instanceof ClerkError && error.code === 'session_exists') {
+      await this.restore();
+      return this.signedIn;
+    }
+    return false;
+  }
+
+  /** Has Clerk email the code for the step that is waiting. */
+  private async prepareCode(): Promise<void> {
+    if (this.signUp) {
+      await this.request(
+        'POST',
+        `/client/sign_ups/${this.signUp.id}/prepare_verification`,
+        { strategy: 'email_code' },
+      );
+      return;
+    }
+    if (!this.signIn) {
+      throw new ClerkError('Start over and sign in again.');
+    }
+    const form: Record<string, string> = { strategy: 'email_code' };
+    if (this.codeAddressId) {
+      form.email_address_id = this.codeAddressId;
+    }
+    await this.request(
+      'POST',
+      `/client/sign_ins/${this.signIn.id}/prepare_${this.factor}_factor`,
+      form,
+    );
+  }
+
+  private async adoptSession(sessionId: string): Promise<void> {
+    this.resetSignIn();
+    // Load the client so the session's user (name, email) is known.
+    await this.restore();
+    if (!this.signedIn) {
+      this.sessionId = sessionId;
+    }
+  }
+
+  private async continueSignUp(signUp: SignUpResource): Promise<SignInResult> {
+    this.signUp = signUp;
+    if (signUp.status === 'complete' && signUp.created_session_id) {
+      await this.adoptSession(signUp.created_session_id);
+      return { step: 'complete', isNew: true };
+    }
+    const missing = [
+      ...(signUp.missing_fields ?? []),
+      ...(signUp.unverified_fields ?? []),
+    ];
+    throw new ClerkError(
+      `Your account isn’t complete yet (Clerk still needs: ${
+        missing.join(', ') || signUp.status
+      }). Create it on the Rhythm website instead.`,
+      'sign_up_incomplete',
+    );
+  }
+
   private async continueSignIn(signIn: SignInResource): Promise<SignInResult> {
     this.signIn = signIn;
     if (signIn.status === 'complete' && signIn.created_session_id) {
-      this.signIn = null;
-      // Load the client so the session's user (name, email) is known.
-      await this.restore();
-      if (!this.signedIn) {
-        this.sessionId = signIn.created_session_id;
-      }
+      await this.adoptSession(signIn.created_session_id);
       return { step: 'complete' };
     }
     // New-device check (Client Trust) or email-code MFA: verify with a code sent by email.
@@ -224,15 +402,9 @@ export class ClerkClient {
         signIn.status === 'needs_second_factor') &&
       emailCode
     ) {
-      const form: Record<string, string> = { strategy: 'email_code' };
-      if (emailCode.email_address_id) {
-        form.email_address_id = emailCode.email_address_id;
-      }
-      await this.request(
-        'POST',
-        `/client/sign_ins/${signIn.id}/prepare_second_factor`,
-        form,
-      );
+      this.factor = 'second';
+      this.codeAddressId = emailCode.email_address_id;
+      await this.prepareCode();
       return {
         step: 'code',
         sentTo: emailCode.safe_identifier ?? 'your email',
@@ -295,7 +467,8 @@ export class ClerkClient {
       });
     } catch {
       throw new ClerkError(
-        "Can't reach Clerk. Check your internet connection.",
+        'Can’t reach the Rhythm sign-in service (Clerk). Check your internet connection.',
+        'network',
       );
     }
     const nextClient = res.headers.get('authorization');
@@ -306,9 +479,16 @@ export class ClerkClient {
     const json = await res.json().catch(() => null);
     if (!res.ok) {
       const first = json?.errors?.[0];
+      const code: string | undefined =
+        first?.code ?? (res.status === 429 ? 'too_many_requests' : undefined);
       throw new ClerkError(
-        first?.long_message ?? first?.message ?? `Clerk error ${res.status}`,
-        first?.code,
+        (code && MESSAGES[code]) ??
+          first?.long_message ??
+          first?.message ??
+          (res.status >= 500
+            ? 'The Rhythm sign-in service (Clerk) isn’t answering right now. Try again in a moment.'
+            : `Sign-in failed (Clerk error ${res.status}).`),
+        code,
         res.status,
       );
     }

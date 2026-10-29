@@ -168,7 +168,7 @@ export function CalendarScreen() {
       <Notice tone="info">
         {account
           ? 'Your Rhythm account · The same Calendar as your phone and the website. Finished workouts, done meals and Watch data come from the server and can’t be edited here.'
-          : 'Demo on this PC · Entries stay on this device. Sign in from Profile to use your account’s Calendar.'}
+          : 'Demo on this PC · Entries stay on this device; this isn’t a Rhythm account.'}
       </Notice>
       <View style={s.row}>
         <Text type="small" themeColor="textSecondary" style={s.flex}>

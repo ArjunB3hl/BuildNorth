@@ -165,6 +165,12 @@ export function createApi(getToken: TokenSource, baseUrl = API_URL) {
     baseUrl,
     me: () => request<{ userId: string }>('GET', '/me'),
     profile: () => request<Profile>('GET', '/profile'),
+    /** PUT /profile: the welcome step's details (it counts as done). */
+    saveProfile: (profile: Profile) =>
+      request<Profile>('PUT', '/profile', {
+        ...profile,
+        onboardingCompleted: true,
+      }),
     preferences: {
       list: () =>
         request<{ preferences: Preference[]; memoryAvailable: boolean }>(

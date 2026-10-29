@@ -1,186 +1,72 @@
 import { useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import {
-  Button,
-  Card,
-  Notice,
-  Screen,
-  TextField,
-  ThemedText,
-} from '../components/ui';
-import { API_URL, WEB_URL } from '../config';
-import { describe, useAccount } from '../lib/account';
-import { useNav } from '../navigation';
+import { Button, Card, Notice, Screen, ThemedText } from '../components/ui';
+import { BACKEND_LABEL } from '../config';
+import { useAccount } from '../lib/account';
 import { Spacing } from '../theme';
 
-// Sign in to a Rhythm account (Profile › Rhythm account). The same steps as the phone app's sign-in screen:
-// email and password, then an emailed code when Clerk asks for one. Accounts are created on the website or
-// the phone; the Windows app only signs in.
+// Profile › Rhythm account: who is signed in, where the data lives, and Sign out. Signing in happens on the sign-in
+// screen that replaces the app while signed out (src/screens/sign-in.tsx).
 
 export function AccountScreen() {
-  const { account, signInAvailable, signIn, verifyCode, resetSignIn, signOut } =
-    useAccount();
-  const nav = useNav();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
-  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const { account, signInAvailable, signOut } = useAccount();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  if (account.status === 'signed-in') {
+  if (account.status !== 'signed-in') {
     return (
       <Screen title="Rhythm account">
-        <Card>
-          <ThemedText type="smallBold">
-            Signed in
-            {account.user.email ? ` as ${account.user.email}` : ''}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {account.via === 'dev-token'
-              ? `Development token for ${account.user.id} on ${API_URL}.`
-              : `Today, Calendar, meals, routines, Coach and memory come from your account on ${API_URL}.`}
-          </ThemedText>
-        </Card>
-        <View style={styles.start}>
-          <Button
-            title="Sign out"
-            variant="secondary"
-            onPress={async () => {
-              await signOut();
-              nav.back();
-            }}
-          />
-        </View>
+        <Notice tone="info">
+          {signInAvailable
+            ? 'You’re signed out.'
+            : 'Sign-in isn’t configured in this build (no EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in win/.env; see win/README.md), so the app shows demo data saved on this PC. It isn’t a Rhythm account.'}
+        </Notice>
       </Screen>
     );
   }
 
-  async function run(step: () => Promise<void>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await step();
-    } catch (e) {
-      setError(describe(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const handle = (result: Awaited<ReturnType<typeof signIn>>) => {
-    if (result.step === 'complete') {
-      nav.back();
-    } else if (result.step === 'code') {
-      setCodeSentTo(result.sentTo);
-    } else {
-      setError(
-        `Sign-in needs a step this app doesn’t support yet (${result.status}). Sign in on the website or phone.`,
-      );
-    }
-  };
-
-  const onSignIn = () =>
-    run(async () => {
-      if (!email.trim() || !password) {
-        throw new Error('Enter your email address and password.');
-      }
-      handle(await signIn(email.trim(), password));
-    });
-
-  const onVerify = () => run(async () => handle(await verifyCode(code.trim())));
-
+  const { user, via } = account;
   return (
-    <Screen
-      title="Sign in"
-      subtitle="Use your Rhythm account to sync this PC with your phone and the website."
-    >
-      {account.status === 'signed-out' && account.problem ? (
-        <Notice tone="error">{account.problem}</Notice>
-      ) : null}
-      {!signInAvailable ? (
-        <Notice tone="info">
-          Sign-in isn’t configured in this build. Set
-          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in win/.env and restart the dev
-          server (see win/README.md). Until then the app uses local demo data.
-        </Notice>
-      ) : codeSentTo ? (
-        <Card>
-          <ThemedText>We sent a verification code to {codeSentTo}.</ThemedText>
-          <TextField
-            label="Verification code"
-            value={code}
-            onChangeText={setCode}
-            placeholder="123456"
-            keyboardType="number-pad"
-            accessibilityLabel="Verification code"
-            onSubmitEditing={onVerify}
-          />
-          {error ? <Notice tone="error">{error}</Notice> : null}
-          <View style={styles.row}>
-            <Button
-              title="Verify"
-              onPress={onVerify}
-              loading={busy}
-              disabled={!code.trim()}
-            />
-            <Button
-              title="Start over"
-              variant="secondary"
-              disabled={busy}
-              onPress={() => {
-                resetSignIn();
-                setCodeSentTo(null);
-                setCode('');
-                setError(null);
-              }}
-            />
-          </View>
-        </Card>
-      ) : (
-        <Card>
-          <TextField
-            label="Email address"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            accessibilityLabel="Email address"
-          />
-          <TextField
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Your password"
-            accessibilityLabel="Password"
-            onSubmitEditing={onSignIn}
-          />
-          {error ? <Notice tone="error">{error}</Notice> : null}
-          <View style={styles.row}>
-            <Button title="Sign in" onPress={onSignIn} loading={busy} />
-          </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            No account yet? Create one on the website or the phone app, then
-            sign in here.
-          </ThemedText>
-          <View style={styles.start}>
-            <Button
-              title="Open the Rhythm website"
-              variant="quiet"
-              size="small"
-              onPress={() => Linking.openURL(`${WEB_URL}/sign-up`)}
-            />
-          </View>
-        </Card>
-      )}
+    <Screen title="Rhythm account">
+      <Card style={styles.card}>
+        <ThemedText type="smallBold">
+          {`Signed in${user.email ? ` as ${user.email}` : ''}`}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {via === 'dev-token'
+            ? `A development token for the fictional user ${user.id}.`
+            : 'Today, Calendar, meals, routines, the Coach and memory come from this account, the same as on your phone and the website.'}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {`Data: ${BACKEND_LABEL}.`}
+        </ThemedText>
+      </Card>
+      <Card style={styles.card}>
+        <ThemedText type="smallBold">Claude Code on this PC is separate</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Talking with Claude in Coach and the Claude coach in Camera workout
+          use the Claude account signed in to Claude Code on this PC, not your
+          Rhythm account. Signing out of Rhythm doesn’t sign Claude Code out
+          (use claude auth logout in a terminal for that).
+        </ThemedText>
+      </Card>
+      <View style={styles.start}>
+        <Button
+          title="Sign out"
+          variant="secondary"
+          loading={busy}
+          onPress={async () => {
+            setBusy(true);
+            // The app returns to the sign-in screen; nothing of this account stays in the app.
+            await signOut();
+          }}
+        />
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: Spacing.two },
+  card: { gap: Spacing.two },
   start: { alignItems: 'flex-start' },
 });

@@ -192,7 +192,7 @@ test('a new-device check asks for the emailed code, as on iPhone', async () => {
   expect(clerk.signedIn).toBe(true);
 });
 
-test('Clerk errors come back with their message', async () => {
+test('Clerk errors are said plainly; unknown ones keep Clerk’s message', async () => {
   const clerk = new ClerkClient('example.clerk.accounts.dev');
   replies = [
     response(422, {
@@ -204,11 +204,175 @@ test('Clerk errors come back with their message', async () => {
         },
       ],
     }),
+    response(422, {
+      errors: [{ long_message: 'Something new.', code: 'something_new' }],
+    }),
   ];
   await expect(
     clerk.signInWithPassword('nobody@example.com', 'pw'),
   ).rejects.toMatchObject({
-    message: "Couldn't find your account.",
+    message: 'There’s no Rhythm account for that email address.',
     code: 'form_identifier_not_found',
   });
+  await expect(clerk.sendEmailCode('x@example.com')).rejects.toMatchObject({
+    message: 'Something new.',
+    code: 'something_new',
+  });
+});
+
+const needsFirstFactor = {
+  id: 'sia_3',
+  status: 'needs_first_factor',
+  created_session_id: null,
+  supported_first_factors: [
+    { strategy: 'password' },
+    {
+      strategy: 'email_code',
+      email_address_id: 'idn_1',
+      safe_identifier: 'a***@example.com',
+    },
+  ],
+};
+
+const signedInAs = (id: string) =>
+  response(200, {
+    response: { id, status: 'complete', created_session_id: 'sess_1' },
+  });
+
+test('an emailed code: send, a wrong code, an expired one, a new one, then in', async () => {
+  const clerk = new ClerkClient('example.clerk.accounts.dev');
+  replies = [
+    response(200, { response: needsFirstFactor }, 'client-token-2'),
+    response(200, { response: needsFirstFactor }),
+  ];
+  await expect(clerk.sendEmailCode('ada@example.com')).resolves.toEqual({
+    step: 'code',
+    sentTo: 'a***@example.com',
+  });
+  expect(calls[0].init.body).toBe('identifier=ada%40example.com');
+  expect(calls[1].url).toContain('/client/sign_ins/sia_3/prepare_first_factor');
+  expect(calls[1].init.body).toBe('strategy=email_code&email_address_id=idn_1');
+
+  replies = [
+    response(422, {
+      errors: [{ code: 'form_code_incorrect', message: 'is incorrect' }],
+    }),
+    response(422, { errors: [{ code: 'verification_expired' }] }),
+  ];
+  await expect(clerk.verifyEmailCode('000000')).rejects.toMatchObject({
+    code: 'form_code_incorrect',
+    message:
+      'That code isn’t right. Check the newest email from Rhythm and try again.',
+  });
+  expect(calls[2].url).toContain('/client/sign_ins/sia_3/attempt_first_factor');
+  expect(calls[2].init.body).toBe('strategy=email_code&code=000000');
+  await expect(clerk.verifyEmailCode('111111')).rejects.toMatchObject({
+    code: 'verification_expired',
+    message: 'That code has expired. Send a new code.',
+  });
+
+  replies = [response(200, { response: needsFirstFactor })];
+  await clerk.resendCode();
+  expect(calls[4].url).toContain('/client/sign_ins/sia_3/prepare_first_factor');
+
+  replies = [signedInAs('sia_3'), response(200, { response: client })];
+  await expect(clerk.verifyEmailCode('424242')).resolves.toEqual({
+    step: 'complete',
+  });
+  expect(clerk.currentUser?.email).toBe('ada@example.com');
+});
+
+test('an emailed code, then a new-device check with a second code', async () => {
+  const clerk = new ClerkClient('example.clerk.accounts.dev');
+  replies = [
+    response(200, { response: needsFirstFactor }),
+    response(200, { response: needsFirstFactor }),
+  ];
+  await clerk.sendEmailCode('ada@example.com');
+  replies = [
+    response(200, {
+      response: {
+        id: 'sia_3',
+        status: 'needs_client_trust',
+        created_session_id: null,
+        supported_second_factors: [
+          {
+            strategy: 'email_code',
+            email_address_id: 'idn_1',
+            safe_identifier: 'a***@example.com',
+          },
+        ],
+      },
+    }),
+    response(200, { response: { id: 'sia_3', status: 'needs_client_trust' } }),
+  ];
+  await expect(clerk.verifyEmailCode('424242')).resolves.toEqual({
+    step: 'code',
+    sentTo: 'a***@example.com',
+  });
+  expect(calls[3].url).toContain('/prepare_second_factor');
+  replies = [signedInAs('sia_3'), response(200, { response: client })];
+  await clerk.verifyEmailCode('515151');
+  expect(calls[4].url).toContain('/attempt_second_factor');
+  expect(clerk.signedIn).toBe(true);
+});
+
+test('a new account: email and password, then the emailed code; it is marked new', async () => {
+  const clerk = new ClerkClient('example.clerk.accounts.dev');
+  const pending = {
+    id: 'sua_1',
+    status: 'missing_requirements',
+    created_session_id: null,
+    unverified_fields: ['email_address'],
+  };
+  replies = [
+    response(200, { response: pending }),
+    response(200, { response: pending }),
+  ];
+  await expect(
+    clerk.signUpWithEmail('new@example.com', 'a long password'),
+  ).resolves.toEqual({ step: 'code', sentTo: 'new@example.com' });
+  expect(calls[0].url).toContain('/client/sign_ups?');
+  expect(calls[0].init.body).toBe(
+    'email_address=new%40example.com&password=a%20long%20password',
+  );
+  expect(calls[1].url).toContain('/client/sign_ups/sua_1/prepare_verification');
+
+  replies = [signedInAs('sua_1'), response(200, { response: client })];
+  await expect(clerk.verifyEmailCode('424242')).resolves.toEqual({
+    step: 'complete',
+    isNew: true,
+  });
+  expect(calls[2].url).toContain('/client/sign_ups/sua_1/attempt_verification');
+
+  // An address that already has an account is told to sign in.
+  replies = [response(422, { errors: [{ code: 'form_identifier_exists' }] })];
+  await expect(
+    new ClerkClient('example.clerk.accounts.dev').signUpWithEmail(
+      'ada@example.com',
+      'pw',
+    ),
+  ).rejects.toMatchObject({ code: 'form_identifier_exists' });
+});
+
+test('no network says so, apart from a refused sign-in', async () => {
+  const clerk = new ClerkClient('example.clerk.accounts.dev');
+  globalThis.fetch = jest.fn(async () => {
+    throw new TypeError('Network request failed');
+  }) as unknown as typeof fetch;
+  await expect(clerk.sendEmailCode('ada@example.com')).rejects.toMatchObject({
+    code: 'network',
+  });
+});
+
+test('a session Clerk ended is reported, and the client is signed out', async () => {
+  const clerk = new ClerkClient('example.clerk.accounts.dev');
+  replies = [signedInAs('sia_1'), response(200, { response: client })];
+  await clerk.signInWithPassword('ada@example.com', 'pw');
+  const ended = jest.fn();
+  clerk.onSessionEnded(ended);
+  replies = [response(401, { errors: [{ code: 'authentication_invalid' }] })];
+  await expect(clerk.getToken()).resolves.toBeNull();
+  expect(ended).toHaveBeenCalledTimes(1);
+  expect(clerk.signedIn).toBe(false);
 });

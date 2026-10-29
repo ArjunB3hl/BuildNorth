@@ -157,7 +157,7 @@ export function CoachScreen() {
         <PageHeader title="Connect your coach first" />
         <ThemedText>
           Verify a Claude API key in AI connections to unlock this PC’s demo
-          Coach, or sign in from Profile to use your Rhythm account’s Coach.
+          Coach. Builds with sign-in use your Rhythm account’s Coach.
           ElevenLabs and account assistants are available through the website.
         </ThemedText>
         <Button
