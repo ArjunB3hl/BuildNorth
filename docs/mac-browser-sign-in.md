@@ -50,12 +50,15 @@ Synchronize server clocks and monitor database capacity. Expired counters are pe
 includes `Retry-After`; monitor 429/503 rates, handoff completion, Clerk errors and database health without
 logging request bodies, tokens, proof, codes, URL fragments, or personal identifiers.
 
-**Deployment gate:** the service uses the ASGI client address and does not trust raw forwarding headers.
-Verify Render's current proxy configuration and configure Uvicorn to trust only verified proxy addresses before
-turning the feature on. An untrusted forwarded address allows limit evasion; using the shared proxy address
-instead can throttle unrelated users. Do not use a wildcard trusted-proxy setting without a separately verified
-network perimeter. Validate the observed client address and spoofed-header rejection in staging. If trustworthy
-client attribution cannot be established, leave the feature disabled and add a properly configured edge limit.
+**Deployment gate:** client attribution requires exactly one valid public `CF-Connecting-IP`, and the direct
+socket peer must match `MAC_SIGN_IN_TRUSTED_PROXY_CIDRS`. An absent or malformed header, missing allowlist,
+untrusted socket peer, and wildcard networks fail closed. Do not enable Uvicorn proxy-header rewriting: this
+check needs the actual socket peer. Render's public ingress documents the header, but web services also accept
+private-network requests which can forge it. Render must confirm a stable ingress boundary that excludes those
+callers before setting the allowlist. Observed proxy addresses, all private ranges and outbound IP ranges are
+not such a guarantee. Validate both distinct networks, forged and malformed headers, private-network bypass,
+and same-network users in staging. If the boundary cannot be verified, keep the feature disabled and use a
+verified edge limiter or isolated ingress architecture instead.
 Per-user and global limits do not replace this gate. Run an independent security review and repeat the two-account
 and interrupted-handoff tests in the deployment environment before enabling. Rate limiting is not a complete defense against distributed abuse.
 
@@ -71,6 +74,12 @@ Mac build if necessary. Leave existing sessions and SQL data untouched. Wait for
 new migration tables until the normal database rollback procedure has been reviewed. Disabling the flag does
 not revoke sessions already created in Clerk. Never roll back the migration while newer instances still run.
 The alternate local test flag `RHYTHM_AUTH_TEST_ALT` also loads localhost and must not be used for release builds.
+
+Each validated attempt consumes independently committed global and client counters; operations on a valid handoff
+also have per-challenge limits, and approvals and ticket issuance use the verified Clerk user. Counters live in
+SQL and are shared across workers. The challenge, proof, verified identity, expiry and single-use claim enforce
+security; a network address never binds or identifies the user. Source addresses may legitimately differ between
+the app and the approving browser.
 
 ## Verification record
 

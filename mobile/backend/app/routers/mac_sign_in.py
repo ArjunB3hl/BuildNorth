@@ -9,7 +9,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -60,14 +60,26 @@ def valid(code: str) -> str:
 
 
 def peer(request: Request) -> str:
-    # Never parse untrusted forwarding headers here. Configure Uvicorn's trusted
-    # proxies so its ASGI client is correct before enabling in production.
-    host = request.client.host if request.client else "unknown"
+    # This is the direct socket peer, not an X-Forwarded-For result. Production
+    # must disable Uvicorn proxy headers and restrict these CIDRs to an ingress
+    # boundary verified with Render, excluding private-service callers.
     try:
-        addr = ipaddress.ip_address(host)
+        socket = ipaddress.ip_address(request.client.host if request.client else "")
+        configured = os.getenv("MAC_SIGN_IN_TRUSTED_PROXY_CIDRS", "")
+        networks = [ipaddress.ip_network(item.strip(), strict=True) for item in configured.split(",") if item.strip()]
+        if not networks or any(net.prefixlen == 0 for net in networks) or not any(socket in net for net in networks):
+            raise ValueError("untrusted ingress")
+        values = request.headers.getlist("cf-connecting-ip")
+        if len(values) != 1 or "," in values[0] or values[0] != values[0].strip():
+            raise ValueError("missing or ambiguous client address")
+        addr = ipaddress.ip_address(values[0])
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+            addr = addr.ipv4_mapped
+        if not addr.is_global or addr.is_multicast or addr.is_unspecified:
+            raise ValueError("invalid client address")
         return str(ipaddress.ip_network(f"{addr}/64", strict=False)) if addr.version == 6 else str(addr)
     except ValueError:
-        return "unknown"
+        raise HTTPException(503, "Browser sign-in is unavailable.") from None
 
 
 def limit(db: Db, groups: list[tuple[str, str, int, int]]) -> None:
@@ -93,18 +105,32 @@ def limit(db: Db, groups: list[tuple[str, str, int, int]]) -> None:
                 db.rollback()
                 raise HTTPException(429, "Too many sign-in requests. Try again later.",
                                     headers={"Retry-After": str(max(1, (bucket + 1) * seconds - now))})
-        db.commit()
+            # Previously debited layers must survive a later rejection, so the
+            # global cap also counts requests blocked by narrower limits.
+            db.commit()
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(503, "Browser sign-in is unavailable.") from None
 
 
-@router.post("/start")
-def start(body: Start, request: Request, response: Response, db: Db) -> dict:
+def ingress_limit(request: Request, response: Response, db: Db) -> None:
+    # A route dependency runs before user authentication and body validation.
+    # Thus invalid or unauthenticated attempts also count toward the endpoint cap.
     enabled(request, response)
-    limit(db, [("start-global", "all", 300, 60), ("start-peer", peer(request), 10, 60)])
+    name = request.scope['path'].rsplit('/', 1)[-1]
+    limits = {'start': (300, 10), 'approve': (300, 60), 'cancel': (1200, 120), 'redeem': (3000, 240)}
+    if name not in limits:
+        raise HTTPException(503, 'Browser sign-in is unavailable.')
+    global_cap, ip_cap = limits[name]
+    limit(db, [(f'{name}-global', 'all', global_cap, 60)])
+    limit(db, [(f'{name}-peer', peer(request), ip_cap, 60)])
+
+
+@router.post("/start", dependencies=[Depends(ingress_limit)])
+def start(body: Start, request: Request, response: Response, db: Db) -> dict:
     if not HASH.fullmatch(body.challenge):
         raise HTTPException(400, "Invalid challenge.")
+    limit(db, [("start-challenge", body.challenge, 4, 180)])
     now = datetime.now(UTC)
     db.execute(delete(MacSignInHandoff).where(MacSignInHandoff.expires_at < now))
     code = secrets.token_urlsafe(32)
@@ -113,16 +139,15 @@ def start(body: Start, request: Request, response: Response, db: Db) -> dict:
     return {"code": code, "expires_in": int(LIFETIME.total_seconds())}
 
 
-@router.post("/approve")
+@router.post("/approve", dependencies=[Depends(ingress_limit)])
 def approve(body: Approval, request: Request, response: Response, db: Db, user: CurrentUser) -> dict:
-    enabled(request, response)
-    limit(db, [("approve-global", "all", 300, 60), ("approve-peer", peer(request), 60, 60),
-               ("approve-user", user.user_id, 12, 600)])
+    limit(db, [("approve-user", user.user_id, 12, 600)])
     # These client values are only assertions about what was displayed; the
     # verified Clerk token remains the sole source of identity.
     if user.user_id != body.expected_user_id or not user.session_id or user.session_id != body.expected_session_id:
         raise HTTPException(409, "Your browser account changed. Review it and try again.")
     code_hash = valid(body.code)
+    limit(db, [("approve-challenge", code_hash, 8, 180)])
     row = db.execute(update(MacSignInHandoff).where(
         MacSignInHandoff.code_hash == code_hash, MacSignInHandoff.expires_at > datetime.now(UTC),
         MacSignInHandoff.used_at.is_(None), MacSignInHandoff.user_id.is_(None),
@@ -133,12 +158,11 @@ def approve(body: Approval, request: Request, response: Response, db: Db, user: 
     return {"approved": True}
 
 
-@router.post("/cancel")
+@router.post("/cancel", dependencies=[Depends(ingress_limit)])
 def cancel(body: Redeem, request: Request, response: Response, db: Db) -> dict:
-    enabled(request, response)
-    limit(db, [("cancel-global", "all", 1200, 60), ("cancel-peer", peer(request), 120, 60)])
     if not TOKEN.fullmatch(body.proof):
         raise HTTPException(400, "Invalid handoff.")
+    limit(db, [("cancel-challenge", valid(body.code), 12, 180)])
     db.execute(update(MacSignInHandoff).where(
         MacSignInHandoff.code_hash == valid(body.code), MacSignInHandoff.proof_hash == digest(body.proof),
         MacSignInHandoff.used_at.is_(None),
@@ -147,13 +171,12 @@ def cancel(body: Redeem, request: Request, response: Response, db: Db) -> dict:
     return {"cancelled": True}
 
 
-@router.post("/redeem")
+@router.post("/redeem", dependencies=[Depends(ingress_limit)])
 async def redeem(body: Redeem, request: Request, response: Response, db: Db) -> dict:
-    enabled(request, response)
-    limit(db, [("redeem-global", "all", 3000, 60), ("redeem-peer", peer(request), 240, 60)])
     if not TOKEN.fullmatch(body.proof):
         raise HTTPException(400, "Invalid handoff.")
     code_hash, proof_hash = valid(body.code), digest(body.proof)
+    limit(db, [("redeem-challenge", code_hash, 120, 180)])
     now = datetime.now(UTC)
     candidate = db.scalar(select(MacSignInHandoff.user_id).where(
         MacSignInHandoff.code_hash == code_hash, MacSignInHandoff.proof_hash == proof_hash,

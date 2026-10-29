@@ -6,16 +6,20 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 from sqlalchemy import update
 
-from app.models import MacSignInHandoff
+from app.models import MacSignInHandoff, MacSignInRateBucket
 from app.routers import mac_sign_in
 from conftest import ALICE, BOB, auth
+
+real_peer = mac_sign_in.peer
 
 
 @pytest.fixture
 def setup_handoff(client, monkeypatch):
     monkeypatch.setenv("MAC_BROWSER_SIGN_IN_ENABLED", "true")
+    monkeypatch.setattr(mac_sign_in, "peer", lambda request: "test-network")
     client.app.state.settings = replace(client.app.state.settings, clerk_secret_key="test-only")
     issued = []
 
@@ -160,3 +164,73 @@ def test_account_change_and_restart_without_proof_fail_closed(client, setup_hand
     assert redeem(client, code, secrets.token_urlsafe(32)).status_code == 410
     assert not setup_handoff
     assert redeem(client, code, proof).status_code == 200
+
+
+def proxy_request(socket, headers):
+    return Request({'type': 'http', 'method': 'POST', 'path': '/', 'scheme': 'https',
+                    'server': ('example.com', 443), 'client': (socket, 1234),
+                    'headers': [(k.lower().encode(), v.encode()) for k, v in headers]})
+
+
+def test_render_client_address_requires_verified_proxy_and_one_global_ip(monkeypatch):
+    monkeypatch.setenv('MAC_SIGN_IN_TRUSTED_PROXY_CIDRS', '10.3.4.5/32')
+    normal = [('CF-Connecting-IP', '8.8.8.8'), ('X-Forwarded-For', '1.1.1.1')]
+    assert mac_sign_in.peer(proxy_request('10.3.4.5', normal)) == '8.8.8.8'
+    assert mac_sign_in.peer(proxy_request('10.3.4.5', [('CF-Connecting-IP', '::ffff:8.8.8.8')])) == '8.8.8.8'
+    for socket, headers in [('10.3.4.6', normal), ('10.3.4.5', []),
+                            ('10.3.4.5', [('CF-Connecting-IP', 'bad')]),
+                            ('10.3.4.5', [('CF-Connecting-IP', '8.8.8.8, 1.1.1.1')]),
+                            ('10.3.4.5', [('CF-Connecting-IP', '8.8.8.8'), ('CF-Connecting-IP', '1.1.1.1')]),
+                            ('10.3.4.5', [('CF-Connecting-IP', '127.0.0.1')])]:
+        with pytest.raises(HTTPException) as exc:
+            mac_sign_in.peer(proxy_request(socket, headers))
+        assert exc.value.status_code == 503
+    monkeypatch.setenv('MAC_SIGN_IN_TRUSTED_PROXY_CIDRS', '0.0.0.0/0')
+    with pytest.raises(HTTPException):
+        mac_sign_in.peer(proxy_request('10.3.4.5', normal))
+
+
+def test_different_networks_and_users_on_same_network(client, setup_handoff, monkeypatch):
+    monkeypatch.setattr(mac_sign_in, 'peer', lambda request: request.headers.get('x-test-network', 'wifi'))
+    proof = secrets.token_urlsafe(32)
+    code = client.post('/mac-sign-in/start', headers={'x-test-network': 'wifi'},
+                       json={'challenge': hashlib.sha256(proof.encode()).hexdigest()}).json()['code']
+    assert client.post('/mac-sign-in/approve', json=approval(code), headers={**auth(ALICE), 'x-test-network': 'cell'}).status_code == 200
+    assert client.post('/mac-sign-in/redeem', json={'code': code, 'proof': proof}, headers={'x-test-network': 'wifi'}).status_code == 200
+    code2, proof2 = new(client)
+    assert client.post('/mac-sign-in/approve', json=approval(code2, BOB), headers=auth(BOB)).status_code == 200
+    assert redeem(client, code2, proof2).status_code == 200
+    assert [x['user_id'] for x in setup_handoff] == [ALICE, BOB]
+
+
+def test_global_counter_counts_requests_rejected_by_narrower_limit(client, setup_handoff):
+    with client.app.state.session_factory() as db:
+        mac_sign_in.limit(db, [('global-check', 'all', 2, 600), ('narrow-check', 'one', 1, 600)])
+        with pytest.raises(HTTPException):
+            mac_sign_in.limit(db, [('global-check', 'all', 2, 600), ('narrow-check', 'one', 1, 600)])
+        with pytest.raises(HTTPException):
+            mac_sign_in.limit(db, [('global-check', 'all', 2, 600)])
+
+
+def test_challenge_rate_limit_cannot_be_evaded_by_changing_network(client, setup_handoff, monkeypatch):
+    monkeypatch.setattr(mac_sign_in, 'peer', lambda request: request.headers.get('x-test-network', 'wifi'))
+    challenge = hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest()
+    for i in range(4):
+        assert client.post('/mac-sign-in/start', headers={'x-test-network': str(i)}, json={'challenge': challenge}).status_code == 200
+    assert client.post('/mac-sign-in/start', headers={'x-test-network': 'other'}, json={'challenge': challenge}).status_code == 429
+
+
+def test_missing_proxy_configuration_fails_closed(client, setup_handoff, monkeypatch):
+    monkeypatch.setattr(mac_sign_in, 'peer', real_peer)
+    monkeypatch.delenv('MAC_SIGN_IN_TRUSTED_PROXY_CIDRS', raising=False)
+    # Explicitly supply server-side settings; no user data or remote call occurs.
+    client.app.state.settings = replace(client.app.state.settings, clerk_secret_key='test-only')
+    assert client.post('/mac-sign-in/start', json={'challenge': 'a' * 64}).status_code == 503
+
+
+def test_unauthenticated_approval_counts_against_endpoint_limit(client, setup_handoff):
+    now = int(datetime.now(UTC).timestamp())
+    assert client.post('/mac-sign-in/approve', json={'code': 'a' * 43}).status_code == 401
+    with client.app.state.session_factory() as db:
+        keys = [mac_sign_in.digest(f'approve-global:all:{bucket}') for bucket in (now // 60, int(datetime.now(UTC).timestamp()) // 60)]
+        assert any(db.get(MacSignInRateBucket, key) is not None for key in keys)
