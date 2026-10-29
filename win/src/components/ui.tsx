@@ -64,8 +64,18 @@ const textStyles = StyleSheet.create({
   default: { fontSize: 15, lineHeight: 23, fontWeight: '400' },
   small: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
   smallBold: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  subtitle: { fontSize: 26, lineHeight: 34, fontWeight: '600', letterSpacing: -0.4 },
-  title: { fontSize: 30, lineHeight: 38, fontWeight: '600', letterSpacing: -0.5 },
+  subtitle: {
+    fontSize: 26,
+    lineHeight: 34,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+  },
+  title: {
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: '600',
+    letterSpacing: -0.5,
+  },
 });
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'quiet';
@@ -273,40 +283,44 @@ export function ToggleRow({
 }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  // The description goes under the label and switch, at full width: beside the switch, Windows laid it out on one
+  // line and cut it short.
   return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityLabel={label}
-      accessibilityState={{ checked: value, disabled }}
-      disabled={disabled}
-      onPress={() => onChange(!value)}
-      {...hoverProps}
-      style={[styles.toggleRow, !disabled && styles.pointer]}
-    >
-      <View style={styles.toggleText}>
-        <ThemedText type="smallBold">{label}</ThemedText>
-        {description ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            {description}
-          </ThemedText>
-        ) : null}
+    <View style={styles.toggle}>
+      <View style={styles.toggleRow}>
+        <ThemedText type="smallBold" style={styles.toggleText}>
+          {label}
+        </ThemedText>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel={label}
+          accessibilityState={{ checked: value, disabled }}
+          disabled={disabled}
+          onPress={() => onChange(!value)}
+          {...hoverProps}
+          hitSlop={8}
+          style={[
+            styles.track,
+            {
+              backgroundColor: value
+                ? Accent
+                : hovered && !disabled
+                ? theme.border
+                : theme.backgroundSelected,
+            },
+            !disabled && styles.pointer,
+            disabled && styles.inactive,
+          ]}
+        >
+          <View style={[styles.thumb, value && styles.thumbOn]} />
+        </Pressable>
       </View>
-      <View
-        style={[
-          styles.track,
-          {
-            backgroundColor: value
-              ? Accent
-              : hovered && !disabled
-              ? theme.border
-              : theme.backgroundSelected,
-          },
-          disabled && styles.inactive,
-        ]}
-      >
-        <View style={[styles.thumb, value && styles.thumbOn]} />
-      </View>
-    </Pressable>
+      {description ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {description}
+        </ThemedText>
+      ) : null}
+    </View>
   );
 }
 
@@ -721,13 +735,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   wideColumn: { maxWidth: WideContentWidth },
+  toggle: { paddingVertical: Spacing.one },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
     paddingVertical: Spacing.one,
   },
-  toggleText: { flex: 1, gap: 2 },
+  toggleText: { flex: 1 },
   track: {
     width: 40,
     height: 22,

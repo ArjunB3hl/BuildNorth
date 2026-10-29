@@ -276,11 +276,17 @@ export function InterestsScreen() {
             </ThemedText>
           </View>
         </View>
-        {row(
-          'learn',
-          'Learn my interests automatically',
-          'Rhythm learns which workouts, martial arts, exercise and cooking videos suit you from what you ask your coach and the fitness and food videos you watch with the Chrome extension.',
-        )}
+        {row('learn', 'Learn my interests automatically', '')}
+        {/* (two short paragraphs, not the switch's description: Windows drew a long paragraph here on one line, cut
+            short, wherever it was placed in this card) */}
+        <ThemedText type="small" themeColor="textSecondary">
+          Rhythm learns which workouts, martial arts, exercise and cooking
+          videos suit you.
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          It learns from what you ask your coach and the fitness and food videos
+          you watch with the Chrome extension.
+        </ThemedText>
         {saved.learn && !profile?.confirmed ? (
           <Notice tone="info">
             Still learning — chat with your coach or watch a few workout or

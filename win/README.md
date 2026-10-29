@@ -1,8 +1,12 @@
 # Rhythm for Windows
 
 A native Windows version of Rhythm (BuildNorth), built with React Native for Windows plus Expo SDK 56's tooling. It
-is a port of the Mac app (`../mac`): the same sidebar sections (Today, Coach, Calendar, Profile, with the recipe and
-workout libraries under Calendar), design tokens, components and data types.
+follows the Rhythm website's layout and navigation (`mobile/src/app/(app)/(tabs)/_layout.web.tsx`): Overview, Coach,
+Calendar and Camera workout; Content library and Interests & sharing under Discover; Downloads and Profile at the
+bottom, with the *Rhythm · Demo version* wordmark, the website's colours and type, Windows' own icon font (Segoe MDL2
+Assets) for the website's Material icons, and a bar of links across the top on windows narrower than 900 points. The
+recipe and workout libraries open from Calendar. Its data types and components started as a port of the Mac app
+(`../mac`).
 
 **Status:** two modes, one set of screens. Opt-in and run by hand from this repository: talking with Claude by voice
 in Coach (Parakeet and Kokoro on this PC, your Claude Code sign-in answering) and Camera workout (the local camera
@@ -214,12 +218,23 @@ the change.
 | Recipes, shopping | `GET /recipes`, `GET /shopping` | `POST /recipes/{id}/shopping` (`servings`), `PATCH /shopping/{id}`, `DELETE /shopping` |
 | Workouts | `GET /routines`, `GET /sessions` | – |
 | Coach | `GET /coach/messages`, `GET /connections/access` | `POST /coach/messages` (`localDate`, `clientKey`, `timezone`), `DELETE /coach/messages` |
-| Profile, memory | `GET /profile`, `GET /preferences`, `GET /progress` | `POST`/`PATCH`/`DELETE /preferences`, `DELETE /memory` |
+| Profile, memory | `GET /profile`, `GET /preferences`, `GET /progress` | `PUT /profile` (welcome step, Edit preferences & goals), `POST`/`PATCH`/`DELETE /preferences`, `DELETE /memory` |
+| Overview | `GET /rhythm/interests`, `GET /rhythm/learned` (plus Today's reads) | (Today's writes) |
+| Content library | `GET /rhythm/saved` (polled every 5 s while notes are being prepared), `GET /rhythm/connections` | `POST /rhythm/saved/{videoId}/summary` (Prepare notes), `DELETE /rhythm/agents/{id}` (Disconnect) |
+| Interests & sharing | `GET /rhythm/interests`, `GET /rhythm/learned` | `PUT /rhythm/settings` (each switch, with `expectedRevision`; a stale revision is refetched and retried once), `PUT /rhythm/choices` (keep, not interested, undo, add, level, length, equipment, quick picks), `POST /rhythm/forget` |
 
 Still only on the phone and website: the weekly planner and plan changes in your own words, assistant approvals,
-importing or editing recipes and routines, running a workout, voice, Apple Watch, interests and the content library.
-The Coach's AI (your Claude key or ElevenLabs) is connected on the website; the Windows app checks
-`/connections/access` and links there. In demo builds, the demo Coach and AI connections screen work as on the Mac.
+connecting a new assistant to the content library, deleting your data (Profile › Your data opens the website),
+importing or editing recipes and routines, running a workout, Apple Watch, and the voice Coach: when the account has
+an ElevenLabs agent, the website opens the Coach in voice; the Windows app says so and keeps text chat (its own
+*Talk with Claude on this PC* uses local speech, see `local-voice/README.md`). In Camera workout the account's
+ElevenLabs agent still coaches first. The Coach's AI (your Claude key or ElevenLabs) is connected on the website; the
+Windows app checks `/connections/access` and links there. In demo builds, the demo Coach and AI connections screen
+work as on the Mac.
+
+Not brought over from the website on purpose: the content library's Memory tab, a Codex connection, and the
+"Rhythm noticed…" interest prompts (the server may still send one; the app doesn't show it). Video recommendations,
+tasks and page grants are off on the server, as on the website.
 
 ### Testing without an account: the local test backend
 
@@ -401,6 +416,29 @@ The Jest screen walk renders every section and pushed page, as in the Mac app.
 **Not verified, because it needs your account:** signing in with real credentials and the emailed code, and the
 Windows app against the deployed API with a real session. The recipe library couldn't be clicked in the live check
 (another window covered it); the Jest account test covers that flow.
+
+### The website's layout and screens (29 Oct 2026)
+
+Debug build against the deployed API, signed in with a real account (the owner's second account):
+
+- The sidebar with every website section, the *Rhythm · Demo version* wordmark and the account line; Overview's cards
+  (Learning, Interests and YouTube sharing from the account, Personalisation, Rhythm in Chrome, Your data) above
+  today's plan; Content library and Interests & sharing loaded the account's data (no saved videos and no interests
+  yet: both said so and offered the next step); Downloads with the Windows card marked; Camera workout explained that
+  the local camera coach wasn't running; the Coach said the account's ElevenLabs voice Coach is on the website; Profile
+  grouped as on the website.
+- Not seen with real data: saved videos with notes (this account has none), and a real *Prepare notes*.
+
+Automated (`__tests__/website-screens.test.tsx`, against a stand-in for the API): the navigation on a wide and a narrow
+window; Overview's cards from the account; saved videos with notes, their YouTube links (a saved link to another site is
+never shown or opened), *Prepare notes*; connections without Codex; no Memory tab; the four switches showing the saved
+settings and a switch saved as the website saves it; *Keep* saved as a choice; no "Rhythm noticed" prompt; Camera
+workout unavailable; the ElevenLabs label; Profile's groups. The sign-in, account-switching and isolation tests still
+pass with the new layout.
+
+Two Windows quirks worked around: buttons beside a page title don't take mouse clicks (the new pages put theirs in the
+body), and a long paragraph in the first card of Interests & sharing was drawn on one line, cut short (it is two short
+paragraphs now).
 
 ### Sign-in (29 Oct 2026)
 
