@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, View } from 'react-native';
 
 import {
   available as northWinAvailable,
@@ -23,7 +23,7 @@ import {
 import { computeProgress, useStore } from '../data/store';
 import type { Preference, Progress } from '../data/types';
 import { friendlyDateInline, localDate } from '../lib/dates';
-import { API_URL } from '../config';
+import { API_URL, WEB_URL } from '../config';
 import { useAccount } from '../lib/account';
 import { useNav } from '../navigation';
 import { Accent, Spacing, useTheme } from '../theme';
@@ -62,7 +62,7 @@ export function ProfileScreen() {
       <SectionHeader title="This week" />
       <ProgressCard progress={progress} />
 
-      <SectionHeader title="About you" />
+      <SectionHeader title="Preferences & goals" />
       <Card>
         <Summary label="Goals" values={p.goals} />
         <Summary label="Dietary preferences" values={p.dietaryPreferences} />
@@ -76,6 +76,34 @@ export function ProfileScreen() {
           values={p.routineTimes.map(capitalise)}
         />
       </Card>
+      {mode === 'account' ? (
+        <ListItem
+          title="Edit preferences & goals"
+          subtitle="Name, goals, diet, equipment, experience and workout times"
+          onPress={() => nav.push({ name: 'edit-profile' })}
+        />
+      ) : null}
+
+      <SectionHeader title="Discover" />
+      <ListItem
+        title="Interests & sharing"
+        subtitle="AI learns your interests · sharing permissions"
+        onPress={() => nav.go('interests')}
+      />
+      <ListItem
+        title="Content library"
+        subtitle="Saved videos with notes · connected assistants"
+        onPress={() => nav.go('library')}
+      />
+
+      <SectionHeader title="Connections" />
+      <ListItem
+        title="AI connections"
+        subtitle="ChatGPT, Claude and your demo API key"
+        onPress={() => nav.push({ name: 'connections' })}
+      />
+
+      <SectionHeader title="Memory & data" />
       <ListItem
         title="What Rhythm remembers"
         subtitle={`${plural(
@@ -84,12 +112,13 @@ export function ProfileScreen() {
         )} · view, correct or delete`}
         onPress={() => nav.push({ name: 'memory' })}
       />
-
-      <ListItem
-        title="AI connections"
-        subtitle="ChatGPT, Claude and your demo API key"
-        onPress={() => nav.push({ name: 'connections' })}
-      />
+      {mode === 'account' ? (
+        <ListItem
+          title="Your data ↗"
+          subtitle="What’s stored and how to delete it, on the website"
+          onPress={() => Linking.openURL(`${WEB_URL}/profile/data`)}
+        />
+      ) : null}
       <SectionHeader title="This PC" />
       <Card>
         <Summary label="Computer" values={[deviceName ?? 'This PC']} />

@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { Button, Notice, PageHeader, Row, ThemedText } from '../components/ui';
+import {
+  Button,
+  Notice,
+  PageHeader,
+  Row,
+  Screen,
+  ThemedText,
+} from '../components/ui';
+import { WEB_URL } from '../config';
 import { useStore } from '../data/store';
 import { describe } from '../lib/account';
 import { localDate } from '../lib/dates';
@@ -13,6 +21,7 @@ import {
   countMessage,
   freeze,
   NOTHING_COUNTED,
+  POSE_ORIGIN,
   poseMessage,
   poseUrl,
   saveTarget,
@@ -29,7 +38,72 @@ import { MaxContentWidth, Spacing, useIsDark, useTheme } from '../theme';
  * gets no sign-in; the only things it can ask the app for are the theme, its AI connection (whether the account's
  * ElevenLabs agent may coach, and that Claude Code on this PC may) and a short-lived ElevenLabs conversation address.
  */
+/**
+ * The Camera workout section. It runs the local camera coach on this PC (a developer setup: win\local-voice\camera.ps1),
+ * so it first checks that the coach answers, and explains how to start it if not, instead of showing an empty view.
+ */
 export function CameraScreen() {
+  const [state, setState] = useState<'checking' | 'ready' | 'unavailable'>(
+    'checking',
+  );
+  const check = useCallback(async () => {
+    setState('checking');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const res = await fetch(`${POSE_ORIGIN}/api/version`, {
+        signal: controller.signal,
+      });
+      setState(res.ok ? 'ready' : 'unavailable');
+    } catch {
+      setState('unavailable');
+    } finally {
+      clearTimeout(timer);
+    }
+  }, []);
+  useEffect(() => {
+    check();
+  }, [check]);
+
+  if (state === 'ready') {
+    return <CameraWorkout />;
+  }
+  return (
+    <Screen
+      title="Camera workout"
+      subtitle="Count your reps with this PC’s camera and save the workout to your Calendar."
+    >
+      {state === 'checking' ? (
+        <ThemedText themeColor="textSecondary">
+          Looking for the camera coach on this PC…
+        </ThemedText>
+      ) : (
+        <>
+          <Notice tone="warning">
+            Unavailable right now: the camera coach isn’t running on this PC.
+          </Notice>
+          <ThemedText type="small" themeColor="textSecondary">
+            On Windows, Camera workout runs Rhythm’s camera coach locally. It’s
+            a developer setup for now: with the BuildNorth repository on this
+            PC, run win\local-voice\camera.ps1 in PowerShell and keep its window
+            open (setup steps in win\local-voice\README.md), then check again.
+            No camera images leave this PC.
+          </ThemedText>
+          <View style={styles.actionRow}>
+            <Button title="Check again" onPress={check} />
+            <Button
+              title="Use Camera workout on the website ↗"
+              variant="secondary"
+              onPress={() => Linking.openURL(`${WEB_URL}/activity/camera`)}
+            />
+          </View>
+        </>
+      )}
+    </Screen>
+  );
+}
+
+function CameraWorkout() {
   const { mode, api, dispatch, reload } = useStore();
   const dark = useIsDark();
   const theme = useTheme();
@@ -261,5 +335,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   actions: { gap: Spacing.two },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   web: { flex: 1 },
 });

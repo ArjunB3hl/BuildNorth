@@ -180,7 +180,7 @@ export function CalendarScreen() {
           title="Camera workout"
           size="small"
           variant="secondary"
-          onPress={() => nav.push({ name: 'camera' })}
+          onPress={() => nav.go('camera')}
         />
       </View>
       <Card style={s.cardGap}>

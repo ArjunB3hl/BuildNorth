@@ -1,7 +1,7 @@
 import { CalendarScreen } from './screens/calendar';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { Sidebar } from './components/sidebar';
+import { Sidebar, TopBar } from './components/sidebar';
 import { Button, Notice, ThemedText } from './components/ui';
 import { DEV_SESSION_TOKEN } from './config';
 import { StoreProvider, useStore } from './data/store';
@@ -18,10 +18,18 @@ import { CoachScreen } from './screens/coach';
 import { ConnectionsScreen } from './screens/connections';
 import { ClaudeDemoProvider } from './lib/claude-demo';
 import { MealsScreen, RecipeScreen, ShoppingScreen } from './screens/meals';
+import { DownloadsScreen } from './screens/downloads';
+import { InterestsScreen } from './screens/interests';
+import { LibraryScreen } from './screens/library';
+import { OverviewScreen } from './screens/overview';
+import { VideoNotesScreen } from './screens/video-notes';
 import { MemoryScreen, ProfileScreen } from './screens/profile';
 import { SignInScreen } from './screens/sign-in';
-import { needsWelcome, WelcomeScreen } from './screens/welcome';
-import { TodayScreen } from './screens/today';
+import {
+  EditProfileScreen,
+  needsWelcome,
+  WelcomeScreen,
+} from './screens/welcome';
 import { useTheme } from './theme';
 
 export default function App() {
@@ -88,6 +96,7 @@ function SignedInApp() {
 
 function Shell() {
   const theme = useTheme();
+  const wide = useWindowDimensions().width >= 900;
   const { account } = useAccount();
   const { state } = useStore();
   if (
@@ -100,9 +109,16 @@ function Shell() {
       </View>
     );
   }
+  // The website's breakpoint: a sidebar from 900 points wide, a bar of links across the top below that.
   return (
-    <View style={[styles.window, { backgroundColor: theme.background }]}>
-      <Sidebar />
+    <View
+      style={[
+        styles.window,
+        !wide && styles.column,
+        { backgroundColor: theme.background },
+      ]}
+    >
+      {wide ? <Sidebar /> : <TopBar />}
       <View style={styles.content}>
         <SyncBanner />
         <CurrentPage />
@@ -126,18 +142,28 @@ function CurrentPage() {
       return <MemoryScreen />;
     case 'connections':
       return <ConnectionsScreen />;
-    case 'camera':
-      return <CameraScreen />;
+    case 'edit-profile':
+      return <EditProfileScreen />;
+    case 'video':
+      return <VideoNotesScreen key={route.id} id={route.id} />;
     case 'account':
       return <AccountScreen />;
     case 'root':
       switch (section) {
-        case 'today':
-          return <TodayScreen />;
+        case 'overview':
+          return <OverviewScreen />;
         case 'coach':
           return <CoachScreen />;
         case 'calendar':
           return <CalendarScreen />;
+        case 'camera':
+          return <CameraScreen />;
+        case 'library':
+          return <LibraryScreen />;
+        case 'interests':
+          return <InterestsScreen />;
+        case 'downloads':
+          return <DownloadsScreen />;
         case 'meals':
           return <MealsScreen />;
         case 'activity':
@@ -150,6 +176,7 @@ function CurrentPage() {
 
 const styles = StyleSheet.create({
   window: { flex: 1, flexDirection: 'row' },
+  column: { flexDirection: 'column' },
   centre: {
     flex: 1,
     alignItems: 'center',

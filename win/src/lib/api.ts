@@ -1,4 +1,5 @@
 import { API_URL } from '../config';
+import { createRhythmApi } from './rhythm';
 import type {
   CheckIn,
   CoachMessage,
@@ -60,6 +61,8 @@ export type AIAccess = {
   textChat: boolean;
   /** An ElevenLabs agent is connected and usable (older servers leave it out). */
   elevenlabs?: boolean;
+  /** The account's voice Coach, when one is connected (the website makes it the Coach's default). */
+  voiceProvider?: 'elevenlabs' | 'parakeet_kokoro' | null;
 };
 
 /** POST /sessions: a finished workout. */
@@ -264,6 +267,8 @@ export function createApi(getToken: TokenSource, baseUrl = API_URL) {
       remove: (id: string) => request<void>('DELETE', `/calendar/${id}`),
     },
     access: () => request<AIAccess>('GET', '/connections/access'),
+    /** Content library and personalisation (src/lib/rhythm.ts). */
+    rhythm: createRhythmApi(request),
     /** A short-lived ElevenLabs conversation address for the account's own agent (camera workout). */
     elevenLabsSession: () =>
       request<{ signedUrl: string }>('POST', '/connections/elevenlabs/session'),
