@@ -18,8 +18,10 @@ import {
   type SignInResult,
 } from './clerk';
 
-// Who is using the app. Signed out, the Windows app runs on its local demo data (as the Mac app does). Signed
-// in, the store loads from and writes to the Rhythm API with the account's Clerk session (src/data/remote.ts).
+// Who is using the app. With sign-in configured (a Clerk publishable key), the app needs a signed-in Rhythm
+// account: signed out, it shows only the sign-in screen (src/screens/sign-in.tsx), and signed in, the store loads
+// from and writes to the Rhythm API with the account's Clerk session (src/data/remote.ts). Builds without a key
+// (development, tests) run on local demo data instead.
 
 export type AccountUser = {
   id: string;
@@ -29,8 +31,17 @@ export type AccountUser = {
 
 export type Account =
   | { status: 'loading' }
+  /** `problem`: why the app is signed out, when that needs saying (the session ended, for one). */
   | { status: 'signed-out'; problem: string | null }
-  | { status: 'signed-in'; user: AccountUser; via: 'clerk' | 'dev-token' };
+  /** A sign-in saved on this PC couldn't be checked (no network, or Clerk down): Try again, or Sign out. */
+  | { status: 'offline'; problem: string }
+  /** `isNew`: the account was created in this app just now, so it gets the welcome (onboarding) step. */
+  | {
+      status: 'signed-in';
+      user: AccountUser;
+      via: 'clerk' | 'dev-token';
+      isNew: boolean;
+    };
 
 type AccountContextValue = {
   account: Account;
@@ -38,13 +49,25 @@ type AccountContextValue = {
   api: Api | null;
   /** Whether this build can sign in at all (a Clerk publishable key is configured). */
   signInAvailable: boolean;
-  signIn(email: string, password: string): Promise<SignInResult>;
+  /** Emails a sign-in code to `email`. */
+  sendCode(email: string): Promise<SignInResult>;
+  signInWithPassword(email: string, password: string): Promise<SignInResult>;
+  signUp(email: string, password: string): Promise<SignInResult>;
+  /** The emailed code, for the sign-in or sign-up waiting for it. */
   verifyCode(code: string): Promise<SignInResult>;
+  resendCode(): Promise<void>;
   resetSignIn(): void;
+  /** Checks a saved sign-in again (after `offline`). */
+  retry(): void;
+  /** The welcome step is done (or skipped). */
+  finishWelcome(): void;
   signOut(): Promise<void>;
 };
 
 const AccountContext = createContext<AccountContextValue | null>(null);
+
+export const SESSION_ENDED =
+  'Your Rhythm session has ended (it expired, or you signed out on another device). Sign in again to continue.';
 
 function makeClerk(): { clerk: ClerkClient | null; problem: string | null } {
   if (!CLERK_PUBLISHABLE_KEY) {
@@ -67,6 +90,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const setup = useRef(makeClerk()).current;
   const clerk = setup.clerk;
   const [account, setAccount] = useState<Account>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   const tokenSource = useCallback(
     async (fresh: boolean) =>
@@ -76,17 +100,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   );
   const api = useMemo(() => createApi(tokenSource), [tokenSource]);
 
-  const adoptClerkUser = useCallback(() => {
-    const user = clerk?.currentUser;
-    setAccount({
-      status: 'signed-in',
-      via: 'clerk',
-      user: {
-        id: user?.id ?? '',
-        email: user?.email ?? null,
-        name: user?.firstName ?? null,
-      },
-    });
+  const adoptClerkUser = useCallback(
+    (isNew = false) => {
+      const user = clerk?.currentUser;
+      setAccount({
+        status: 'signed-in',
+        via: 'clerk',
+        isNew,
+        user: {
+          id: user?.id ?? '',
+          email: user?.email ?? null,
+          name: user?.firstName ?? null,
+        },
+      });
+    },
+    [clerk],
+  );
+
+  // Clerk ended the session while the app ran (it expired, or was signed out elsewhere): back to sign-in, saying why.
+  useEffect(() => {
+    clerk?.onSessionEnded(() =>
+      setAccount({ status: 'signed-out', problem: SESSION_ENDED }),
+    );
+    return () => clerk?.onSessionEnded(null);
   }, [clerk]);
 
   useEffect(() => {
@@ -100,6 +136,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             setAccount({
               status: 'signed-in',
               via: 'dev-token',
+              isNew: false,
               user: { id: me.userId, email: null, name: 'Local test user' },
             });
           }
@@ -130,54 +167,70 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           setAccount({ status: 'signed-out', problem: null });
         }
       } catch (error) {
-        if (active) {
-          setAccount({
-            status: 'signed-out',
-            problem: `Couldn’t restore your sign-in: ${describe(error)}`,
-          });
+        if (!active) {
+          return;
         }
+        // The saved sign-in is kept: it may well be fine once Clerk can be reached.
+        setAccount(
+          error instanceof ClerkError &&
+            (error.code === 'network' || (error.status ?? 0) >= 500)
+            ? { status: 'offline', problem: describe(error) }
+            : {
+                status: 'signed-out',
+                problem: `Your saved sign-in couldn’t be used: ${describe(
+                  error,
+                )} Sign in again.`,
+              },
+        );
       }
     })();
     return () => {
       active = false;
     };
-  }, [api, clerk, setup.problem, adoptClerkUser]);
+  }, [api, clerk, setup.problem, adoptClerkUser, attempt]);
 
-  const value = useMemo<AccountContextValue>(
-    () => ({
+  const value = useMemo<AccountContextValue>(() => {
+    const need = () => {
+      if (!clerk) {
+        throw new ClerkError('Sign-in isn’t configured in this build.');
+      }
+      return clerk;
+    };
+    const finish = (result: SignInResult) => {
+      if (result.step === 'complete') {
+        adoptClerkUser(result.isNew === true);
+      }
+      return result;
+    };
+    return {
       account,
       api: account.status === 'signed-in' ? api : null,
       signInAvailable: clerk != null,
-      async signIn(email, password) {
-        if (!clerk) {
-          throw new ClerkError('Sign-in isn’t configured in this build.');
-        }
-        const result = await clerk.signInWithPassword(email, password);
-        if (result.step === 'complete') {
-          adoptClerkUser();
-        }
-        return result;
-      },
-      async verifyCode(code) {
-        if (!clerk) {
-          throw new ClerkError('Sign-in isn’t configured in this build.');
-        }
-        const result = await clerk.verifyEmailCode(code);
-        if (result.step === 'complete') {
-          adoptClerkUser();
-        }
-        return result;
-      },
+      sendCode: async email => finish(await need().sendEmailCode(email)),
+      signInWithPassword: async (email, password) =>
+        finish(await need().signInWithPassword(email, password)),
+      signUp: async (email, password) =>
+        finish(await need().signUpWithEmail(email, password)),
+      verifyCode: async code => finish(await need().verifyEmailCode(code)),
+      resendCode: () => need().resendCode(),
       resetSignIn() {
         clerk?.resetSignIn();
+      },
+      retry() {
+        setAccount({ status: 'loading' });
+        setAttempt(a => a + 1);
+      },
+      finishWelcome() {
+        setAccount(a =>
+          a.status === 'signed-in' && a.isNew ? { ...a, isNew: false } : a,
+        );
       },
       async signOut() {
         setAccount({ status: 'signed-out', problem: null });
         await clerk?.signOut().catch(() => {});
       },
-    }),
-    [account, api, clerk, adoptClerkUser],
-  );
+    };
+  }, [account, api, clerk, adoptClerkUser]);
 
   return (
     <AccountContext.Provider value={value}>{children}</AccountContext.Provider>

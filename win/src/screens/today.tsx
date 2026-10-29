@@ -583,7 +583,7 @@ function WeekPlan({ today }: { today: string }) {
       <Notice tone="info">
         {mode === 'account'
           ? '“Help plan my week” and plan changes in your own words are on the phone and website for now; plans you make there show up here.'
-          : '“Help plan my week” and plan changes in your own words need the Rhythm backend. Sign in from Profile; they’re on the phone and website.'}
+          : '“Help plan my week” and plan changes in your own words need a Rhythm account; they’re on the phone and website.'}
       </Notice>
     </View>
   );

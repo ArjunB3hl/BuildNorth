@@ -22,6 +22,8 @@ jest.mock('../src/config', () => ({
   CLERK_PUBLISHABLE_KEY: '',
   WEB_URL: 'https://web.test',
   DEV_SESSION_TOKEN: 'test-session-token',
+  LOCAL_BACKEND: false,
+  BACKEND_LABEL: 'Rhythm (api.test)',
 }));
 
 const today = localDate();

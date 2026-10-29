@@ -11,6 +11,7 @@ import {
   type Phase,
   type Turn,
 } from '../lib/local-voice';
+import { useAccount } from '../lib/account';
 import { Button, Card, Notice, Row, ThemedText } from './ui';
 import { Spacing } from '../theme';
 
@@ -36,6 +37,9 @@ export function LocalVoiceCard() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState('');
   const conversation = useRef<AbortController | null>(null);
+  const { account } = useAccount();
+  const rhythmEmail =
+    account.status === 'signed-in' ? account.user.email : null;
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -116,6 +120,9 @@ export function LocalVoiceCard() {
           {`Claude answers as ${claude.account ?? 'your Claude account'}${
             claude.plan ? ` (${claude.plan})` : ''
           }, the account signed in to Claude Code on this PC. No API key is used.`}
+          {` This Claude account is separate from your Rhythm account${
+            rhythmEmail ? ` (${rhythmEmail})` : ''
+          }.`}
         </Notice>
       ) : null}
       {problem ? <Notice tone="warning">{problem}</Notice> : null}

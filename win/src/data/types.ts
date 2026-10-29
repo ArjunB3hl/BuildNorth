@@ -11,6 +11,8 @@ export type Profile = {
   equipment: string[];
   experienceLevel: ExperienceLevel | null;
   routineTimes: TimeSlot[];
+  /** Signed in: whether the account went through the welcome step (or skipped it). */
+  onboardingCompleted?: boolean;
 };
 
 export type PreferenceSource = 'app' | 'coach' | 'planner' | 'assistant';

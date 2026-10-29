@@ -23,3 +23,13 @@ export const WEB_URL = (
 export const DEV_SESSION_TOKEN = __DEV__
   ? process.env.EXPO_PUBLIC_DEV_SESSION_TOKEN || ''
   : '';
+
+/** Whether API_URL is a backend on this PC (the local test backend): test data, never a live Rhythm account. */
+export const LOCAL_BACKEND = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(
+  API_URL,
+);
+
+/** Where this build's data lives, said plainly (sign-in screen, sidebar, account page). */
+export const BACKEND_LABEL = LOCAL_BACKEND
+  ? `Local test backend (${API_URL}): test data only, not your live Rhythm account`
+  : `Rhythm (${API_URL.replace(/^https?:\/\//, '')})`;
