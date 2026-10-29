@@ -8,11 +8,12 @@ workout libraries under Calendar), design tokens, components and data types.
 in Coach (Parakeet and Kokoro on this PC, your Claude Code sign-in answering) and Camera workout (the local camera
 coach in a WebView, saved as an Activity session). See [`local-voice/README.md`](local-voice/README.md).
 
-- **Signed out (demo):** local sample data saved on this PC, as in the Mac app. The demo Coach calls Claude
-  directly with a key you enter in AI connections.
-- **Signed in (account):** the same screens load from and save to the Rhythm API (`mobile/backend`), so it's the
-  same data as the phone and the website. Sign-in is the phone app's: email and password, then an emailed code when
-  Clerk asks for one. See *Signing in and the backend*.
+- **Signed in (account), required in every real build:** the screens load from and save to the Rhythm API
+  (`mobile/backend`), so it's the same data as the phone and the website. Signed out, the app shows only its sign-in
+  screen: an emailed code by default, a password, or a new account, all inside the app. See *Signing in and the
+  backend*.
+- **Demo (builds without a Clerk key, for development and tests):** local sample data saved on this PC, as in the Mac
+  app, labelled as not a Rhythm account. The demo Coach calls Claude directly with a key you enter in AI connections.
 
 | | |
 |---|---|
@@ -152,22 +153,54 @@ Debug build back.
 
 ## Signing in and the backend
 
-The backend's REST API only accepts **Clerk session tokens** (`mobile/backend/app/auth.py`); connection, Rhythm and
-watch tokens open only the MCP and `/watch/*` routes. Clerk has no SDK for React Native for Windows, so the app talks
-to Clerk's Frontend API itself, the way `@clerk/expo` does on iPhone (`src/lib/clerk.ts`):
+In every real build (one with `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`) the app needs a signed-in Rhythm account: signed
+out, the whole window is the sign-in screen (`src/screens/sign-in.tsx`), with no section of the app and no account's
+data. Builds without a key (development, Jest) run on demo data saved on this PC and say so.
 
-1. `GET /v1/client?_is_native=1` (or any first request) gets a client token in the response's `Authorization`
-   header. Native mode sends it back in `Authorization` instead of using cookies.
-2. `POST /v1/client/sign_ins` with `identifier`, `password`, `strategy=password`. On `needs_client_trust` or
-   `needs_second_factor` with `email_code` available (Clerk's new-device check), `prepare_second_factor` emails a code
-   and `attempt_second_factor` checks it, as on the phone.
+**Signing in, inside the app** (the website's and phone app's steps, `mobile/src/app/(auth)/sign-in.tsx` and
+`sign-up.tsx`; there is no browser hand-off on Windows):
+
+- **Email me a sign-in code** (the default): Clerk emails a code, you type it in. If Clerk then asks for a new-device
+  check, a second code follows.
+- **Use my password instead**: email and password, then an emailed code if Clerk asks for one.
+- **Create an account**: email address and a password (this Clerk instance requires one), then the emailed code. An
+  address with no account offers this. Only an account created here gets the **welcome** step (the website's
+  onboarding: optional name, goals, diet, equipment, experience and workout times, or *Skip for now*); signing in to
+  an existing account goes straight to Today.
+- Wrong, expired and too-many codes, unknown addresses, an address that already has an account, and rate limits are
+  said in plain words; *Send a new code* and *Start over* are always there.
+
+**How** (`src/lib/clerk.ts`): Clerk has no SDK for React Native for Windows, so the app talks to Clerk's Frontend API
+itself, the way `@clerk/expo` does on iPhone. Only the publishable key is in the app (never a secret key), and no
+browser cookie is read or copied.
+
+1. The first request gets a client token in the response's `Authorization` header; native mode (`_is_native=1`)
+   sends it back in `Authorization` instead of using cookies.
+2. Email code: `POST /v1/client/sign_ins` with `identifier`, then `prepare_first_factor` / `attempt_first_factor`
+   with `strategy=email_code`. Password: `identifier`, `password`, `strategy=password`. On `needs_client_trust` or
+   `needs_second_factor`, `prepare_second_factor` / `attempt_second_factor` with the emailed code. New account:
+   `POST /v1/client/sign_ups` with `email_address` and `password`, then `prepare_verification` /
+   `attempt_verification`.
 3. `POST /v1/client/sessions/{id}/tokens` gives a session token for `Authorization: Bearer …`. It lasts about a minute
    and is reused until 10 s before it expires; after a 401 the API client asks for a new one and retries once, as the
    phone's `api.ts` does.
-4. The client token is kept encrypted for the Windows user (DPAPI, NorthWin's `writeSecret`), the counterpart of the
-   phone's `expo-secure-store` token cache, so the app stays signed in. Signing out removes the session and the token.
+4. The client token is kept encrypted for the Windows user (DPAPI, NorthWin's `writeSecret`, in
+   `LocalState\secrets`), the counterpart of the phone's `expo-secure-store` token cache, so the app stays signed in
+   across restarts. Sign out (Profile › Rhythm account) removes the session and the token and returns to sign-in.
 
-Profile › **Sign in to your Rhythm account** opens the form. Accounts are created on the website or phone.
+**When something goes wrong:** if Clerk can't be reached at start, the app says so and offers *Try again* and *Sign
+out*, keeping the saved sign-in. If Clerk ends the session while the app runs (it expired, or you signed out
+elsewhere), the app returns to sign-in and says why. If the Rhythm API can't be reached or refuses, the app explains it
+with *Try again* and *Sign out*.
+
+**One account at a time:** everything below the account (the store, navigation and every screen) is keyed by the
+signed-in user, so signing in as someone else starts from nothing. Account data is only in memory; the only thing
+saved on this PC is the encrypted Clerk client token. The Claude account signed in to Claude Code on this PC (local
+voice, Camera workout) is separate from the Rhythm account, and the app says so.
+
+**Which backend:** `EXPO_PUBLIC_API_URL` in `win/.env`. The sign-in screen, the sidebar and Profile › Rhythm account
+name it; a backend on `localhost`/`127.0.0.1` is labelled *Local test backend: test data only, not your live Rhythm
+account*.
 
 **What syncs when signed in** (`src/data/remote.ts`). Every action still updates the screen at once; it's then sent to
 the API and the parts it touched are reloaded, so server ids and rules win (recipe scaling and unit merging for the
@@ -186,7 +219,7 @@ the change.
 Still only on the phone and website: the weekly planner and plan changes in your own words, assistant approvals,
 importing or editing recipes and routines, running a workout, voice, Apple Watch, interests and the content library.
 The Coach's AI (your Claude key or ElevenLabs) is connected on the website; the Windows app checks
-`/connections/access` and links there. Signed out, the demo Coach and AI connections screen work as on the Mac.
+`/connections/access` and links there. In demo builds, the demo Coach and AI connections screen work as on the Mac.
 
 ### Testing without an account: the local test backend
 
@@ -196,13 +229,13 @@ script signs for a fictional user (`user_windowsLocalTest`) pass the real verifi
 check is the real code. `seed.py` fills that account through the API.
 
 ```powershell
-cd mobileackend
-py -3.11 -m venv .venv; .venvScriptspip install -r requirements.txt
-.venvScriptspython ....win	oolslocal-backendserve.py
+cd mobile\backend
+py -3.11 -m venv .venv; .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python ..\..\win\tools\local-backend\serve.py
 ```
 
 ```powershell
-cd mobileackend; .venvScriptspython ....win	oolslocal-backendseed.py
+cd mobile\backend; .venv\Scripts\python ..\..\win\tools\local-backend\seed.py
 ```
 
 Then put `EXPO_PUBLIC_API_URL=http://localhost:8000` and the printed `EXPO_PUBLIC_DEV_SESSION_TOKEN=…` in
@@ -267,7 +300,7 @@ restore fails with MSB3202 otherwise.
 | API | What it does |
 |---|---|
 | `readState()` / `writeState(json)` | The whole store as one JSON file, `buildnorth.json` in the package's `LocalState` folder (`%LOCALAPPDATA%\Packages\<package>\LocalState`). Read synchronously at startup, like the Mac app's expo-sqlite read; written to a temporary file and then moved over the old one |
-| `readSecret(name)` / `writeSecret(name, value)` | Small secrets encrypted with DPAPI for the current Windows user, in `LocalStatesecrets`: the Clerk client token that keeps you signed in. Only the names the app uses are accepted |
+| `readSecret(name)` / `writeSecret(name, value)` | Small secrets encrypted with DPAPI for the current Windows user, in `LocalState\secrets`: the Clerk client token that keeps you signed in. Only the names the app uses are accepted |
 | `setBadge(count)` | Number badge on the taskbar button (the Mac app's Dock badge): the count of today's planned items. Needs package identity, which the packaged app has |
 | `setKeepAwake(enabled)` | Keeps the display on during *Cook mode* with a power request (`PowerSetRequest`, display required), released when cook mode ends or the app quits |
 | `readLocalVoiceToken()`, `randomHex(bytes)`, `hmacSha256Hex(key, message)` | For the local voice helper (`local-voice/`): its token from `LocalState\local-voice.token` (64 hex characters or nothing), random bytes from the system RNG (`BCryptGenRandom`; Hermes has no `crypto.getRandomValues`) and HMAC-SHA256 (BCrypt), to check the helper's proof before every request |
