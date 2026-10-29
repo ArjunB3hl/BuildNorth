@@ -12,6 +12,7 @@ import {
   RoutineScreen,
   SessionScreen,
 } from './screens/activity';
+import { CameraScreen } from './screens/camera';
 import { CoachScreen } from './screens/coach';
 import { ConnectionsScreen } from './screens/connections';
 import { ClaudeDemoProvider } from './lib/claude-demo';
@@ -62,6 +63,8 @@ function CurrentPage() {
       return <MemoryScreen />;
     case 'connections':
       return <ConnectionsScreen />;
+    case 'camera':
+      return <CameraScreen />;
     case 'account':
       return <AccountScreen />;
     case 'root':

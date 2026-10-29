@@ -36,6 +36,7 @@ import time
 from datetime import date
 from pathlib import Path
 
+import claude_code
 import coach
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -148,11 +149,15 @@ def check_claude() -> dict:
             raise ValueError
     except ValueError:
         info, err = {}, "claude auth status gave an answer it could not read"
-    logged = info.get("loggedIn") is True
+    # the user's Claude account only (claude.ai): a Claude Code signed in with an API key or another provider is not
+    # what "Claude Code sign-in" means, so it is not counted
+    logged = claude_code.signed_in(info)
     plan = info.get("subscriptionType")                 # max, pro, ... (its email and organisation stay here)
+    missing = ("signed in with an API key or another provider: sign in with your Claude account (claude auth login)"
+               if info.get("loggedIn") is True else "not signed in: sign in with claude auth login")
     return {"available": True, "loggedIn": logged,
             "plan": plan if logged and isinstance(plan, str) and PLAN.fullmatch(plan) else None,
-            "error": err or (None if logged else "not signed in: sign in with claude auth login"), "failed": bool(err)}
+            "error": err or (None if logged else missing), "failed": bool(err)}
 
 
 def check_chatgpt() -> dict:

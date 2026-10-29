@@ -1,0 +1,8 @@
+<Project>
+  <!-- react-native-webview's Windows project pins Visual Studio 2022's C++ toolset (v143). This app builds with Visual
+       Studio 2026 (v145, as NorthAssistant.vcxproj), so that one project gets the same toolset. Microsoft.Cpp.props
+       imports ForceImportBeforeCppProps after the project has set its toolset, so the override wins. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ReactNativeWebView'">
+    <ForceImportBeforeCppProps>$(MSBuildThisFileDirectory)windows\webview-toolset.props</ForceImportBeforeCppProps>
+  </PropertyGroup>
+</Project>

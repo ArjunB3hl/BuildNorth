@@ -74,6 +74,7 @@ class FakeWorker(unittest.TestCase):
         self.env = os.environ.get("HF_HUB_CACHE")
         os.environ["HF_HUB_CACHE"] = str(self.tmp / "hub")
         importlib.reload(stt)                                # a fresh state (dev_server sees the same module)
+        stt.WINDOWS = False                                  # (these fake the Mac's model files, on any system)
         stt.PYTHON = Path(sys.executable)
         stt.WORKER = self.tmp / "worker.py"
         stt.LOG = self.tmp / "worker.log"

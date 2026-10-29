@@ -27,6 +27,7 @@ export type Route =
   | { name: 'session'; id: string }
   | { name: 'memory' }
   | { name: 'connections' }
+  | { name: 'camera' }
   | { name: 'account' };
 
 export const SECTIONS: {
@@ -64,6 +65,7 @@ const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
   session: 'Session',
   memory: 'Memory',
   connections: 'AI connections',
+  camera: 'Camera workout',
   account: 'Rhythm account',
 };
 

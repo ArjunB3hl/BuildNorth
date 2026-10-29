@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
+// (a Windows checkout has CRLF line ends; the slices below look for LF)
+const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const section = (from, to) => app.slice(app.indexOf(from), app.indexOf(to, app.indexOf(from)));
 const source = [
   section('async function ensureVoice()', '\n/**\n * A cue on screen'),

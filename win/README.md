@@ -4,7 +4,9 @@ A native Windows version of Rhythm (BuildNorth), built with React Native for Win
 is a port of the Mac app (`../mac`): the same sidebar sections (Today, Coach, Calendar, Profile, with the recipe and
 workout libraries under Calendar), design tokens, components and data types.
 
-**Status:** two modes, one set of screens.
+**Status:** two modes, one set of screens. Opt-in and run by hand from this repository: talking with Claude by voice
+in Coach (Parakeet and Kokoro on this PC, your Claude Code sign-in answering) and Camera workout (the local camera
+coach in a WebView, saved as an Activity session). See [`local-voice/README.md`](local-voice/README.md).
 
 - **Signed out (demo):** local sample data saved on this PC, as in the Mac app. The demo Coach calls Claude
   directly with a key you enter in AI connections.
@@ -268,6 +270,7 @@ restore fails with MSB3202 otherwise.
 | `readSecret(name)` / `writeSecret(name, value)` | Small secrets encrypted with DPAPI for the current Windows user, in `LocalStatesecrets`: the Clerk client token that keeps you signed in. Only the names the app uses are accepted |
 | `setBadge(count)` | Number badge on the taskbar button (the Mac app's Dock badge): the count of today's planned items. Needs package identity, which the packaged app has |
 | `setKeepAwake(enabled)` | Keeps the display on during *Cook mode* with a power request (`PowerSetRequest`, display required), released when cook mode ends or the app quits |
+| `readLocalVoiceToken()`, `randomHex(bytes)`, `hmacSha256Hex(key, message)` | For the local voice helper (`local-voice/`): its token from `LocalState\local-voice.token` (64 hex characters or nothing), random bytes from the system RNG (`BCryptGenRandom`; Hermes has no `crypto.getRandomValues`) and HMAC-SHA256 (BCrypt), to check the helper's proof before every request |
 | `deviceName`, `windowsVersion`, `dataFile` | Shown on Profile › This PC. React Native's `Platform.Version` on Windows is an API contract number (19 here), not the OS version, so `windowsVersion` reads it from the registry |
 
 ## Project layout
@@ -284,6 +287,8 @@ win/
 ├── metro.config.js                Expo's Metro config + Windows resolution
 ├── tools/pwsh-restore/            restores PowerShell 7 into the NuGet cache for the RNW CLI
 ├── tools/local-backend/           the real backend with a stand-in for Clerk, for testing (see above)
+├── local-voice/                   opt-in local voice (Coach) and camera coach launcher (Camera workout): local-voice/README.md
+├── Directory.Build.props          builds react-native-webview's project with this Visual Studio's C++ toolset (v145)
 └── __tests__/                     Jest (jest-expo)
 ```
 
@@ -363,6 +368,27 @@ The Jest screen walk renders every section and pushed page, as in the Mac app.
 **Not verified, because it needs your account:** signing in with real credentials and the emailed code, and the
 Windows app against the deployed API with a real session. The recipe library couldn't be clicked in the live check
 (another window covered it); the Jest account test covers that flow.
+
+### Local voice and Camera workout (29 Oct 2026)
+
+Details and numbers in [`local-voice/README.md`](local-voice/README.md). On this PC, with the Debug build:
+
+- The Debug build with react-native-webview 15.0.0 (built with the v145 toolset through `Directory.Build.props`).
+- Coach: the voice card found the running helper, checked its proof and showed that Claude Code is signed out (with
+  the `claude auth login` step); with the helper stopped it said how to start it; with a stand-in program on its port
+  the card refused it and the stand-in received only the nonce. (Before that fix, the app trusted a stale token's
+  earlier proof and sent the stand-in an authorized `/info`: caught by this test.)
+- The helper over real HTTP: Kokoro → Parakeet round trip, Kokoro on the speakers, the speakers → microphone →
+  pause detection → Parakeet (which found and fixed a bug: no utterance ever came out of the VAD), 20 s of quiet
+  answered "nothing heard", a second job refused while one ran, a stop within 0.5 s, every unauthorized request
+  refused, a signed-out Claude Code reported and never started, and the `speak_reply` MCP server through a standard
+  MCP client.
+- Camera workout against the local test backend (the fictional test user): the WebView loaded the camera page, the
+  page's `ready` reached the app and the app's answer reached the page (it then read `/api/connections`, which it does
+  only after the app's `localClaude`). With a stand-in page at the trusted address sending the real page's messages,
+  the app counted *Squat 1 × 8*, *Finish and save* sent `stop`, took the summary and saved one session, which the
+  backend's Calendar lists as *Camera workout*. A page elsewhere on the same origin sending a fake workout was
+  ignored: the app reloaded the camera page each time and saved nothing.
 
 ### Release package (25 Oct 2026)
 

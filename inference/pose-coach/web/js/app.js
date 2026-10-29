@@ -20,7 +20,7 @@ import { AutoTracker } from './auto.js';
 import { createPose, detect, drawPose } from './pose.js';
 import { RepReplay, bonesFor, describeFault, mirrorImage } from './formcheck.js';
 import { mirrorSide } from './retarget.js';
-import { connect, embedded, parentOrigin, workoutOf } from './embed.js';
+import { connect, connectWindowsApp, embedded, parentOrigin, windowsApp, WINDOWS_APP, workoutOf } from './embed.js';
 import { MacVoice, createVoice } from './voice.js';
 import { CAP_MS, ElevenCoach } from './eleven-coach.js';
 import { AGENT_ID, ORDER, SessionCues, brainLabel, describe, describeStt, fallback, listens, resolve } from './connections.js';
@@ -43,8 +43,10 @@ $('exercise').value = 'auto';
 // inside the BuildNorth app (?embed=1, web/js/embed.js): the app is told about each set and saves the workout itself
 const QS = new URLSearchParams(location.search);
 const HOSTED = document.documentElement.dataset.hosted === 'true';
-const PARENT = embedded(location.search) ? parentOrigin(location.search) : null;
-const app = PARENT ? connect(window, PARENT) : null;
+// (?parent=windows-app: the Rhythm Windows app shows this page in its own WebView2 and talks through chrome.webview)
+const IN_WINDOWS_APP = embedded(location.search) && windowsApp(window, location.search);
+const PARENT = IN_WINDOWS_APP ? WINDOWS_APP : embedded(location.search) ? parentOrigin(location.search) : null;
+const app = IN_WINDOWS_APP ? connectWindowsApp(window.chrome.webview) : PARENT ? connect(window, PARENT) : null;
 let hostAuthorized = !HOSTED;
 if (HOSTED) {
   $('start').disabled = true;
@@ -64,14 +66,22 @@ if (HOSTED) {
 }
 const accountSession = app ? hostAgent(app) : null;
 let accountElevenLabs = false;
+let accountLocalClaude = false;
 if (embedded(location.search) && !PARENT) console.warn('pose coach: ?parent= must be a page on this machine (http://localhost:<port>); not embedded');
 if (app) {
+  $('record').checked = false; // Landmark debugging is opt-in in the embedded app workout.
   document.body.classList.add('embed');
   connectAppearance(window, app);
   app.on('ai-connection', message => {
     hostAuthorized = true;
+    S.appConnection = true;
     if (!S.running && !S.starting) $('start').disabled = false;
     accountElevenLabs = message.elevenlabs === true;
+    // Claude Code on this computer (the server's own sign-in check decides whether it is usable): the app offers it
+    // only where this page runs on the user's own computer
+    accountLocalClaude = !HOSTED && message.localClaude === true;
+    const claude = [...$('coachKind').options].find(option => option.value === 'claude');
+    if (claude) claude.disabled = !accountLocalClaude;
     void loadConnections();
   });
   for (const option of $('coachKind').options) {
@@ -151,6 +161,8 @@ const elevenListen = () => elevenVoice() || (brain() === 'eleven' && S.talking &
 const remember = (k, v) => { try { localStorage.setItem(`pose-coach-${k}`, v); } catch { /* private window */ } };
 // (new names: a choice made before Auto existed is not kept, so Auto is everyone's default once)
 for (const [id, k] of [['coachKind', 'coach'], ['voiceKind', 'voice']]) {
+  // Each embedded workout starts on Auto; people can still choose another coach for this visit.
+  if (app) continue;
   try { const v = localStorage.getItem(`pose-coach-${k}`); if (v && [...$(id).options].some(o => o.value === v)) $(id).value = v; } catch { /* */ }
 }
 S.conns = undefined;     // GET /api/connections (null: the server did not say)
@@ -366,6 +378,7 @@ const CLOSE_MS = 5000;         // the longest a new agent session waits for the 
 async function ensureCoach() {
   const b = brain();
   if (b === 'none') { idleState(); return null; }
+  if (app && !S.appConnection) return null;      // (in the app: no coach starts before the app says what is connected)
   if (b === 'eleven') return S.running || S.starting || S.talking ? startEleven() : null;
   if (S.sid && S.sidBrain === b) return S.sid;
   if (S.cliStart?.brain === b) return S.cliStart.promise;    // (asked again while it starts: one session)
@@ -728,10 +741,14 @@ const SHORT = { eleven: 'ElevenLabs', claude: 'Claude', chatgpt: 'ChatGPT', none
  * timeout and keeps the answers about a minute; `fresh`, from Check again, asks it to check them again now).
  */
 async function readConnections(fresh = false) {
-  if (app) return accountConnections(accountElevenLabs);
+  if (app && !accountLocalClaude) return accountConnections(accountElevenLabs);
   try {
     const r = await fetch(`/api/connections${fresh ? '?fresh=1' : ''}`, { cache: 'no-store' });
-    return r.ok ? await r.json() : null;
+    if (!r.ok) return null;
+    const local = await r.json();
+    if (!app) return local;
+    // the account's ElevenLabs agent, and Claude Code signed in on this computer
+    return { ...accountConnections(accountElevenLabs), claude: local.claude };
   } catch { return null; }
 }
 /** What is connected, shown and planned for. */

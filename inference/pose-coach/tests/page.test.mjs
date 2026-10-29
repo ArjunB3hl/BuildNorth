@@ -12,8 +12,9 @@ import { bonesFor, describeFault, mirrorImage } from '../web/js/formcheck.js';
 import { mirrorSide } from '../web/js/retarget.js';
 import * as Mistakes from '../web/js/mistakes.js';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8');
+// (a Windows checkout has CRLF line ends; the slices below look for LF)
+const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const app = readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
 
 test('every element app.js looks up by id is in the page (or made by app.js itself)', () => {

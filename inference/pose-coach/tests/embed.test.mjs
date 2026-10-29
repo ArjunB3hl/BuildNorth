@@ -1,7 +1,7 @@
 // The page inside the BuildNorth app: who may be the app, the workout it gets, and the messages both ways.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { connect, embedded, parentOrigin, workoutOf } from '../web/js/embed.js';
+import { connect, connectWindowsApp, embedded, parentOrigin, windowsApp, WINDOWS_APP, workoutOf } from '../web/js/embed.js';
 
 test('only a page on this machine can be the app', () => {
   assert.equal(embedded('?embed=1'), true);
@@ -72,4 +72,31 @@ test('messages go only to the app, and only the app can start or stop the page',
   f.deliver(null);
   f.deliver('pose-coach/start');
   assert.deepEqual(got, [['start', 'auto'], ['stop']]);
+});
+
+test('the Windows app: only its own WebView2, at the top of the window, through chrome.webview', () => {
+  const webview = () => {
+    const listeners = [], sent = [];
+    return { sent, listeners, addEventListener: (type, fn) => type === 'message' && listeners.push(fn), postMessage: m => sent.push(m) };
+  };
+  const top = { chrome: { webview: webview() } };
+  top.parent = top;
+  assert.equal(windowsApp(top, '?embed=1&parent=windows-app'), true);
+  assert.equal(windowsApp(top, '?embed=1&parent=http://localhost:8081'), false);
+  // an ordinary browser (no chrome.webview), or the page framed by another page, is not the Windows app
+  const browser = {};
+  browser.parent = browser;
+  assert.equal(windowsApp(browser, '?embed=1&parent=windows-app'), false);
+  assert.equal(windowsApp({ chrome: { webview: webview() }, parent: {} }, '?embed=1&parent=windows-app'), false);
+  // a hostile ?parent= can't make a web origin out of it
+  assert.equal(parentOrigin(`?parent=${WINDOWS_APP}`), null);
+
+  const link = connectWindowsApp(top.chrome.webview);
+  link.send('set', { reps: 8 });
+  assert.deepEqual(top.chrome.webview.sent.map(m => JSON.parse(m)), [{ reps: 8, type: 'pose-coach/set' }]);
+  const got = [];
+  link.on('stop', m => got.push(m));
+  for (const data of ['{"type":"pose-coach/stop"}', { type: 'pose-coach/stop' }, '{"type":"other/stop"}', 'not json', '{"type":"pose-coach/start"}'])
+    top.chrome.webview.listeners.forEach(fn => fn({ data }));
+  assert.deepEqual(got, [{ type: 'pose-coach/stop' }, { type: 'pose-coach/stop' }]);
 });

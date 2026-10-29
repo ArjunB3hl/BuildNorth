@@ -78,6 +78,14 @@ bash tools/serve.sh                                            # http://localhos
 `tools/serve.sh` sets `POSE_DATA_DIR`, `POSE_CLIPS_DIR` and `POSE_DEMOS_DIR` to `.data/` (`bash tools/serve.sh m3d`
 serves the 3D test set on 8766); the server can also be started by hand with those variables.
 
+On Windows (x64), `bash tools/setup_voice_windows.sh` sets up the venv and the speech instead (Parakeet and Kokoro as
+ONNX models on the CPU with sherpa-onnx: `server/onnx_speech.py` and the `*_onnx.py` workers, which `stt.py` and `tts.py`
+use there), and `WEB_KOKORO=0 bash tools/fetch_assets.sh` skips the in-browser Kokoro. The Rhythm Windows app embeds
+the page as `?embed=1&parent=windows-app` and talks to it through `chrome.webview` (`web/js/embed.js`);
+`win/local-voice/camera.ps1` starts the server for it with `POSE_CLAUDE_TRANSPORT=cli` and `POSE_COACH_LOG=0` (no
+session logs). See `win/local-voice/README.md`. Claude Code counts as connected only when signed in with a Claude
+account (`authMethod` `claude.ai`), on every system.
+
 Open `http://localhost:8765/` (localhost counts as a secure context, so the camera works) and press **Start**. By
 default ("Auto: detect exercises") the page counts at once, working out what you are doing (reps and sets per exercise),
 and the coach asks which exercise you are about to do: say it (to the ElevenLabs agent), tap it in the side panel, or

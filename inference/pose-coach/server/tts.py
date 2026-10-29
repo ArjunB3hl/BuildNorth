@@ -16,13 +16,18 @@ import itertools
 import json
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from queue import Empty, Queue
 
 HERE = Path(__file__).resolve().parent
-PYTHON = Path(os.environ.get("POSE_KOKORO_PY", HERE.parent / ".venv-kokoro" / "bin" / "python"))
-WORKER = HERE / "kokoro_worker.py"
+# Windows has no MLX: there the worker is kokoro_worker_onnx.py (sherpa-onnx on the CPU, tools/setup_voice_windows.sh),
+# in the server's own venv (Windows layout)
+WINDOWS = sys.platform == "win32"
+PYTHON = Path(os.environ.get("POSE_KOKORO_PY") or (HERE.parent / ".venv" / "Scripts" / "python.exe" if WINDOWS
+                                                    else HERE.parent / ".venv-kokoro" / "bin" / "python"))
+WORKER = HERE / ("kokoro_worker_onnx.py" if WINDOWS else "kokoro_worker.py")
 LOG = HERE.parent / ".data" / "kokoro-worker.log"         # the worker's stderr, when .data/ is there
 CHUNK_TIMEOUT_S = 20
 MAX_RESTARTS = 3            # starts again in a row, with no sentence said between, before the worker is given up on
@@ -39,6 +44,9 @@ _restarts = 0
 
 
 def available() -> bool:
+    if WINDOWS:
+        import onnx_speech
+        return PYTHON.is_file() and onnx_speech.kokoro_ready()
     return PYTHON.is_file()
 
 

@@ -14,6 +14,7 @@ import type { AIAccess } from '../lib/api';
 import { localDate } from '../lib/dates';
 import { randomUUID } from '../lib/ids';
 
+import { LocalVoiceCard } from '../components/local-voice';
 import {
   Button,
   Card,
@@ -146,6 +147,7 @@ export function CoachScreen() {
           onPress={() => Linking.openURL(`${WEB_URL}/profile/connections`)}
         />
         <Button title="Check again" variant="secondary" onPress={checkAccess} />
+        <LocalVoiceCard />
       </View>
     );
 
@@ -162,6 +164,7 @@ export function CoachScreen() {
           title="Open AI connections"
           onPress={() => nav.go('profile', { name: 'connections' })}
         />
+        <LocalVoiceCard />
       </View>
     );
 
@@ -229,6 +232,7 @@ export function CoachScreen() {
                 Calendar. Your conversation is saved only on this PC.
               </Notice>
             )}
+            <LocalVoiceCard />
             {messages.length === 0 ? (
               <Card>
                 <ThemedText type="smallBold">Your personal coach</ThemedText>
