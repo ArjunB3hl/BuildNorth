@@ -18,6 +18,7 @@ import {
   Accent,
   Danger,
   MaxContentWidth,
+  WideContentWidth,
   Spacing,
   ToneColors,
   useIsDark,
@@ -59,11 +60,12 @@ export function ThemedText({
 }
 
 const textStyles = StyleSheet.create({
-  default: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
-  small: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
-  smallBold: { fontSize: 13, lineHeight: 19, fontWeight: '700' },
-  subtitle: { fontSize: 28, lineHeight: 36, fontWeight: '600' },
-  title: { fontSize: 30, lineHeight: 38, fontWeight: '700' },
+  // The website's type scale (mobile/src/components/themed-text.tsx, web).
+  default: { fontSize: 15, lineHeight: 23, fontWeight: '400' },
+  small: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  smallBold: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  subtitle: { fontSize: 26, lineHeight: 34, fontWeight: '600', letterSpacing: -0.4 },
+  title: { fontSize: 30, lineHeight: 38, fontWeight: '600', letterSpacing: -0.5 },
 });
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'quiet';
@@ -191,11 +193,14 @@ export function Screen({
   title,
   subtitle,
   actions,
+  wide = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  /** The website's wide column (grids, two-column pages) instead of the reading column. */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -205,7 +210,7 @@ export function Screen({
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.column}>
+      <View style={[styles.column, wide && styles.wideColumn]}>
         <PageHeader title={title} subtitle={subtitle} actions={actions} />
         {children}
       </View>
@@ -252,6 +257,59 @@ export function PageHeader({
   );
 }
 
+/** A setting that turns on and off, as on the website's Interests & sharing page. */
+export function ToggleRow({
+  label,
+  description,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  description?: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  const theme = useTheme();
+  const { hovered, hoverProps } = useHover();
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onChange(!value)}
+      {...hoverProps}
+      style={[styles.toggleRow, !disabled && styles.pointer]}
+    >
+      <View style={styles.toggleText}>
+        <ThemedText type="smallBold">{label}</ThemedText>
+        {description ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {description}
+          </ThemedText>
+        ) : null}
+      </View>
+      <View
+        style={[
+          styles.track,
+          {
+            backgroundColor: value
+              ? Accent
+              : hovered && !disabled
+              ? theme.border
+              : theme.backgroundSelected,
+          },
+          disabled && styles.inactive,
+        ]}
+      >
+        <View style={[styles.thumb, value && styles.thumbOn]} />
+      </View>
+    </Pressable>
+  );
+}
+
 export function Card({
   children,
   style,
@@ -262,7 +320,11 @@ export function Card({
   const theme = useTheme();
   return (
     <View
-      style={[styles.card, { backgroundColor: theme.backgroundElement }, style]}
+      style={[
+        styles.card,
+        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+        style,
+      ]}
     >
       {children}
     </View>
@@ -658,7 +720,34 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two + Spacing.one,
     fontSize: 14,
   },
-  card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
+  wideColumn: { maxWidth: WideContentWidth },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  toggleText: { flex: 1, gap: 2 },
+  track: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  thumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  thumbOn: { alignSelf: 'flex-end' },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

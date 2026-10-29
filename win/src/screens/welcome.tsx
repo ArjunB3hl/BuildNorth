@@ -13,6 +13,7 @@ import {
 import { useStore } from '../data/store';
 import type { ExperienceLevel, Profile, TimeSlot } from '../data/types';
 import { describe, useAccount } from '../lib/account';
+import { useNav } from '../navigation';
 import { Spacing } from '../theme';
 
 // The welcome step for an account created in this app just now (the website's onboarding after sign-up,
@@ -106,45 +107,7 @@ export function WelcomeScreen() {
       title="Welcome to Rhythm"
       subtitle="A few optional details help tailor meals, routines and coaching. Skip anything you like and change it later on the website or phone."
     >
-      <Card style={styles.card}>
-        <TextField
-          label="What should Rhythm call you?"
-          value={draft.preferredName ?? ''}
-          onChangeText={v => set('preferredName', v.trim() ? v : null)}
-          maxLength={80}
-        />
-        <ThemedText type="smallBold">Goals</ThemedText>
-        <ChipGroup
-          options={GOALS}
-          selected={draft.goals}
-          onChange={v => set('goals', v)}
-        />
-        <ThemedText type="smallBold">Dietary preferences</ThemedText>
-        <ChipGroup
-          options={DIETS}
-          selected={draft.dietaryPreferences}
-          onChange={v => set('dietaryPreferences', v)}
-        />
-        <ThemedText type="smallBold">Equipment</ThemedText>
-        <ChipGroup
-          options={EQUIPMENT}
-          selected={draft.equipment}
-          onChange={v => set('equipment', v)}
-        />
-        <ThemedText type="smallBold">Experience</ThemedText>
-        <ChipGroup
-          options={LEVELS}
-          multiple={false}
-          selected={draft.experienceLevel ? [draft.experienceLevel] : []}
-          onChange={v => set('experienceLevel', v[0] ?? null)}
-        />
-        <ThemedText type="smallBold">When you like to work out</ThemedText>
-        <ChipGroup
-          options={TIMES}
-          selected={draft.routineTimes}
-          onChange={v => set('routineTimes', v)}
-        />
-      </Card>
+      <ProfileFields draft={draft} set={set} />
       {error ? <Notice tone="error">{error}</Notice> : null}
       <View style={styles.row}>
         <Button
@@ -156,6 +119,110 @@ export function WelcomeScreen() {
           title="Skip for now"
           variant="secondary"
           onPress={() => save(EMPTY_PROFILE)}
+          disabled={busy}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+/** The profile's optional details, shared by the welcome step and Profile › Edit preferences & goals. */
+function ProfileFields({
+  draft,
+  set,
+}: {
+  draft: Profile;
+  set: <K extends keyof Profile>(key: K, value: Profile[K]) => void;
+}) {
+  return (
+    <Card style={styles.card}>
+      <TextField
+        label="What should Rhythm call you?"
+        value={draft.preferredName ?? ''}
+        onChangeText={v => set('preferredName', v.trim() ? v : null)}
+        maxLength={80}
+      />
+      <ThemedText type="smallBold">Goals</ThemedText>
+      <ChipGroup
+        options={GOALS}
+        selected={draft.goals}
+        onChange={v => set('goals', v)}
+      />
+      <ThemedText type="smallBold">Dietary preferences</ThemedText>
+      <ChipGroup
+        options={DIETS}
+        selected={draft.dietaryPreferences}
+        onChange={v => set('dietaryPreferences', v)}
+      />
+      <ThemedText type="smallBold">Equipment</ThemedText>
+      <ChipGroup
+        options={EQUIPMENT}
+        selected={draft.equipment}
+        onChange={v => set('equipment', v)}
+      />
+      <ThemedText type="smallBold">Experience</ThemedText>
+      <ChipGroup
+        options={LEVELS}
+        multiple={false}
+        selected={draft.experienceLevel ? [draft.experienceLevel] : []}
+        onChange={v => set('experienceLevel', v[0] ?? null)}
+      />
+      <ThemedText type="smallBold">When you like to work out</ThemedText>
+      <ChipGroup
+        options={TIMES}
+        selected={draft.routineTimes}
+        onChange={v => set('routineTimes', v)}
+      />
+    </Card>
+  );
+}
+
+/** Profile › Edit preferences & goals: the same details, saved to the account (PUT /profile). */
+export function EditProfileScreen() {
+  const { api, reload, state } = useStore();
+  const nav = useNav();
+  const [draft, setDraft] = useState<Profile>(() => ({
+    preferredName: state.profile.preferredName,
+    goals: [...state.profile.goals],
+    dietaryPreferences: [...state.profile.dietaryPreferences],
+    equipment: [...state.profile.equipment],
+    experienceLevel: state.profile.experienceLevel,
+    routineTimes: [...state.profile.routineTimes],
+  }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = <K extends keyof Profile>(key: K, value: Profile[K]) =>
+    setDraft(d => ({ ...d, [key]: value }));
+
+  async function save() {
+    if (!api) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.saveProfile(draft);
+      await reload(['profile']);
+      nav.back();
+    } catch (e) {
+      setError(`Couldn’t save to your account: ${describe(e)}`);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Screen
+      title="Preferences & goals"
+      subtitle="These help tailor meals, routines and coaching, here and on your phone and the website."
+    >
+      <ProfileFields draft={draft} set={set} />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <View style={styles.row}>
+        <Button title="Save" onPress={save} loading={busy} />
+        <Button
+          title="Cancel"
+          variant="secondary"
+          onPress={nav.back}
           disabled={busy}
         />
       </View>

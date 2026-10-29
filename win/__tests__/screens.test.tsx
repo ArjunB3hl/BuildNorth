@@ -110,7 +110,7 @@ test('every section and page renders', async () => {
 
   await press(renderer, 'Profile');
   expect(text()).toContain('Day streak');
-  expect(text()).toContain('ABOUT YOU');
+  expect(text()).toContain('PREFERENCES & GOALS');
   await pressFirst(renderer, 'What Rhythm remembers');
   expect(text()).toContain('I prefer vegetarian dinners on weekdays.');
 });

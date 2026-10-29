@@ -1,7 +1,8 @@
 import { useColorScheme } from 'react-native';
 
-// Same design tokens as the BuildNorth iPhone app
-// (src/constants/theme.ts and src/components/form.tsx in the Expo project).
+// The Rhythm website's design tokens (mobile/src/constants/theme.ts, WebColors): a soft page background, white (or
+// raised dark) surfaces with hairline borders, and the website's accent. The Windows app is a desktop app on a wide
+// canvas, like the website, so it takes the website's palette rather than the phone's.
 
 export type Theme = {
   text: string;
@@ -9,29 +10,40 @@ export type Theme = {
   backgroundElement: string;
   backgroundSelected: string;
   textSecondary: string;
-  /** Desktop only: the sidebar. */
+  /** Hairline borders around cards, the sidebar and inputs. */
+  border: string;
+  /** The sidebar (the website's: a surface with a border). */
   sidebar: string;
 };
 export type ThemeColor = keyof Theme;
 
 export const Colors: { light: Theme; dark: Theme } = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    sidebar: '#F7F7F9',
+    text: '#16171A',
+    background: '#F6F7F9',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#ECEEF2',
+    textSecondary: '#5F6470',
+    border: '#E2E5EA',
+    sidebar: '#FFFFFF',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    sidebar: '#111113',
+    text: '#EDEDEF',
+    background: '#0B0B0D',
+    backgroundElement: '#161619',
+    backgroundSelected: '#232328',
+    textSecondary: '#A0A1AB',
+    border: '#27272D',
+    sidebar: '#161619',
   },
 };
+
+/** The AI's own colours (violet, blue, cyan), as on the website, so AI features are easy to spot. */
+export const AiColors = {
+  violet: '#8B5CF6',
+  blue: '#3B82F6',
+  cyan: '#22D3EE',
+} as const;
 
 export const Accent = '#208AEF';
 export const Danger = '#D93025';
@@ -56,6 +68,8 @@ export const Spacing = {
 } as const;
 
 export const MaxContentWidth = 800;
+/** Grids and two-column pages (the website's WideContentWidth). */
+export const WideContentWidth = 1120;
 
 export function useIsDark(): boolean {
   return useColorScheme() === 'dark';

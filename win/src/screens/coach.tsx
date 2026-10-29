@@ -215,6 +215,13 @@ export function CoachScreen() {
                 {account ? 'Your coach is replying…' : 'Claude is replying…'}
               </Notice>
             ) : null}
+            {account && access?.voiceProvider ? (
+              <Notice tone="warning">
+                {access.voiceProvider === 'elevenlabs'
+                  ? 'Your account’s voice Coach is your ElevenLabs agent, and it stays the default on the website. Talking with it isn’t available in the Windows app yet: use the website for voice conversations. In Camera workout on this PC, your ElevenLabs agent still coaches first.'
+                  : 'Your account has a voice Coach on the website. On this PC, text chat is below, and Talk with Claude on this PC uses local speech.'}
+              </Notice>
+            ) : null}
             {account ? (
               <Notice tone="info">
                 Your Rhythm Coach replies with your account’s profile, saved

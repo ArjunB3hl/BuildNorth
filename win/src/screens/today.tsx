@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import {
@@ -26,7 +26,7 @@ import {
   weekStart,
 } from '../lib/dates';
 import { useNav } from '../navigation';
-import { Accent, Spacing } from '../theme';
+import { Accent, MaxContentWidth, Spacing } from '../theme';
 
 const SLOT_LABEL = {
   morning: 'Morning',
@@ -39,7 +39,8 @@ const MEAL_LABEL = {
   evening: 'Dinner',
 } as const;
 
-export function TodayScreen() {
+/** `intro`: Overview's cards (src/screens/overview.tsx), shown above today's plan in the wide column. */
+export function TodayScreen({ intro }: { intro?: ReactNode } = {}) {
   const { state } = useStore();
   const nav = useNav();
   const today = localDate();
@@ -57,6 +58,7 @@ export function TodayScreen() {
 
   return (
     <Screen
+      wide={intro != null}
       title={`${greeting()}${name ? `, ${name}` : ''}`}
       subtitle={`${dateLabel} · ${
         planned.length
@@ -64,81 +66,85 @@ export function TodayScreen() {
           : 'Nothing planned yet today.'
       }`}
     >
-      <ChipGroup
-        options={[
-          { value: 'today', label: 'Today' },
-          { value: 'week', label: 'Week' },
-        ]}
-        multiple={false}
-        selected={[view]}
-        onChange={v => v[0] && setView(v[0])}
-      />
+      {intro}
+      <View style={intro != null ? styles.todayColumn : styles.plain}>
+        {intro != null ? <SectionHeader title="Today" /> : null}
+        <ChipGroup
+          options={[
+            { value: 'today', label: 'Today' },
+            { value: 'week', label: 'Week' },
+          ]}
+          multiple={false}
+          selected={[view]}
+          onChange={v => v[0] && setView(v[0])}
+        />
 
-      {view === 'week' ? <WeekPlan today={today} /> : null}
+        {view === 'week' ? <WeekPlan today={today} /> : null}
 
-      {view === 'today' ? (
-        <>
-          <CheckInCard
-            key={today}
-            day={today}
-            existing={state.checkIns.find(c => c.date === today) ?? null}
-          />
+        {view === 'today' ? (
+          <>
+            <CheckInCard
+              key={today}
+              day={today}
+              existing={state.checkIns.find(c => c.date === today) ?? null}
+            />
 
-          <SectionHeader
-            title="Planned for today"
-            action={
-              <Button
-                title={adding ? 'Cancel' : 'Add'}
-                size="small"
-                variant="quiet"
-                onPress={() => setAdding(a => !a)}
-                accessibilityLabel={
-                  adding ? 'Cancel adding' : "Add to today's plan"
-                }
-              />
-            }
-          />
-          {adding ? (
-            <AddPlanItemCard date={today} onDone={() => setAdding(false)} />
-          ) : null}
-          {planned.length === 0 && !adding ? (
-            <EmptyState
-              title="Nothing planned for today"
-              body="Add a meal or an activity, or ask the coach for ideas."
+            <SectionHeader
+              title="Planned for today"
               action={
                 <Button
-                  title="Plan something"
+                  title={adding ? 'Cancel' : 'Add'}
                   size="small"
-                  onPress={() => setAdding(true)}
+                  variant="quiet"
+                  onPress={() => setAdding(a => !a)}
+                  accessibilityLabel={
+                    adding ? 'Cancel adding' : "Add to today's plan"
+                  }
                 />
               }
             />
-          ) : null}
-          {planned.map(item => (
-            <PlanItemCard key={item.id} item={item} day={today} />
-          ))}
+            {adding ? (
+              <AddPlanItemCard date={today} onDone={() => setAdding(false)} />
+            ) : null}
+            {planned.length === 0 && !adding ? (
+              <EmptyState
+                title="Nothing planned for today"
+                body="Add a meal or an activity, or ask the coach for ideas."
+                action={
+                  <Button
+                    title="Plan something"
+                    size="small"
+                    onPress={() => setAdding(true)}
+                  />
+                }
+              />
+            ) : null}
+            {planned.map(item => (
+              <PlanItemCard key={item.id} item={item} day={today} />
+            ))}
 
-          <SectionHeader title="Quick actions" />
-          <View style={styles.quickGrid}>
-            <QuickAction
-              title="Ask the coach"
-              onPress={() => nav.go('coach')}
-            />
-            <QuickAction
-              title="Browse recipes"
-              onPress={() => nav.go('meals')}
-            />
-            <QuickAction
-              title="Start a routine"
-              onPress={() => nav.go('activity')}
-            />
-            <QuickAction
-              title="Shopping list"
-              onPress={() => nav.go('meals', { name: 'shopping' })}
-            />
-          </View>
-        </>
-      ) : null}
+            <SectionHeader title="Quick actions" />
+            <View style={styles.quickGrid}>
+              <QuickAction
+                title="Ask the coach"
+                onPress={() => nav.go('coach')}
+              />
+              <QuickAction
+                title="Browse recipes"
+                onPress={() => nav.go('meals')}
+              />
+              <QuickAction
+                title="Start a routine"
+                onPress={() => nav.go('activity')}
+              />
+              <QuickAction
+                title="Shopping list"
+                onPress={() => nav.go('meals', { name: 'shopping' })}
+              />
+            </View>
+          </>
+        ) : null}
+      </View>
     </Screen>
   );
 }
@@ -723,6 +729,13 @@ function MoveChoices({
 }
 
 const styles = StyleSheet.create({
+  todayColumn: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    gap: Spacing.three,
+    marginTop: Spacing.three,
+  },
+  plain: { gap: Spacing.three },
   fill: { flex: 1 },
   moveChoices: { gap: Spacing.one },
   wrap: { flexWrap: 'wrap' },

@@ -6,18 +6,23 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { ImageSourcePropType } from 'react-native';
 
-// The iPhone app's five tabs become sidebar sections. Each section keeps its own
-// stack, like a tab's native stack on iOS.
+// The Rhythm website's navigation (mobile/src/app/(app)/(tabs)/_layout.web.tsx): Overview, Coach, Calendar and
+// Camera workout; Content library and Interests & sharing under Discover; Downloads and Profile at the bottom. Each
+// section keeps its own stack of pages, like a tab's native stack on iOS. The recipe and workout libraries are
+// sections reached from Calendar, as on the website.
 
 export type Section =
-  | 'today'
+  | 'overview'
   | 'coach'
   | 'calendar'
+  | 'camera'
+  | 'library'
+  | 'interests'
+  | 'downloads'
+  | 'profile'
   | 'meals'
-  | 'activity'
-  | 'profile';
+  | 'activity';
 
 export type Route =
   | { name: 'root' }
@@ -27,36 +32,34 @@ export type Route =
   | { name: 'session'; id: string }
   | { name: 'memory' }
   | { name: 'connections' }
-  | { name: 'camera' }
+  | { name: 'edit-profile' }
   | { name: 'account' };
+
+export type NavGroup = 'main' | 'discover' | 'bottom';
 
 export const SECTIONS: {
   key: Section;
   label: string;
-  /** PNG of the iPhone tab's SF Symbol (the Mac app draws the symbol itself). */
-  icon: ImageSourcePropType;
+  group: NavGroup;
+  /** A glyph of Windows' own icon font (Segoe MDL2 Assets), standing in for the website's Material Symbol; the Coach
+   * has the AI orb instead. */
+  glyph: string;
+  ai?: boolean;
 }[] = [
-  {
-    key: 'today',
-    label: 'Today',
-    icon: require('./assets/icons/today.png'),
-  },
-  {
-    key: 'coach',
-    label: 'Coach',
-    icon: require('./assets/icons/coach.png'),
-  },
-  {
-    key: 'calendar',
-    label: 'Calendar',
-    icon: require('./assets/icons/today.png'),
-  },
-  {
-    key: 'profile',
-    label: 'Profile',
-    icon: require('./assets/icons/profile.png'),
-  },
+  { key: 'overview', label: 'Overview', group: 'main', glyph: '' },
+  { key: 'coach', label: 'Coach', group: 'main', glyph: '', ai: true },
+  { key: 'calendar', label: 'Calendar', group: 'main', glyph: '' },
+  { key: 'camera', label: 'Camera workout', group: 'main', glyph: '' },
+  { key: 'library', label: 'Content library', group: 'discover', glyph: '' },
+  { key: 'interests', label: 'Interests & sharing', group: 'discover', glyph: '' },
+  { key: 'downloads', label: 'Downloads', group: 'bottom', glyph: '' },
+  { key: 'profile', label: 'Profile', group: 'bottom', glyph: '' },
 ];
+
+/** The sidebar item a section belongs to (the recipe and workout libraries open from Calendar). */
+export function navItemOf(section: Section): Section {
+  return section === 'meals' || section === 'activity' ? 'calendar' : section;
+}
 
 const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
   recipe: 'Recipe',
@@ -65,7 +68,7 @@ const ROUTE_TITLES: Record<Exclude<Route['name'], 'root'>, string> = {
   session: 'Session',
   memory: 'Memory',
   connections: 'AI connections',
-  camera: 'Camera workout',
+  'edit-profile': 'Preferences & goals',
   account: 'Rhythm account',
 };
 
@@ -95,14 +98,18 @@ const NavContext = createContext<Nav | null>(null);
 const ROOT: Route[] = [{ name: 'root' }];
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
-  const [section, setSection] = useState<Section>('today');
+  const [section, setSection] = useState<Section>('overview');
   const [stacks, setStacks] = useState<Record<Section, Route[]>>({
-    calendar: ROOT,
-    today: ROOT,
+    overview: ROOT,
     coach: ROOT,
+    calendar: ROOT,
+    camera: ROOT,
+    library: ROOT,
+    interests: ROOT,
+    downloads: ROOT,
+    profile: ROOT,
     meals: ROOT,
     activity: ROOT,
-    profile: ROOT,
   });
 
   const stack = stacks[section];
