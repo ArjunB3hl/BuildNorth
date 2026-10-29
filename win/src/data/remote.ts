@@ -156,6 +156,10 @@ export async function syncAction(
   before: State,
 ): Promise<Slice[]> {
   switch (action.type) {
+    case 'session/save':
+      await api.sessions.create(action.session);
+      // The server adds it to the Calendar and the progress numbers.
+      return ['sessions', 'calendar', 'today', 'progress'];
     case 'plan/update':
       await api.plan.update(action.id, action.patch);
       // Done meals and reschedules show up in the Calendar and the progress numbers.
@@ -257,6 +261,8 @@ export function slicesFor(action: Action): Slice[] {
     case 'calendar/save':
     case 'calendar/remove':
       return ['calendar'];
+    case 'session/save':
+      return ['sessions', 'calendar'];
     default:
       return [];
   }

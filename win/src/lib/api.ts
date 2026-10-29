@@ -10,6 +10,7 @@ import type {
   Recipe,
   Routine,
   ActivitySession,
+  SessionEntry,
   ShoppingItem,
 } from '../data/types';
 
@@ -57,6 +58,20 @@ export type AIAccess = {
   claude: boolean;
   sharedClaude: boolean;
   textChat: boolean;
+  /** An ElevenLabs agent is connected and usable (older servers leave it out). */
+  elevenlabs?: boolean;
+};
+
+/** POST /sessions: a finished workout. */
+export type SessionInput = {
+  routineId: string | null;
+  routineName: string;
+  planItemId: string | null;
+  localDate: string;
+  startedAt: string;
+  finishedAt: string;
+  entries: SessionEntry[];
+  notes: string | null;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -150,6 +165,12 @@ export function createApi(getToken: TokenSource, baseUrl = API_URL) {
     baseUrl,
     me: () => request<{ userId: string }>('GET', '/me'),
     profile: () => request<Profile>('GET', '/profile'),
+    /** PUT /profile: the welcome step's details (it counts as done). */
+    saveProfile: (profile: Profile) =>
+      request<Profile>('PUT', '/profile', {
+        ...profile,
+        onboardingCompleted: true,
+      }),
     preferences: {
       list: () =>
         request<{ preferences: Preference[]; memoryAvailable: boolean }>(
@@ -184,6 +205,8 @@ export function createApi(getToken: TokenSource, baseUrl = API_URL) {
     routines: { list: () => request<Routine[]>('GET', '/routines') },
     sessions: {
       list: () => request<ActivitySession[]>('GET', '/sessions'),
+      create: (session: SessionInput) =>
+        request<ActivitySession>('POST', '/sessions', session),
     },
     today: (date: string) =>
       request<{ date: string; items: PlanItem[]; checkIn: CheckIn | null }>(
@@ -241,6 +264,9 @@ export function createApi(getToken: TokenSource, baseUrl = API_URL) {
       remove: (id: string) => request<void>('DELETE', `/calendar/${id}`),
     },
     access: () => request<AIAccess>('GET', '/connections/access'),
+    /** A short-lived ElevenLabs conversation address for the account's own agent (camera workout). */
+    elevenLabsSession: () =>
+      request<{ signedUrl: string }>('POST', '/connections/elevenlabs/session'),
   };
 }
 

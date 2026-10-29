@@ -36,12 +36,15 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import uuid
 from collections import deque
 from pathlib import Path
+
+import claude_code
 
 MODEL = os.environ.get("POSE_COACH_MODEL", "sonnet")
 EFFORT = os.environ.get("POSE_COACH_EFFORT", "high")   # measured on Haiku: high costs no extra delay on these short cues
@@ -66,12 +69,16 @@ CODEX_OFF = ("shell_tool", "unified_exec", "view_image", "image_generation", "br
              "plugins", "multi_agent", "goals", "tool_suggest", "skill_search", "sleep_tool", "in_app_browser",
              "personality")
 HERE = Path(__file__).resolve().parent
-VENV_PY = HERE.parent / ".venv" / "bin" / "python"
+VENV_PY = HERE.parent / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 # the movement library the page offers (tools/build_moves.mjs; git-ignored): read for the movements' names, how each is
 # tracked and its coaching notes. Missing, the readings use what the event itself says.
 LIBRARY = Path(os.environ.get("POSE_MOVES_DIR") or HERE.parent / ".data" / "moves") / "library.json"
 # --- the API transport (Claude through the Anthropic SDK, on the user's own key) ---
 TRANSPORT = os.environ.get("POSE_CLAUDE_TRANSPORT", "auto").strip().lower()      # auto | api | cli
+# POSE_COACH_LOG=0: no session log. A log (DATA/coach/session-<id>.jsonl) keeps what the coach was sent and what it
+# answered: the measured events and, with Talk to coach, the user's transcribed words. The Windows app's camera server
+# (win/local-voice/camera.ps1) turns it off.
+KEEP_LOG = os.environ.get("POSE_COACH_LOG", "1").strip().lower() not in ("0", "off", "no", "false")
 KEY_FILE = Path(os.environ.get("POSE_ANTHROPIC_KEY_FILE") or HERE.parent / ".data" / "connections" / "anthropic-key")
 THINKING = os.environ.get("POSE_CLAUDE_THINKING", "between_tools").strip().lower()   # between_tools | adaptive
 API_URL = "https://api.anthropic.com"   # the key goes here and nowhere else (api_client)
@@ -111,6 +118,11 @@ def sdk():
     except ImportError:
         return None
     return anthropic
+
+
+def open_log(path: Path, mode: str):
+    """A session's log file, or nowhere (os.devnull) with POSE_COACH_LOG=0."""
+    return open(path if KEEP_LOG else os.devnull, mode)
 
 
 def api_key() -> str | None:
@@ -245,11 +257,8 @@ def complete(text: str) -> bool:
 
 
 def claude_cli() -> str | None:
-    """The claude CLI: on PATH, else where its installer puts it."""
-    for p in (shutil.which("claude"), Path.home() / ".local/bin/claude"):
-        if p and Path(p).is_file():
-            return str(p)
-    return None
+    """The claude CLI: on PATH, else where its installer puts it, else (Windows) the Claude desktop app's copy."""
+    return claude_code.find_cli()
 
 
 def nvm_bins() -> list[Path]:
@@ -278,7 +287,8 @@ def codex_cli() -> str | None:
 
 
 def claude_env() -> dict:
-    return {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}   # the user's Claude login, not a key
+    """The user's Claude Code sign-in only: no ANTHROPIC_* or CLAUDE* variable (a key, a gateway, a parent session's)."""
+    return claude_code.clean_env(claude_cli())
 
 
 def codex_env(cli: str) -> dict:
@@ -920,7 +930,7 @@ class Session:
             "command": str(VENV_PY), "args": [str(HERE / "pose_mcp.py")],
             "env": {"POSE_SERVER": self.server_url, "POSE_COACH_SESSION": self.id}}}}))
         cmd = self.claude_cmd(cfg)
-        self.log = open(self.dir / f"session-{self.id}.jsonl", "w")
+        self.log = open_log(self.dir / f"session-{self.id}.jsonl", "w")
         self.run_started, self.runs = time.monotonic(), 1
         self.proc = subprocess.Popen(cmd, cwd=self.cwd(), env=claude_env(), stdin=subprocess.DEVNULL, stdout=self.log,
                                      stderr=subprocess.STDOUT)
@@ -961,7 +971,7 @@ class Session:
             # a request the model declines (a refusal) is run again, in the same call, on the model Anthropic names for
             # the refusal's category (Claude Haiku 5.5 has no server-side fallback)
             self.request.update(betas=[FALLBACK_BETA], fallbacks="default")
-        self.log = open(self.dir / f"session-{self.id}.jsonl", "w")
+        self.log = open_log(self.dir / f"session-{self.id}.jsonl", "w")
         self.run_started, self.runs = time.monotonic(), 1
         self.worker = threading.Thread(target=self._api_loop, args=(client, key), name=f"coach-{self.id}", daemon=True)
         self.worker.start()
@@ -1144,7 +1154,7 @@ class Session:
                                        "t": time.time()}) + "\n")
             self.log.flush()
         else:
-            self.log = open(self.dir / f"session-{self.id}.jsonl", "a")     # one log for all its runs
+            self.log = open_log(self.dir / f"session-{self.id}.jsonl", "a")     # one log for all its runs
         self.run_started, self.run_said = time.monotonic(), len(self.said)
         self.run_taken, self.run_asked = 0, False
         self.proc = subprocess.Popen(cmd, cwd=self.cwd(), env=codex_env(cmd[0]), stdin=subprocess.DEVNULL,

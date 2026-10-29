@@ -17,6 +17,9 @@ interface Spec extends TurboModule {
   writeSecret(name: SecretName, value: string): boolean;
   setKeepAwake(enabled: boolean): void;
   setBadge(count: number): void;
+  readLocalVoiceToken(): string;
+  randomHex(bytes: number): string;
+  hmacSha256Hex(key: string, message: string): string;
 }
 
 const native = TurboModuleRegistry.get<Spec>('NorthWin');
@@ -100,4 +103,19 @@ export function setKeepAwake(enabled: boolean): void {
   if (native) {
     guard('setKeepAwake', () => native.setKeepAwake(enabled), undefined);
   }
+}
+
+/** The local voice helper's token from the app's own data folder (win/local-voice), or null when it isn't running. */
+export function readLocalVoiceToken(): string | null {
+  return native ? guard('readLocalVoiceToken', () => native.readLocalVoiceToken(), '') || null : null;
+}
+
+/** `bytes` random bytes from the system RNG as hex, or null where the module isn't built in. */
+export function randomHex(bytes: number): string | null {
+  return native ? guard('randomHex', () => native.randomHex(bytes), '') || null : null;
+}
+
+/** HMAC-SHA256 as hex, or null where the module isn't built in. */
+export function hmacSha256Hex(key: string, message: string): string | null {
+  return native ? guard('hmacSha256Hex', () => native.hmacSha256Hex(key, message), '') || null : null;
 }

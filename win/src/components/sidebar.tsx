@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { setBadge } from '../../modules/north-win';
 import { useStore } from '../data/store';
+import { LOCAL_BACKEND } from '../config';
 import { useAccount } from '../lib/account';
 import { localDate } from '../lib/dates';
 import { SECTIONS, useNav, type Section } from '../navigation';
@@ -40,7 +41,11 @@ export function Sidebar() {
       <View style={styles.brand}>
         <ThemedText style={styles.wordmark}>Rhythm</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Demo version
+          {signedIn
+            ? LOCAL_BACKEND
+              ? 'Local test backend'
+              : 'Your account'
+            : 'Demo version'}
         </ThemedText>
       </View>
       {SECTIONS.map(s => (
@@ -61,13 +66,17 @@ export function Sidebar() {
         <View style={styles.status}>
           <View style={[styles.dot, signedIn && styles.dotSynced]} />
           <ThemedText type="smallBold">
-            {signedIn ? 'Synced with Rhythm' : 'Saved on this PC'}
+            {signedIn
+              ? LOCAL_BACKEND
+                ? 'Test data on this PC'
+                : 'Synced with Rhythm'
+              : 'Saved on this PC'}
           </ThemedText>
         </View>
         <ThemedText type="small" themeColor="textSecondary">
           {signedIn
             ? signedIn.user.email ?? signedIn.user.name ?? 'Signed in'
-            : 'Local demo data. Sign in from Profile to sync your account.'}
+            : 'Demo data on this PC, not a Rhythm account.'}
         </ThemedText>
       </View>
     </View>

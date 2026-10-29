@@ -71,6 +71,8 @@ if name == "claude":
     elif mode == "out":
         print(json.dumps({"loggedIn": False, "authMethod": "none"}))
         sys.exit(1)
+    elif mode == "key":
+        print(json.dumps({"loggedIn": True, "authMethod": "api_key", "apiKeySource": "/login managed key"}))
     else:
         print("this is not JSON")
 else:
@@ -171,6 +173,11 @@ class Connections(unittest.TestCase):
         st = connections.status()["claude"]
         self.assertEqual((st["available"], st["loggedIn"], st["plan"]), (True, False, None))
         self.assertIn("sign in", st["error"])
+        # Claude Code signed in with an API key is not the user's Claude account: not counted
+        self.mode("claude", "key")
+        st = connections.status()["claude"]
+        self.assertEqual((st["loggedIn"], st["plan"]), (False, None))
+        self.assertIn("API key", st["error"])
         self.mode("claude", "junk")
         self.assertIn("could not read", connections.status()["claude"]["error"])
 

@@ -32,6 +32,31 @@ export function workoutOf(sets, ended, startedAt, finishedAt) {
   return { startedAt, finishedAt, sets: out, totals };
 }
 
+/**
+ * Inside the Rhythm Windows app (?embed=1&parent=windows-app): the app shows this page at the top of its own WebView2
+ * (there is no parent page) and messages go through `window.chrome.webview`, which only that WebView provides, as
+ * JSON strings. The app takes them only from this server's origin.
+ */
+export const WINDOWS_APP = 'windows-app';
+export const windowsApp = (win, search) =>
+  new URLSearchParams(search).get('parent') === WINDOWS_APP && win.parent === win && !!win.chrome?.webview;
+
+/** `connect` for the Windows app: the same `send` and `on`, through the WebView. */
+export function connectWindowsApp(webview) {
+  const handlers = {};
+  webview.addEventListener('message', ev => {
+    let data;
+    try { data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch { return; }
+    if (typeof data?.type !== 'string' || !data.type.startsWith('pose-coach/')) return;
+    const handler = handlers[data.type.slice('pose-coach/'.length)];
+    if (handler) handler(data);
+  });
+  return {
+    send: (name, fields = {}) => webview.postMessage(JSON.stringify({ ...fields, type: `pose-coach/${name}` })),
+    on: (name, fn) => { handlers[name] = fn; },
+  };
+}
+
 /** The link to the app: `send(name, fields)`, and `on(name, fn)` for the app's messages (start, stop). */
 export function connect(win, parent) {
   const handlers = {};

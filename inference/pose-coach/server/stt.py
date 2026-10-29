@@ -18,15 +18,20 @@ import itertools
 import json
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from queue import Empty, Queue
 
 HERE = Path(__file__).resolve().parent
+# Windows has no MLX: there the worker is stt_worker_onnx.py (sherpa-onnx on the CPU, tools/setup_voice_windows.sh), in
+# the server's own venv (Windows layout)
+WINDOWS = sys.platform == "win32"
 # Kokoro's venv: mlx-audio has both models, and one venv is one set of pinned packages to keep
 PYTHON = Path(os.environ.get("POSE_STT_PY") or os.environ.get("POSE_KOKORO_PY")
-              or HERE.parent / ".venv-kokoro" / "bin" / "python")
-WORKER = HERE / "stt_worker.py"
+              or (HERE.parent / ".venv" / "Scripts" / "python.exe" if WINDOWS
+                  else HERE.parent / ".venv-kokoro" / "bin" / "python"))
+WORKER = HERE / ("stt_worker_onnx.py" if WINDOWS else "stt_worker.py")
 LOG = HERE.parent / ".data" / "stt-worker.log"            # the worker's stderr, when .data/ is there
 REPO = os.environ.get("POSE_STT_REPO", "mlx-community/parakeet-tdt-0.6b-v3")
 REVISION = os.environ.get("POSE_STT_REVISION", "ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15")   # (as stt_worker.py)
@@ -69,6 +74,9 @@ def snapshot() -> Path:
 
 def available() -> bool:
     # (the worker reads the model from the cache only: without it, it would only fail at every start)
+    if WINDOWS:
+        import onnx_speech
+        return not OFF and PYTHON.is_file() and onnx_speech.parakeet_ready()
     return not OFF and PYTHON.is_file() and (snapshot() / "model.safetensors").exists()
 
 

@@ -50,12 +50,12 @@ export function ProfileScreen() {
             ? `Signed in${
                 signedIn.user.email ? ` as ${signedIn.user.email}` : ''
               }`
-            : 'Sign in to your Rhythm account'
+            : 'Demo data on this PC'
         }
         subtitle={
           signedIn
             ? 'Synced with your Rhythm account · sign out'
-            : 'Sync this PC with your phone and the website'
+            : 'Not a Rhythm account: sign-in isn’t configured in this build'
         }
         onPress={() => nav.push({ name: 'account' })}
       />

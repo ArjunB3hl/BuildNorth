@@ -11,6 +11,7 @@ import {
 } from '../components/ui';
 import type { DemoCalendarEntry } from '../data/calendar';
 import { useStore } from '../data/store';
+import { LOCAL_BACKEND } from '../config';
 import { addDays, friendlyDate, localDate, weekStart } from '../lib/dates';
 import { useNav } from '../navigation';
 import { Accent, useTheme } from '../theme';
@@ -168,8 +169,20 @@ export function CalendarScreen() {
       <Notice tone="info">
         {account
           ? 'Your Rhythm account · The same Calendar as your phone and the website. Finished workouts, done meals and Watch data come from the server and can’t be edited here.'
-          : 'Demo on this PC · Entries stay on this device. Sign in from Profile to use your account’s Calendar.'}
+          : 'Demo on this PC · Entries stay on this device; this isn’t a Rhythm account.'}
       </Notice>
+      <View style={s.row}>
+        <Text type="small" themeColor="textSecondary" style={s.flex}>
+          Camera workout: count your reps with this PC’s camera and save them
+          here.
+        </Text>
+        <Button
+          title="Camera workout"
+          size="small"
+          variant="secondary"
+          onPress={() => nav.push({ name: 'camera' })}
+        />
+      </View>
       <Card style={s.cardGap}>
         <View style={s.row}>
           <Text type="subtitle" style={s.flex}>
@@ -274,7 +287,13 @@ export function CalendarScreen() {
           })}
         </View>
         <Text type="small" themeColor="textSecondary">
-          ● Meals ◆ Movement · All entries are local demo data
+          {`● Meals ◆ Movement · ${
+            !account
+              ? 'All entries are local demo data'
+              : LOCAL_BACKEND
+              ? 'Test data from the local test backend'
+              : 'From your Rhythm account'
+          }`}
         </Text>
       </Card>
       <Card>

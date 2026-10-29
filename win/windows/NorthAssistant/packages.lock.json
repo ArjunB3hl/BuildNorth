@@ -152,7 +152,7 @@
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "1.8.260430001"
         }
       },
-      "reactnativeasyncstorage": {
+      "reactnativewebview": {
         "type": "Project",
         "dependencies": {
           "Microsoft.ReactNative": "[0.85.0, )",

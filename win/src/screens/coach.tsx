@@ -14,6 +14,7 @@ import type { AIAccess } from '../lib/api';
 import { localDate } from '../lib/dates';
 import { randomUUID } from '../lib/ids';
 
+import { LocalVoiceCard } from '../components/local-voice';
 import {
   Button,
   Card,
@@ -146,6 +147,7 @@ export function CoachScreen() {
           onPress={() => Linking.openURL(`${WEB_URL}/profile/connections`)}
         />
         <Button title="Check again" variant="secondary" onPress={checkAccess} />
+        <LocalVoiceCard />
       </View>
     );
 
@@ -155,13 +157,14 @@ export function CoachScreen() {
         <PageHeader title="Connect your coach first" />
         <ThemedText>
           Verify a Claude API key in AI connections to unlock this PC’s demo
-          Coach, or sign in from Profile to use your Rhythm account’s Coach.
+          Coach. Builds with sign-in use your Rhythm account’s Coach.
           ElevenLabs and account assistants are available through the website.
         </ThemedText>
         <Button
           title="Open AI connections"
           onPress={() => nav.go('profile', { name: 'connections' })}
         />
+        <LocalVoiceCard />
       </View>
     );
 
@@ -229,6 +232,7 @@ export function CoachScreen() {
                 Calendar. Your conversation is saved only on this PC.
               </Notice>
             )}
+            <LocalVoiceCard />
             {messages.length === 0 ? (
               <Card>
                 <ThemedText type="smallBold">Your personal coach</ThemedText>

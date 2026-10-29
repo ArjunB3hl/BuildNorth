@@ -1,0 +1,6 @@
+<Project>
+  <!-- See ..\Directory.Build.props. -->
+  <PropertyGroup>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+</Project>

@@ -11,6 +11,7 @@
 
 #include <wincrypt.h>
 #include <dpapi.h>
+#include <bcrypt.h>
 
 #include <filesystem>
 #include <fstream>
@@ -19,6 +20,7 @@
 #include <vector>
 
 #pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "bcrypt.lib")
 
 namespace NorthAssistant {
 
@@ -143,6 +145,53 @@ struct NorthWin {
     }
   }
 
+  // The local voice helper's token (win/local-voice): the helper writes it to LocalState\local-voice.token,
+  // where this app can read it and web pages (the camera WebView included) cannot. Empty unless the file holds
+  // exactly 64 lowercase hex characters.
+  REACT_SYNC_METHOD(ReadLocalVoiceToken, L"readLocalVoiceToken")
+  std::string ReadLocalVoiceToken() noexcept {
+    try {
+      std::ifstream in(DataFile().parent_path() / L"local-voice.token", std::ios::binary);
+      if (!in) {
+        return {};
+      }
+      std::string token(65, '\0');
+      in.read(token.data(), 65);
+      token.resize(static_cast<size_t>(in.gcount()));
+      bool hex = token.size() == 64;
+      for (char c : token) {
+        hex = hex && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
+      }
+      return hex ? token : std::string{};
+    } catch (...) {
+      return {};
+    }
+  }
+
+  // `bytes` (1 to 64) random bytes from the system RNG, as lowercase hex; empty on failure. React Native for
+  // Windows has no crypto.getRandomValues.
+  REACT_SYNC_METHOD(RandomHex, L"randomHex")
+  std::string RandomHex(int bytes) noexcept {
+    if (bytes < 1 || bytes > 64) {
+      return {};
+    }
+    BYTE buffer[64]{};
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, buffer, static_cast<ULONG>(bytes), BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+      return {};
+    }
+    return Hex(buffer, static_cast<size_t>(bytes));
+  }
+
+  // HMAC-SHA256(key, message) as lowercase hex, to check the local voice helper's proof before trusting it.
+  REACT_SYNC_METHOD(HmacSha256Hex, L"hmacSha256Hex")
+  std::string HmacSha256Hex(std::string key, std::string message) noexcept {
+    BYTE digest[32]{};
+    auto status = BCryptHash(BCRYPT_HMAC_SHA256_ALG_HANDLE, reinterpret_cast<PUCHAR>(key.data()),
+                             static_cast<ULONG>(key.size()), reinterpret_cast<PUCHAR>(message.data()),
+                             static_cast<ULONG>(message.size()), digest, sizeof(digest));
+    return BCRYPT_SUCCESS(status) ? Hex(digest, sizeof(digest)) : std::string{};
+  }
+
   // Keeps the display on (cook mode) with a power request, which Windows tracks per process
   // and lists in `powercfg /requests`. Released with `false` or when the app quits.
   REACT_METHOD(SetKeepAwake, L"setKeepAwake")
@@ -188,6 +237,16 @@ struct NorthWin {
   }
 
  private:
+  static std::string Hex(BYTE const *data, size_t size) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string text(size * 2, '0');
+    for (size_t i = 0; i < size; ++i) {
+      text[i * 2] = digits[data[i] >> 4];
+      text[i * 2 + 1] = digits[data[i] & 0xf];
+    }
+    return text;
+  }
+
   // e.g. "Windows 11, version 25H2 (build 26300.1234)", from the registry values Settings > About
   // shows. Windows 11 still reports ProductName "Windows 10", so the build number decides.
   static std::wstring WindowsVersion() noexcept {

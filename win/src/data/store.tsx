@@ -14,7 +14,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button, Notice, ThemedText } from '../components/ui';
 import { describe, useAccount } from '../lib/account';
-import type { Api } from '../lib/api';
+import type { Api, SessionInput } from '../lib/api';
 import { addDays, localDate } from '../lib/dates';
 import { randomUUID } from '../lib/ids';
 import { loadState, saveState } from '../lib/persist';
@@ -48,6 +48,8 @@ export type State = SampleData & {
 
 export type Action =
   | { type: 'calendar/save'; entry: DemoCalendarEntry }
+  /** A camera workout counted by the pose coach (src/lib/pose-coach.ts), saved as an Activity session. */
+  | { type: 'session/save'; session: SessionInput; id: string }
   | { type: 'calendar/remove'; id: string }
   | {
       type: 'plan/update';
@@ -121,6 +123,38 @@ function reducer(state: State, action: Action): State {
         ...state,
         calendarEntries: state.calendarEntries.filter(e => e.id !== action.id),
       };
+    case 'session/save': {
+      // The demo's Calendar shows it as the server's would (signed in, the server derives the entry itself).
+      const s = action.session;
+      const seconds = Math.max(0, Math.round((Date.parse(s.finishedAt) - Date.parse(s.startedAt)) / 1000));
+      const started = new Date(s.startedAt);
+      const time = `${String(started.getHours()).padStart(2, '0')}:${String(started.getMinutes()).padStart(2, '0')}`;
+      return {
+        ...state,
+        sessions: [
+          ...state.sessions,
+          {
+            id: action.id,
+            routineId: s.routineId,
+            routineName: s.routineName,
+            localDate: s.localDate,
+            durationSeconds: seconds,
+            entries: s.entries,
+          },
+        ],
+        calendarEntries: [
+          ...state.calendarEntries,
+          {
+            id: `session-${action.id}`,
+            kind: 'activity',
+            title: s.routineName,
+            date: s.localDate,
+            time,
+            minutes: Math.max(1, Math.round(seconds / 60)),
+          },
+        ],
+      };
+    }
     case 'plan/update': {
       let calendarEntries = state.calendarEntries;
       const item = state.plan.find(i => i.id === action.id);
@@ -266,6 +300,8 @@ type Store = {
   /** The last change the server refused or couldn't receive (signed in only). */
   syncError: string | null;
   dismissSyncError: () => void;
+  /** Signed in: loads these parts again from the server (after a change made outside an action). */
+  reload: (slices: Slice[]) => Promise<void>;
 };
 const StoreContext = createContext<Store | null>(null);
 
@@ -301,6 +337,7 @@ function DemoStore({ children }: { children: ReactNode }) {
       api: null,
       syncError: null,
       dismissSyncError: () => {},
+      reload: async () => {},
     }),
     [state],
   );
@@ -367,8 +404,9 @@ function AccountStore({ api, children }: { api: Api; children: ReactNode }) {
         api,
         syncError,
         dismissSyncError: () => setSyncError(null),
+        reload,
       },
-    [state, dispatch, api, syncError],
+    [state, dispatch, api, syncError, reload],
   );
 
   if (!value) {
