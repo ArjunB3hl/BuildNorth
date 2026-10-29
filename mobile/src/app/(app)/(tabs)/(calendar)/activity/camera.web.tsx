@@ -16,6 +16,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
 import { localDate } from '@/lib/dates';
+import { hasLocalVoice, localClaudeReady } from '@/lib/local-voice';
 import {
   countedSets,
   countedWorkout,
@@ -58,12 +59,19 @@ const serverOrigin = () => '';
  */
 export default function CameraWorkout() {
   const focused = useIsFocused();
+  const [localReady, setLocalReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void (focused && hasLocalVoice() ? localClaudeReady() : Promise.resolve(false))
+      .then(ready => { if (alive) setLocalReady(ready); });
+    return () => { alive = false; };
+  }, [focused]);
   // Web stack routes remain mounted after navigation. Release the frame and its Web Lock while off-screen;
   // the inner screen restores persisted counts on the next visit.
-  return focused ? <AIConnectionGate>{access => <CameraWorkoutSession elevenlabs={access.elevenlabs} />}</AIConnectionGate> : null;
+  return focused ? <AIConnectionGate fallback={localReady ? <CameraWorkoutSession elevenlabs={false} localReady /> : undefined}>{access => <CameraWorkoutSession elevenlabs={access.elevenlabs} localReady={localReady} />}</AIConnectionGate> : null;
 }
 
-function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
+function CameraWorkoutSession({ elevenlabs, localReady }: { elevenlabs: boolean; localReady: boolean }) {
   const params = useLocalSearchParams<{ routineId?: string; routineName?: string; planItemId?: string }>();
   const api = useApi();
   // useApi gives a new client on every render (Clerk's getToken is new each time): effects read it from a ref
@@ -90,6 +98,7 @@ function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
     }
   }, [parentOrigin]);
   const { src, origin: poseOrigin } = frameConfig;
+  const localClaude = localReady && poseOrigin === 'http://127.0.0.1:8765' && parentOrigin.startsWith('http://localhost:');
   const [ready, setReady] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const [attempt, setAttempt] = useState(0);              // the frame is loaded again on Try again (no reload)
@@ -304,7 +313,7 @@ function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
       update(next.counted);
       if (m.type === 'pose-coach/ready') {
         post('theme', { theme: scheme });
-        post('ai-connection', { elevenlabs });
+        post('ai-connection', { elevenlabs, localClaude });
         setReady(true);
         setUnreachable(false);
       } else if (m.type === 'pose-coach/error') {
@@ -319,11 +328,11 @@ function CameraWorkoutSession({ elevenlabs }: { elevenlabs: boolean }) {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [poseOrigin, update, finished, post, reset, scheme, elevenlabs]);
+  }, [poseOrigin, update, finished, post, reset, scheme, elevenlabs, localClaude]);
 
   useEffect(() => {
-    if (ready) { post('theme', { theme: scheme }); post('ai-connection', { elevenlabs }); }
-  }, [ready, scheme, post, elevenlabs]);
+    if (ready) { post('theme', { theme: scheme }); post('ai-connection', { elevenlabs, localClaude }); }
+  }, [ready, scheme, post, elevenlabs, localClaude]);
 
   useEffect(() => {
     if (ready || !claimed || elsewhere || !src) return;

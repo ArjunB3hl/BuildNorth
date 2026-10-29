@@ -129,7 +129,11 @@ class Handler(BaseHTTPRequestHandler):
     def end_headers(self):
         # every response, whatever its path or type: only pages on this machine may frame this server's pages (the
         # BuildNorth app embeds the page with ?embed=1)
-        self.send_header("Content-Security-Policy", "frame-ancestors 'self' http://localhost:* http://127.0.0.1:*")
+        parent = os.environ.get("POSE_MAC_PARENT_ORIGIN", "")
+        if re.fullmatch(r"http://localhost:\d{1,5}", parent):
+            self.send_header("Content-Security-Policy", f"frame-ancestors 'self' {parent}")
+        else:
+            self.send_header("Content-Security-Policy", "frame-ancestors 'self' http://localhost:* http://127.0.0.1:*")
         super().end_headers()
 
     def send_json(self, obj, status=200):
@@ -294,6 +298,9 @@ class Handler(BaseHTTPRequestHandler):
             what_type = "JSON" if ctype == "application/json" else "raw audio"
             return HTTPStatus.UNSUPPORTED_MEDIA_TYPE, f"the body must be {what_type} (Content-Type: {ctype})"
         origin = self.headers.get("Origin")
+        parent = os.environ.get("POSE_MAC_PARENT_ORIGIN", "")
+        if parent and origin is not None and origin.lower() != f"http://127.0.0.1:{self.server.server_port}":
+            return HTTPStatus.FORBIDDEN, f"only the local camera page may {what}"
         if origin is not None and not LOCAL_ORIGIN.fullmatch(origin.lower()):
             return HTTPStatus.FORBIDDEN, f"only pages on this machine may {what}"
         return None

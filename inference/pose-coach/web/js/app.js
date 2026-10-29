@@ -64,14 +64,19 @@ if (HOSTED) {
 }
 const accountSession = app ? hostAgent(app) : null;
 let accountElevenLabs = false;
+let accountLocalClaude = false;
 if (embedded(location.search) && !PARENT) console.warn('pose coach: ?parent= must be a page on this machine (http://localhost:<port>); not embedded');
 if (app) {
+  $('record').checked = false; // Landmark debugging is opt-in in the embedded Mac workout.
   document.body.classList.add('embed');
   connectAppearance(window, app);
   app.on('ai-connection', message => {
     hostAuthorized = true;
     if (!S.running && !S.starting) $('start').disabled = false;
     accountElevenLabs = message.elevenlabs === true;
+    accountLocalClaude = !HOSTED && message.localClaude === true;
+    const claude = [...$('coachKind').options].find(option => option.value === 'claude');
+    if (claude) claude.disabled = !accountLocalClaude;
     void loadConnections();
   });
   for (const option of $('coachKind').options) {
@@ -151,6 +156,8 @@ const elevenListen = () => elevenVoice() || (brain() === 'eleven' && S.talking &
 const remember = (k, v) => { try { localStorage.setItem(`pose-coach-${k}`, v); } catch { /* private window */ } };
 // (new names: a choice made before Auto existed is not kept, so Auto is everyone's default once)
 for (const [id, k] of [['coachKind', 'coach'], ['voiceKind', 'voice']]) {
+  // Each embedded workout starts on Auto; people can still choose another coach for this visit.
+  if (app) continue;
   try { const v = localStorage.getItem(`pose-coach-${k}`); if (v && [...$(id).options].some(o => o.value === v)) $(id).value = v; } catch { /* */ }
 }
 S.conns = undefined;     // GET /api/connections (null: the server did not say)
@@ -728,10 +735,13 @@ const SHORT = { eleven: 'ElevenLabs', claude: 'Claude', chatgpt: 'ChatGPT', none
  * timeout and keeps the answers about a minute; `fresh`, from Check again, asks it to check them again now).
  */
 async function readConnections(fresh = false) {
-  if (app) return accountConnections(accountElevenLabs);
+  if (app && !accountLocalClaude) return accountConnections(accountElevenLabs);
   try {
     const r = await fetch(`/api/connections${fresh ? '?fresh=1' : ''}`, { cache: 'no-store' });
-    return r.ok ? await r.json() : null;
+    if (!r.ok) return null;
+    const local = await r.json();
+    if (!app) return local;
+    return { ...accountConnections(accountElevenLabs), claude: local.claude };
   } catch { return null; }
 }
 /** What is connected, shown and planned for. */
