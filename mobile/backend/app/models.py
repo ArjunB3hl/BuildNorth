@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
@@ -43,6 +43,26 @@ class UTCDateTime(TypeDecorator[datetime]):
 
 class Base(DeclarativeBase):
     pass
+
+
+class MacSignInHandoff(Base):
+    """Short-lived browser approval, redeemable only by the initiating app's proof."""
+
+    __tablename__ = "mac_sign_in_handoffs"
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    proof_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, index=True)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class MacSignInRateBucket(Base):
+    """Shared fixed-window counters; identifiers are hashed before storage."""
+
+    __tablename__ = "mac_sign_in_rate_buckets"
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 class Timestamped:

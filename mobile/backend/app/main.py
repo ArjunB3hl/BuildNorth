@@ -25,7 +25,7 @@ from app.config import load_settings
 from app.db import make_engine, make_session_factory, migrate
 from app import mcp_server
 from app.memory import MemoryService
-from app.routers import account, activity, calendar, claude, coach, connections, daily, elevenlabs, meals, planner, profile, voice, watch
+from app.routers import account, activity, calendar, claude, coach, connections, daily, elevenlabs, mac_sign_in, meals, planner, profile, voice, watch
 from app.provider_credentials import credential_cipher
 from app.rhythm import router as rhythm
 from app.rhythm.config import RhythmSettings
@@ -123,7 +123,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for module in (account, calendar, profile, claude, elevenlabs, voice, coach, meals, activity, daily, planner, connections, watch, rhythm):
+for module in (account, calendar, profile, claude, elevenlabs, voice, coach, meals, activity, daily, planner, connections, watch, mac_sign_in, rhythm):
     app.include_router(module.router)
 app.include_router(rhythm.videos)
 

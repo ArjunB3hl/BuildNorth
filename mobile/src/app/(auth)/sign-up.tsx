@@ -53,7 +53,7 @@ export default function SignUpScreen() {
       return;
     }
     const { error: finalizeError } = await signUp.finalize({
-      navigate: navigateAfterAuth(router, setFormError),
+      navigate: navigateAfterAuth(router, setFormError, '/onboarding'),
     });
     if (finalizeError) setFormError(describeError(finalizeError));
   }

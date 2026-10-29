@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/expo';
 import { useQuery } from '@tanstack/react-query';
-import { Redirect, Stack, useSegments } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 
 import { Button, FormScreen, LoadingScreen } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
@@ -28,10 +28,8 @@ export default function ProtectedLayout() {
 function OnboardingGate() {
   const api = useApi();
   const signOut = useSignOut();
-  const segments = useSegments();
   const stackOptions = useStackOptions();
   const profile = useQuery({ queryKey: ['profile'], queryFn: api.profile.get });
-  const onOnboarding = segments.includes('onboarding' as never);
 
   if (profile.isPending) return <LoadingScreen label="Loading your profile…" />;
   if (profile.isError && !profile.data) {
@@ -43,8 +41,6 @@ function OnboardingGate() {
       </FormScreen>
     );
   }
-  if (profile.data && !profile.data.onboardingCompleted && !onOnboarding) return <Redirect href="/onboarding" />;
-
   return (
     <Stack screenOptions={{ ...stackOptions, headerShown: false }}>
       <Stack.Screen name="(tabs)" />

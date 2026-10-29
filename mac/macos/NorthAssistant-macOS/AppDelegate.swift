@@ -1,72 +1,140 @@
+import AppKit
 import SwiftUI
-import React
-import React_RCTAppDelegate
-import ReactAppDependencyProvider
+import WebKit
+
+#if RHYTHM_AUTH_TEST_ALT
+private let rhythmURL = URL(string: "http://localhost:8113/")!
+#elseif RHYTHM_AUTH_TEST
+private let rhythmURL = URL(string: "http://localhost:8089/")!
+#else
+private let rhythmURL = URL(string: "https://rhythm-buildnorth.expo.app/")!
+#endif
 
 @main
 struct NorthAssistantApp: App {
-  @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
   var body: some Scene {
     Window("Rhythm · Demo version", id: "main") {
-      ReactNativeView(factory: appDelegate.reactNativeFactory)
-        // Room for the sidebar plus a readable content column.
-        .frame(minWidth: 900, minHeight: 600)
+      RhythmWindow().frame(minWidth: 900, minHeight: 600)
     }
     .defaultSize(width: 1200, height: 800)
   }
 }
 
-// MARK: - App Delegate
+private struct RhythmWindow: View {
+  @State private var failure = false
+  @State private var reloadID = 0
 
-class AppDelegate: NSObject, NSApplicationDelegate {
-  private let reactNativeDelegate: ReactNativeDelegate
-  let reactNativeFactory: RCTReactNativeFactory
-
-  override init() {
-    let delegate = ReactNativeDelegate()
-    let factory = RCTReactNativeFactory(delegate: delegate)
-    delegate.dependencyProvider = RCTAppDependencyProvider()
-
-    // Stored `let` properties must be set before super.init().
-    reactNativeDelegate = delegate
-    reactNativeFactory = factory
-
-    super.init()
+  var body: some View {
+    ZStack {
+      RhythmWebView(failure: $failure, reloadID: reloadID)
+      if failure {
+        VStack(spacing: 16) {
+          Text("Rhythm couldn’t connect").font(.title2.bold())
+          Text("Check your internet connection and try again.")
+          Button("Try again") { failure = false; reloadID += 1 }
+          Button("Open Rhythm in your browser") { NSWorkspace.shared.open(rhythmURL) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+      }
+    }
   }
 }
 
-// MARK: - React Native Delegate
+private struct RhythmWebView: NSViewRepresentable {
+  @Binding var failure: Bool
+  let reloadID: Int
 
-/// Metro (started by `expo start`) runs on 8090 instead of the default 8081 so it doesn't
-/// clash with the BuildNorth Expo dev server. Keep in sync with the `start` script in package.json.
-private let metroPort = 8090
+  func makeCoordinator() -> Coordinator { Coordinator(failure: $failure) }
 
-class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
-  override func sourceURL(for bridge: RCTBridge) -> URL? {
-    bundleURL()
+  func makeNSView(context: Context) -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .default()
+    configuration.userContentController.add(context.coordinator, name: "rhythmAuth")
+    let view = WKWebView(frame: .zero, configuration: configuration)
+    view.navigationDelegate = context.coordinator
+    view.uiDelegate = context.coordinator
+    view.load(URLRequest(url: rhythmURL))
+    return view
   }
 
-  override func bundleURL() -> URL? {
-#if DEBUG
-    let settings = RCTBundleURLProvider.sharedSettings()
-    settings.jsLocation = "localhost:\(metroPort)"
-    // Expo CLI's entry point; it resolves to index.js.
-    return settings.jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
-#else
-    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-#endif
-  }
-}
-
-// MARK: - React Native SwiftUI View
-
-struct ReactNativeView: NSViewRepresentable {
-  let factory: RCTReactNativeFactory
-
-  func makeNSView(context: Context) -> NSView {
-    factory.rootViewFactory.view(withModuleName: "NorthAssistant")
+  func updateNSView(_ view: WKWebView, context: Context) {
+    guard context.coordinator.reloadID != reloadID else { return }
+    context.coordinator.reloadID = reloadID
+    view.load(URLRequest(url: rhythmURL))
   }
 
-  func updateNSView(_ nsView: NSView, context: Context) {}
+  final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    @Binding var failure: Bool
+    var reloadID = 0
+
+    init(failure: Binding<Bool>) { _failure = failure }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+      let origin = message.frameInfo.securityOrigin
+      guard message.name == "rhythmAuth", message.frameInfo.isMainFrame,
+            origin.protocol == rhythmURL.scheme, origin.host == rhythmURL.host,
+            origin.port == (rhythmURL.port ?? (rhythmURL.scheme == "https" ? 443 : 80)),
+            let code = message.body as? String,
+            code.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else { return }
+      var url = URLComponents(url: rhythmURL, resolvingAgainstBaseURL: false)!
+      url.path = "/mac-connect"
+      url.fragment = code
+      if let url = url.url { NSWorkspace.shared.open(url) }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { failure = false }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+      if (error as NSError).code != NSURLErrorCancelled { failure = true }
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+      if (error as NSError).code != NSURLErrorCancelled { failure = true }
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+      guard let url = action.request.url else { decisionHandler(.cancel); return }
+      // The camera coach runs in a separate HTTPS iframe.
+      guard action.targetFrame?.isMainFrame != false else { decisionHandler(.allow); return }
+      let downloads = ["zip", "dmg", "pkg", "exe", "msi", "apk"]
+      if action.navigationType == .linkActivated && downloads.contains(url.pathExtension.lowercased()) {
+        NSWorkspace.shared.open(url)
+        decisionHandler(.cancel)
+      } else if url.scheme == rhythmURL.scheme && url.host == rhythmURL.host && url.port == rhythmURL.port {
+        decisionHandler(.allow)
+      } else {
+        if action.navigationType == .linkActivated, ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") {
+          NSWorkspace.shared.open(url)
+        }
+        decisionHandler(.cancel)
+      }
+    }
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                 for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+      guard let url = action.request.url else { return nil }
+      if url.scheme == rhythmURL.scheme && url.host == rhythmURL.host && url.port == rhythmURL.port { webView.load(action.request) }
+      else if ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+      return nil
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+      let alert = NSAlert()
+      alert.messageText = message
+      alert.addButton(withTitle: "OK")
+      guard let window = webView.window else { completionHandler(); return }
+      alert.beginSheetModal(for: window) { _ in completionHandler() }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+      let alert = NSAlert()
+      alert.messageText = message
+      alert.addButton(withTitle: "OK")
+      alert.addButton(withTitle: "Cancel")
+      guard let window = webView.window else { completionHandler(false); return }
+      alert.beginSheetModal(for: window) { response in completionHandler(response == .alertFirstButtonReturn) }
+    }
+  }
 }

@@ -1,11 +1,13 @@
 # Rhythm for Mac — Demo version
 
-A native macOS version of the Rhythm iPhone app, built with React Native for macOS plus parts of Expo SDK 55.
-The UI uses Today, Coach, Calendar and Profile, shared design tokens, components and API data types, with a Mac
-sidebar instead of a tab bar.
+The Mac window loads the deployed Rhythm website in a sandboxed WebKit view. Users sign in with their Rhythm
+account and use the same Coach, Calendar, camera workout, library and settings as on the website. Internet access
+is required; the website and backend control feature availability. Camera and microphone access require user
+permission in macOS. External links open in the default browser.
 
-**Status:** demo version using data saved on this Mac. Live account syncing is not connected. Coach can use a
-judge-provided Claude API key from Profile → AI connections; the key stays in memory until disconnect or quit.
+The previous local-data React Native demo remains in `src/` for reference, but the current Mac window no longer
+mounts it. The notes below describing that demo's screens, local database and API-key flow are historical; they do
+not describe the signed-in web-backed window.
 
 | | |
 |---|---|
