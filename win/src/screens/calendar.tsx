@@ -11,6 +11,7 @@ import {
 } from '../components/ui';
 import type { DemoCalendarEntry } from '../data/calendar';
 import { useStore } from '../data/store';
+import { LOCAL_BACKEND } from '../config';
 import { addDays, friendlyDate, localDate, weekStart } from '../lib/dates';
 import { useNav } from '../navigation';
 import { Accent, useTheme } from '../theme';
@@ -286,7 +287,13 @@ export function CalendarScreen() {
           })}
         </View>
         <Text type="small" themeColor="textSecondary">
-          ● Meals ◆ Movement · All entries are local demo data
+          {`● Meals ◆ Movement · ${
+            !account
+              ? 'All entries are local demo data'
+              : LOCAL_BACKEND
+              ? 'Test data from the local test backend'
+              : 'From your Rhythm account'
+          }`}
         </Text>
       </Card>
       <Card>

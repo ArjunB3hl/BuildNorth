@@ -402,6 +402,36 @@ The Jest screen walk renders every section and pushed page, as in the Mac app.
 Windows app against the deployed API with a real session. The recipe library couldn't be clicked in the live check
 (another window covered it); the Jest account test covers that flow.
 
+### Sign-in (29 Oct 2026)
+
+**With real accounts**, on the Debug build against the deployed API (`https://buildnorth.onrender.com`) and the
+development Clerk instance. The account owners typed their own emails and codes:
+
+- An emailed-code sign-in reached Today with the account's own data. After closing the app completely and starting
+  it again, it opened signed in. The saved sign-in on disk was a DPAPI blob (standard DPAPI header, no readable
+  token).
+- Sign out (Profile › Rhythm account) returned to the sign-in screen and deleted the saved sign-in; nothing of the
+  account was written to disk. A restart after that stayed on sign-in.
+- A second account showed only its own data: its name, email and profile, 0 sessions where the first had 1, an empty
+  Calendar and monthly report, and its own Coach history.
+- An address with no account got *There's no Rhythm account for that email address* from the real Clerk, with the
+  offer to create one.
+
+**Automated** (Jest, against stand-ins for Clerk's Frontend API and the Rhythm API): `__tests__/clerk.test.ts`
+(email code, a wrong code, an expired code, a new code, a new-device code, a new account, an existing address,
+Clerk's errors in plain words, no network, a session Clerk ended) and `__tests__/sign-in.test.tsx`:
+
+- the sign-in screen is all there is while signed out, and nothing is asked of the API until sign-in;
+- a wrong code, then a new one; restart; sign-out; a second account sees none of the first's data, and its API
+  calls carry only its own token;
+- a new account gets the welcome step once;
+- a session ended while the app runs;
+- Clerk unreachable at start (*Try again* keeps the saved sign-in);
+- the Rhythm API unreachable after sign-in.
+
+**Not tried with a real account:** a wrong or expired real code, Clerk or the API going offline, a session expiring
+or being revoked elsewhere, and creating a real account. These are covered only by the stand-ins above.
+
 ### Local voice and Camera workout (29 Oct 2026)
 
 Details and numbers in [`local-voice/README.md`](local-voice/README.md). On this PC, with the Debug build:
