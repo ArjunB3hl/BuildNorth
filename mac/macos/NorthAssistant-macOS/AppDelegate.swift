@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import SwiftUI
 import WebKit
 
@@ -51,6 +52,7 @@ private struct RhythmWebView: NSViewRepresentable {
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .default()
     configuration.userContentController.add(context.coordinator, name: "rhythmAuth")
+    configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "rhythmVoice")
     let view = WKWebView(frame: .zero, configuration: configuration)
     view.navigationDelegate = context.coordinator
     view.uiDelegate = context.coordinator
@@ -64,11 +66,40 @@ private struct RhythmWebView: NSViewRepresentable {
     view.load(URLRequest(url: rhythmURL))
   }
 
-  final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+  final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
     @Binding var failure: Bool
     var reloadID = 0
 
     init(failure: Binding<Bool>) { _failure = failure }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+      let origin = message.frameInfo.securityOrigin
+      guard message.name == "rhythmVoice", message.frameInfo.isMainFrame,
+            origin.protocol == rhythmURL.scheme, origin.host == rhythmURL.host,
+            origin.port == (rhythmURL.port ?? (rhythmURL.scheme == "https" ? 443 : 80)),
+            let body = message.body as? [String: Any], let action = body["action"] as? String,
+            ((message.webView?.url?.path == "/coach" && ["status", "transcribe", "synthesize", "coach"].contains(action)) ||
+             (message.webView?.url?.path == "/activity/camera" && action == "status")) else {
+        replyHandler(nil, "Local voice is unavailable."); return
+      }
+      var payload: [String: Any] = [:]
+      if action == "transcribe" {
+        guard let audio = body["audioBase64"] as? String, audio.count <= 880_000 else {
+          replyHandler(nil, "Invalid recording."); return
+        }
+        payload["audioBase64"] = audio
+      } else if action == "synthesize" || action == "coach" {
+        guard let text = body["text"] as? String, !text.isEmpty, text.count <= (action == "coach" ? 4000 : 600) else {
+          replyHandler(nil, "Invalid reply."); return
+        }
+        payload["text"] = text
+      }
+      Task {
+        do { let result = try await LocalVoice.request(action, payload: payload); replyHandler(result, nil) }
+        catch { replyHandler(nil, "Local voice is unavailable. Start the local voice service and try again.") }
+      }
+    }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
       let origin = message.frameInfo.securityOrigin
@@ -136,5 +167,52 @@ private struct RhythmWebView: NSViewRepresentable {
       guard let window = webView.window else { completionHandler(false); return }
       alert.beginSheetModal(for: window) { response in completionHandler(response == .alertFirstButtonReturn) }
     }
+  }
+}
+
+private final class VoiceNoRedirect: NSObject, URLSessionTaskDelegate {
+  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                  newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+    completionHandler(nil)
+  }
+}
+
+private enum LocalVoice {
+  private static let endpoint = "http://127.0.0.1:39765/"
+  private static let delegate = VoiceNoRedirect()
+  private static let session: URLSession = {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 120
+    config.urlCache = nil
+    return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+  }()
+
+  static func request(_ action: String, payload: [String: Any]) async throws -> [String: Any] {
+    let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    let token = try String(contentsOf: support.appendingPathComponent("Rhythm/local-voice.token"), encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard token.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { throw URLError(.userAuthenticationRequired) }
+    var random = [UInt8](repeating: 0, count: 32)
+    guard SecRandomCopyBytes(kSecRandomDefault, random.count, &random) == errSecSuccess else { throw URLError(.unknown) }
+    let nonce = random.map { String(format: "%02x", $0) }.joined()
+    let status = try await post("status", body: ["nonce": nonce], token: nil)
+    let expected = HMAC<SHA256>.authenticationCode(for: Data(nonce.utf8), using: SymmetricKey(data: Data(token.utf8)))
+      .map { String(format: "%02x", $0) }.joined()
+    guard let proof = status["proof"] as? String, proof == expected else { throw URLError(.userAuthenticationRequired) }
+    if action == "status" { return status }
+    return try await post(action, body: payload, token: token)
+  }
+
+  private static func post(_ action: String, body: [String: Any], token: String?) async throws -> [String: Any] {
+    guard let url = URL(string: endpoint + action) else { throw URLError(.badURL) }
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if let token = token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse, http.statusCode == 200, data.count <= 12_000_000,
+          let result = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw URLError(.badServerResponse) }
+    return result
   }
 }

@@ -5,7 +5,7 @@ import { ThemedText as Text } from '@/components/themed-text';
 import { Card } from '@/components/ui';
 import { isPublicConnectorUrl } from '@/lib/assistant-setup';
 
-export function SpeechChat() {
+export function SpeechChat(_props: { local?: boolean }) {
   const [error, setError] = useState('');
   const url = process.env.EXPO_PUBLIC_WEB_APP_URL;
   const usable = !!url && isPublicConnectorUrl(url);

@@ -1,8 +1,9 @@
 /** Short browser recordings, converted to Parakeet's mono 16 kHz PCM16 format. */
-export async function recordVoice(signal: AbortSignal) {
+export async function recordVoice(signal: AbortSignal, onSilence?: () => void) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Recording needs a supported browser on HTTPS or localhost.');
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }, video: false });
-  const close = () => stream.getTracks().forEach(track => track.stop());
+  let detector: AudioContext | undefined, frame = 0, heardSpeech = false, sampled = false;
+  const close = () => { cancelAnimationFrame(frame); if (detector) void detector.close(); detector = undefined; stream.getTracks().forEach(track => track.stop()); };
   if (signal.aborted) { close(); throw new Error('Recording cancelled.'); }
   const chunks: Blob[] = [];
   let recorder: MediaRecorder;
@@ -23,9 +24,29 @@ export async function recordVoice(signal: AbortSignal) {
     close(); signal.removeEventListener('abort', cancel);
     resolve(new Blob(chunks, { type: recorder.mimeType }));
   };
+  if (onSilence) {
+    try {
+      detector = new AudioContext();
+      const analyser = detector.createAnalyser(); analyser.fftSize = 1024;
+      detector.createMediaStreamSource(stream).connect(analyser);
+      const samples = new Float32Array(analyser.fftSize);
+      let lastSpeech = 0, started = 0;
+      const detect = () => {
+        sampled = true;
+        analyser.getFloatTimeDomainData(samples);
+        const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+        const now = performance.now();
+        if (rms > 0.018) { heardSpeech = true; if (!started) started = now; lastSpeech = now; }
+        if (started && now - started > 250 && now - lastSpeech > 850) { onSilence(); return; }
+        frame = requestAnimationFrame(detect);
+      };
+      frame = requestAnimationFrame(detect);
+    } catch { if (detector) void detector.close(); detector = undefined; }
+  }
   try { recorder.start(); } catch (error) { close(); signal.removeEventListener('abort', cancel); throw error; }
   return {
     cancel,
+    hasSpeech: () => detector?.state === 'running' && sampled ? heardSpeech : null,
     stop: async () => {
       if (recorder.state !== 'inactive') recorder.stop();
       const blob = await done;

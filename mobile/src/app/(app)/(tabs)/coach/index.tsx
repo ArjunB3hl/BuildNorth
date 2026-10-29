@@ -33,20 +33,27 @@ import { ApiError } from '@/lib/api';
 import { confirmAction } from '@/lib/confirm';
 import { newKey } from '@/lib/keys';
 import { localDate } from '@/lib/dates';
+import { hasLocalVoice } from '@/lib/local-voice';
 import type { AIAccess, CoachMessage } from '@/lib/types';
 
 const web = Platform.OS === 'web';
 
 export default function CoachScreen() {
   const focused = useIsFocused();
-  return focused ? <AIConnectionGate>{access => <ConnectedCoach key={access.voiceProvider ?? 'text'} claude={access.textChat} provider={access.voiceProvider} />}</AIConnectionGate> : null;
+  return focused ? <AIConnectionGate fallback={hasLocalVoice() ? <ConnectedCoach claude={false} provider={null} localOnly /> : undefined}>{access => <ConnectedCoach key={access.voiceProvider ?? 'text'} claude={access.textChat} provider={access.voiceProvider} />}</AIConnectionGate> : null;
 }
 
-function ConnectedCoach({ claude, provider }: { claude: boolean; provider: AIAccess['voiceProvider'] }) {
-  const [voice, setVoice] = useState(!!provider);
+function ConnectedCoach({ claude, provider, localOnly = false }: { claude: boolean; provider: AIAccess['voiceProvider']; localOnly?: boolean }) {
+  const [voice, setVoice] = useState(!!provider || localOnly);
+  const [local, setLocal] = useState(localOnly);
+  const canUseLocal = hasLocalVoice();
   return <View style={{ flex: 1 }}>
-    {claude && provider ? <View style={{ padding: 12 }}><Button title={voice ? 'Switch to text chat' : 'Switch to voice Coach'} variant="secondary" onPress={() => setVoice(!voice)} /></View> : null}
-    {provider && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}>{provider === 'elevenlabs' ? <ElevenLabsChat /> : <SpeechChat />}</ScrollView> : <ClaudeCoach />}
+    {!localOnly && (claude || canUseLocal) && (provider || canUseLocal) ? <View style={{ padding: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Button title={voice ? 'Switch to text chat' : 'Switch to voice Coach'} variant="secondary" onPress={() => { if (!voice && !provider && canUseLocal) setLocal(true); setVoice(!voice); }} />
+      {canUseLocal && voice ? <Button title={local ? 'Use connected voice' : 'Use local voice on this Mac'} variant="secondary" onPress={() => { if (!provider && local) { setLocal(false); setVoice(false); } else setLocal(!local); }} /> : null}
+    </View> : null}
+    {voice && local && canUseLocal ? <ScrollView contentContainerStyle={{ padding: 20 }}><SpeechChat local /></ScrollView> :
+      provider && (voice || !claude) ? <ScrollView contentContainerStyle={{ padding: 20 }}>{provider === 'elevenlabs' ? <ElevenLabsChat /> : <SpeechChat />}</ScrollView> : <ClaudeCoach />}
   </View>;
 }
 
