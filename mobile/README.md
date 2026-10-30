@@ -490,9 +490,10 @@ The UI evidence is for `d843a88`, before the later Rhythm branding integration.
      other accounts need their own configured Context bindings (see [Rhythm setup](docs/rhythm.md))
    - `CLERK_PUBLISHABLE_KEY` — same public key; locates Clerk's JWKS for token verification
    - `AI_PROVIDER` = `none` (default) | `auto` | `ollama` | `openai` | `anthropic`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`.
-     Shared model access is off by default, even if a provider key remains in the environment. Explicit `auto` opts into key detection.
+     Shared model access is off by default, even if a provider key remains in the environment. It requires
+     `SHARED_AI_ENABLED=true` as well as a provider selection. Users' own connections do not require this switch.
    - `DATABASE_URL` (default: SQLite in `backend/var/`, git-ignored), `AUTO_MIGRATE` (default `true`)
-4. **AI (local, free)**: install [Ollama](https://ollama.com) and `ollama pull gemma3:4b`; then `AI_PROVIDER=ollama`,
+4. **AI (local, free)**: install [Ollama](https://ollama.com) and `ollama pull gemma3:4b`; then `SHARED_AI_ENABLED=true`, `AI_PROVIDER=ollama`,
    `AI_MODEL=gemma3:4b`. Expect 40–60 s per reply on an M3/16 GB Mac. For faster replies use `AI_PROVIDER=anthropic`
    with an API key (default model `claude-opus-5-5`) or any OpenAI-compatible endpoint.
 5. Install:
@@ -694,6 +695,7 @@ Save these in **Render → backend service → Environment**. A placeholder impo
 | Variable | Value / purpose |
 |---|---|
 | `AI_PROVIDER` | `none`; shared owner-funded access is disabled |
+| `SHARED_AI_ENABLED` | `false`; also blocks legacy `auto`/`anthropic` configuration from enabling shared billing |
 | `CLERK_PUBLISHABLE_KEY` | The same Clerk instance used by the website/phone |
 | `DATABASE_URL` | Render Postgres Internal Database URL |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | A persistent Fernet key for users' personal Claude/ElevenLabs credentials |
@@ -713,7 +715,8 @@ default local SQLite path for deployed account data. Postgres preserves records 
 If migrating existing account-owned credentials, retain the encryption key that originally encrypted them.
 
 Remove `ANTHROPIC_API_KEY`, legacy `AI_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVEN_API_KEY` and any shared
-`POSE_ELEVEN_AGENT` setting from this service and any linked environment group or secret file. Keep `AI_PROVIDER=none`.
+`POSE_ELEVEN_AGENT` setting from this service and any linked environment group or secret file. Keep `AI_PROVIDER=none`
+and `SHARED_AI_ENABLED=false`. The shared-access switch defaults to false even when a deployment retains old keys/settings.
 Do not remove `AI_CREDENTIAL_ENCRYPTION_KEY`: users' own encrypted connections still need it.
 Users connect their own verified Claude key for Coach and video notes, or an ElevenLabs agent for voice.
 Removing a personal connection no longer falls back to an owner-funded demo. An invalid personal credential

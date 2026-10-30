@@ -87,6 +87,11 @@ def load_settings() -> Settings:
         provider = "anthropic" if env("ANTHROPIC_API_KEY") else "none"
     if provider not in AI_PROVIDERS:
         provider = "none"
+    # An old deployment may still explicitly select auto/anthropic. Require a
+    # separate opt-in before constructing any server-funded model client.
+    # Account-owned credentials are loaded independently by provider_credentials.
+    if env("SHARED_AI_ENABLED", "false").lower() not in {"1", "true", "yes"}:
+        provider = "none"
     # Provider-specific key names are accepted too, so an existing ANTHROPIC_API_KEY just works.
     api_key = env("ANTHROPIC_API_KEY") if automatic else env("AI_API_KEY") or {
         "anthropic": env("ANTHROPIC_API_KEY"),

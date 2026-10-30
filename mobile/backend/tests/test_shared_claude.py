@@ -16,12 +16,12 @@ from conftest import ALICE, BOB, auth
 @pytest.fixture
 def clean_settings(monkeypatch):
     monkeypatch.setattr("app.config.load_dotenv", lambda *_: None)
-    for name in ("AI_PROVIDER", "AI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AI_MODEL",
+    for name in ("AI_PROVIDER", "SHARED_AI_ENABLED", "AI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AI_MODEL",
                  "DATABASE_URL", "MCP_PUBLIC_URL", "RHYTHM_MCP_PUBLIC_URL", "RENDER_EXTERNAL_URL"):
         monkeypatch.delenv(name, raising=False)
 
 
-@pytest.mark.parametrize("provider", [None, "", "none", "invalid"])
+@pytest.mark.parametrize("provider", [None, "", "none", "invalid", "auto", "anthropic", "openai", "ollama"])
 def test_shared_keys_do_not_enable_access_by_default(clean_settings, monkeypatch, provider):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "made-up-server-key")
     monkeypatch.setenv("AI_API_KEY", "made-up-legacy-key")
@@ -34,6 +34,7 @@ def test_shared_keys_do_not_enable_access_by_default(clean_settings, monkeypatch
 
 
 def test_explicit_auto_can_still_select_shared_provider(clean_settings, monkeypatch):
+    monkeypatch.setenv("SHARED_AI_ENABLED", "true")
     monkeypatch.setenv("AI_PROVIDER", "auto")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "made-up-server-key")
     monkeypatch.setenv("AI_API_KEY", "unused-legacy-provider-key")
@@ -45,6 +46,19 @@ def test_explicit_auto_can_still_select_shared_provider(clean_settings, monkeypa
     factory.assert_called_once_with("made-up-server-key", "claude-opus-5-5", 150.0)
     monkeypatch.setenv("AI_PROVIDER", "none")
     assert build_provider(load_settings())[0] is None
+
+
+@pytest.mark.parametrize("enabled", ["false", "0", "no", "", "invalid"])
+def test_shared_access_switch_overrides_old_deployment_config(clean_settings, monkeypatch, enabled):
+    monkeypatch.setenv("SHARED_AI_ENABLED", enabled)
+    monkeypatch.setenv("AI_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "made-up-server-key")
+    factory = Mock()
+    monkeypatch.setattr("app.ai.AnthropicProvider", factory)
+    settings = load_settings()
+    assert settings.ai_api_key == ""
+    assert build_provider(settings)[0] is None
+    factory.assert_not_called()
 
 
 def test_auto_without_a_key_is_unavailable(clean_settings, monkeypatch):
