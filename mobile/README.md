@@ -489,8 +489,8 @@ The UI evidence is for `d843a88`, before the later Rhythm branding integration.
    - `SPECTRON_OWNER_USER_ID` — explicitly binds that Context to one Clerk account, including Rhythm;
      other accounts need their own configured Context bindings (see [Rhythm setup](docs/rhythm.md))
    - `CLERK_PUBLISHABLE_KEY` — same public key; locates Clerk's JWKS for token verification
-   - `AI_PROVIDER` = `auto` (default) | `ollama` | `openai` | `anthropic` | `none`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`.
-     `auto` detects `ANTHROPIC_API_KEY` for the shared Claude demo. Explicit `none` disables the fallback.
+   - `AI_PROVIDER` = `none` (default) | `auto` | `ollama` | `openai` | `anthropic`, plus `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_TIMEOUT_SECONDS`.
+     Shared model access is off by default, even if a provider key remains in the environment. Explicit `auto` opts into key detection.
    - `DATABASE_URL` (default: SQLite in `backend/var/`, git-ignored), `AUTO_MIGRATE` (default `true`)
 4. **AI (local, free)**: install [Ollama](https://ollama.com) and `ollama pull gemma3:4b`; then `AI_PROVIDER=ollama`,
    `AI_MODEL=gemma3:4b`. Expect 40–60 s per reply on an M3/16 GB Mac. For faster replies use `AI_PROVIDER=anthropic`
@@ -693,9 +693,7 @@ Save these in **Render → backend service → Environment**. A placeholder impo
 
 | Variable | Value / purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Shared demo Claude key; stays on the backend and pays for shared requests |
-| `AI_PROVIDER` | `auto` (or explicitly `anthropic`); don't leave an old `none` value |
-| `AI_MODEL` | `claude-opus-5-5`, or another Claude model your key can access |
+| `AI_PROVIDER` | `none`; shared owner-funded access is disabled |
 | `CLERK_PUBLISHABLE_KEY` | The same Clerk instance used by the website/phone |
 | `DATABASE_URL` | Render Postgres Internal Database URL |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | A persistent Fernet key for users' personal Claude/ElevenLabs credentials |
@@ -714,10 +712,20 @@ Keep that encryption key stable across deploys. The ordinary Render filesystem i
 default local SQLite path for deployed account data. Postgres preserves records across application redeploys.
 If migrating existing account-owned credentials, retain the encryption key that originally encrypted them.
 
-`ANTHROPIC_API_KEY` alone selects shared Claude when `AI_PROVIDER` is unset/`auto`. Signed-in users can open Coach
-and the camera route without bringing a key. Their own verified Claude key takes priority for Coach and video
-notes; removing it restores the shared demo. An invalid personal credential requires reconnecting/removing it
-instead of silently switching keys. No shared secret or hint is sent to the website or phone.
+Remove `ANTHROPIC_API_KEY`, legacy `AI_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVEN_API_KEY` and any shared
+`POSE_ELEVEN_AGENT` setting from this service and any linked environment group or secret file. Keep `AI_PROVIDER=none`.
+Do not remove `AI_CREDENTIAL_ENCRYPTION_KEY`: users' own encrypted connections still need it.
+Users connect their own verified Claude key for Coach and video notes, or an ElevenLabs agent for voice.
+Removing a personal connection no longer falls back to an owner-funded demo. An invalid personal credential
+requires reconnecting/removing it instead of silently switching keys.
+
+After saving environment changes, deploy/restart the service and run `python3 scripts/check-deployment.py`
+from the repository root. It expects `/health` to report `aiAvailable: false` and `aiProvider: "none"`.
+To disconnect only the owner's stored personal credentials, use that account's AI connections screen
+(`DELETE /connections/claude` and `DELETE /connections/elevenlabs` authenticated as that account).
+Never bulk-delete credential tables or rotate the encryption key to disconnect one user.
+Environment removal does not revoke keys at Anthropic/ElevenLabs or terminate already-issued remote voice sessions.
+If provider-side revocation is required, revoke the specific keys in the provider's console separately.
 
 ChatGPT/Claude account connections still use MCP and the assistant's own model. They don't turn a subscription
 into an API key or override the built-in Coach. OpenCode setup is no longer shipped. ElevenLabs remains an
@@ -729,7 +737,7 @@ Optional backend settings:
   The owner binding is per account. Additional users need their own entries in `RHYTHM_MEMORY_CONTEXTS_JSON`;
   never share one private context between judge accounts. Coach still works without memory.
 - Video search: `YOUTUBE_API_KEY` and `RHYTHM_RECOMMENDATIONS=on` if enabling recommendations. Saved transcript
-  summaries can use shared Claude without a YouTube key.
+  summaries can use the user's own Claude connection without a YouTube key.
 - Clerk opaque OAuth tokens only: `CLERK_SECRET_KEY`. Default JWT OAuth verification uses public JWKS.
 - `RHYTHM_MCP_PUBLIC_URL` defaults to the API origin plus `/rhythm/mcp`; configure Clerk OAuth resource audiences
   for the public MCP URLs when using ChatGPT/Claude connectors.

@@ -21,7 +21,20 @@ def clean_settings(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def test_shared_key_is_detected_without_selecting_a_provider(clean_settings, monkeypatch):
+@pytest.mark.parametrize("provider", [None, "", "none", "invalid"])
+def test_shared_keys_do_not_enable_access_by_default(clean_settings, monkeypatch, provider):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "made-up-server-key")
+    monkeypatch.setenv("AI_API_KEY", "made-up-legacy-key")
+    if provider is not None:
+        monkeypatch.setenv("AI_PROVIDER", provider)
+    settings = load_settings()
+    assert settings.ai_provider == "none"
+    assert settings.ai_api_key == ""
+    assert build_provider(settings)[0] is None
+
+
+def test_explicit_auto_can_still_select_shared_provider(clean_settings, monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "auto")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "made-up-server-key")
     monkeypatch.setenv("AI_API_KEY", "unused-legacy-provider-key")
     settings = load_settings()

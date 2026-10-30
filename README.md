@@ -5,7 +5,7 @@ Your health, connected: meals, movement, saved video ideas and useful assistant 
 **[Open the live Rhythm demo](https://rhythm-buildnorth.expo.app)** · **[Download the apps and Chrome extension](https://rhythm-buildnorth.expo.app/downloads)**
 
 Rhythm is a **demo version**. Sign in on the website to explore the Calendar, Coach, Content library and AI connections.
-Shared Claude is included for the demo; you can also connect your own Claude API key or authorized assistants over MCP.
+Connect your own Claude API key, ElevenLabs agent, or authorized assistants over MCP. Shared owner-funded AI is disabled by default.
 
 ## What you can explore
 

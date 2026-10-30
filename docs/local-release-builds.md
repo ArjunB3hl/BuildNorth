@@ -143,6 +143,7 @@ Each artifact's verification record distinguishes build checks, process startup,
 build alone does not confirm sign-in or navigation. Hardware camera/microphone permissions, physical Watch readings
 and real HealthKit syncing require device testing.
 
-The current public website supports signed-in Calendar and shared Claude Coach. The camera coach remains a
+The public website supports signed-in Calendar and Coach with users' own connected providers. Deploy with
+`AI_PROVIDER=none` and run the public health check to verify shared demo AI is disabled. The camera coach remains a
 localhost-only integration. Long-term memory and the separate Parakeet/Kokoro worker are not configured on the live
 backend. Those services need their own deployment and end-to-end tests.

@@ -79,8 +79,10 @@ def load_settings() -> Settings:
     def env(name: str, default: str = "") -> str:
         return os.getenv(name, default).strip()
 
-    provider = env("AI_PROVIDER", "auto").lower()
-    automatic = provider in {"", "auto"}
+    # Shared billing must be explicitly enabled. A leftover provider key alone
+    # must never grant every signed-in user access to the owner's account.
+    provider = env("AI_PROVIDER", "none").lower() or "none"
+    automatic = provider == "auto"
     if automatic:
         provider = "anthropic" if env("ANTHROPIC_API_KEY") else "none"
     if provider not in AI_PROVIDERS:
@@ -90,6 +92,8 @@ def load_settings() -> Settings:
         "anthropic": env("ANTHROPIC_API_KEY"),
         "openai": env("OPENAI_API_KEY"),
     }.get(provider, "")
+    if provider == "none":
+        api_key = ""
     try:
         timeout = float(env("AI_TIMEOUT_SECONDS", "150"))
     except ValueError:

@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--api", type=origin, default="https://buildnorth.onrender.com")
     parser.add_argument("--website", type=origin, default="https://rhythm-buildnorth.expo.app")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--shared-ai", choices=("disabled", "anthropic"), default="disabled",
+                        help="Expected shared provider configuration (default: disabled). Does not check users' own keys.")
     args = parser.parse_args()
     checks = []
 
@@ -51,8 +53,10 @@ def main():
     health = document(body)
     record("API health", status == 200 and health.get("status") == "ok", f"HTTP {status}")
     record("Clerk configured", health.get("clerkConfigured") is True, "Public readiness flag")
-    record("Shared Claude available", health.get("aiAvailable") is True and health.get("aiProvider") == "anthropic",
-           "Configuration only; no paid model request")
+    expected_provider = "none" if args.shared_ai == "disabled" else "anthropic"
+    record("Shared AI configuration", health.get("aiAvailable") is (args.shared_ai != "disabled")
+           and health.get("aiProvider") == expected_provider,
+           f"Expected {args.shared_ai}; configuration only, no paid model request")
 
     month = datetime.now(timezone.utc).strftime("%Y-%m")
     for path in ("/profile", "/connections/access", "/connections/claude", "/connections/elevenlabs",
