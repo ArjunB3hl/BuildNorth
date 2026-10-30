@@ -136,12 +136,13 @@ export function makeRetarget(THREE) {
       this.turn(bone, Q().setFromUnitVectors(cur.normalize(), dir.clone().normalize()));
     }
 
-    /** Pose the character from one frame's world landmarks (33 points), standing on the floor (y = baseY). */
-    pose(world) {
+    /** Pose from a frame's world landmarks. Review disables floor placement and the hand-floor heuristic; it also
+     * passes `skip`, bone names whose landmarks are unmeasured, which are then not aimed at all (never guessed). */
+    pose(world, { ground = true, measuredHands = false, skip = new Set() } = {}) {
       for (const [b, r] of this.rest) { b.quaternion.copy(r.q); b.position.copy(r.p); }
       this.root.position.y = this.baseY;
       this.root.updateMatrixWorld(true);
-      const P = world.map(p => toThree(Array.isArray(p) ? p : [p.x, p.y, p.z]));
+      const P = world.map(p => p && toThree(Array.isArray(p) ? p : [p.x, p.y, p.z]));
       const hipMid = mid(P[LM.lHip], P[LM.rHip]), shMid = mid(P[LM.lSh], P[LM.rSh]);
       const up = shMid.clone().sub(hipMid);
       // pelvis: from its rest frame to the hip line and the way the spine points
@@ -152,24 +153,26 @@ export function makeRetarget(THREE) {
       const chest = basis(P[LM.lSh].clone().sub(P[LM.rSh]), up);
       this.turn(this.bones.Spine, chest.multiply(this.chest(this.bones.Spine).invert()));
       // head: the neck points from between the shoulders to between the ears
-      this.aim(this.bones.Neck, 'Head', mid(P[LM.lEar], P[LM.rEar]).sub(shMid));
-      for (const [bone, child, a, b] of LIMBS) this.aim(this.bones[bone], child, P[b].clone().sub(P[a]));
+      if (!skip.has('Neck')) this.aim(this.bones.Neck, 'Head', mid(P[LM.lEar], P[LM.rEar]).sub(shMid));
+      for (const [bone, child, a, b] of LIMBS) if (!skip.has(bone)) this.aim(this.bones[bone], child, P[b].clone().sub(P[a]));
       // hands: towards the knuckles; a hand on the floor (the forearm pointing down) lies flat, fingers along it
       for (const [s, el, wr, idx, pk] of [['Left', LM.lEl, LM.lWr, LM.lIdx, LM.lPinky], ['Right', LM.rEl, LM.rWr, LM.rIdx, LM.rPinky]]) {
         const hand = this.bones[`${s}Hand`];
-        if (!hand || !this.bones[`${s}HandMiddle1`]) continue;
+        if (!hand || !this.bones[`${s}HandMiddle1`] || skip.has(`${s}Hand`)) continue;
         const d = mid(P[idx], P[pk]).sub(P[wr]);
-        if (P[wr].clone().sub(P[el]).normalize().y < -0.5) {
+        if (!measuredHands && P[wr].clone().sub(P[el]).normalize().y < -0.5) {
           d.y = 0;
           if (d.lengthSq() < 1e-4) d.set(up.x, 0, up.z);                     // no knuckles to go by: towards the head
         }
         this.aim(hand, `${s}HandMiddle1`, d);
       }
       // stand on the floor: the lowest skin that can touch it at y = baseY (MediaPipe's origin is between the hips)
-      const below = (n, r) => (this.bones[n] ? this.pos(n).y - r : Infinity);
-      const low = Math.min(...Object.entries(GROUND).flatMap(([n, r]) => [below(`Left${n}`, r), below(`Right${n}`, r)]),
-        ...Object.entries(GROUND_MID).map(([n, r]) => below(n, r)));
-      this.root.position.y = this.baseY - (low - this.baseY);
+      if (ground) {
+        const below = (n, r) => (this.bones[n] ? this.pos(n).y - r : Infinity);
+        const low = Math.min(...Object.entries(GROUND).flatMap(([n, r]) => [below(`Left${n}`, r), below(`Right${n}`, r)]),
+          ...Object.entries(GROUND_MID).map(([n, r]) => below(n, r)));
+        this.root.position.y = this.baseY - (low - this.baseY);
+      }
       this.root.updateMatrixWorld(true);
     }
 

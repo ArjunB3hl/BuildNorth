@@ -11,6 +11,7 @@ import { EXERCISES } from '../web/js/engine.js';
 import { bonesFor, describeFault, mirrorImage } from '../web/js/formcheck.js';
 import { mirrorSide } from '../web/js/retarget.js';
 import * as Mistakes from '../web/js/mistakes.js';
+import { recordMovingIntervals, endAttempt } from '../web/js/movement-review.js';
 
 // (a Windows checkout has CRLF line ends; the slices below look for LF)
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -67,6 +68,11 @@ test('a movement named is said, with the set it ended, whatever its track', () =
   }
   // (a short hold is a pause: nothing said)
   assert.equal(FALLBACK.hold_end({ seconds: 3 }), '');
+});
+
+test('dance encouragement does not display an elapsed-time counter', () => {
+  assert.equal(FALLBACK.moving_progress({ kind: 'dance', seconds: 30 }), 'Keep exploring the movement at your own pace.');
+  assert.doesNotMatch(FALLBACK.moving_progress({ movementKind: 'dance', seconds: 90 }), /\d|seconds|minutes/);
 });
 
 test('the workout summary leaves out a movement with nothing to show', () => {
@@ -215,10 +221,10 @@ test("a held pose's form: a fault goes no further than its hold's start", () => 
 });
 
 test("a held pose's form: the landmarks go to the tracker, its events are recorded, the fault shows aside", () => {
-  assert.match(app, /tracker\?\.update\(f, t, \{ world: r\.world, image: r\.image, aspect: w \/ h \}\)/);
+  assert.match(app, /tracker\.update\(f, t, \{ world: r\.world, image: r\.image, aspect: w \/ h \}\)/);
   // (the movement tracker's events in the recording too, not only auto mode's: update, lost and finish)
-  assert.match(app, /tracker\?\.update\([^\n]+\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);/);
-  assert.match(app, /tracker\?\.lost\(t\) \?\? \[\];\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);/);
+  assert.match(app, /tracker\.update\([^\n]+\n[^]*?catch[^\n]+\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);/);
+  assert.match(app, /tracker\?\.lost\(t\) \?\? \[\];[^]*?if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);/);
   assert.match(app,
     /tracker\?\.finish\(S\.lastFrameT\) \?\? \[\];\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.ending\);/);
   // the Now card's form line: in the side panel's Now card, not over the camera view
@@ -775,7 +781,7 @@ test('the Mistakes list: cleared only when the next workout starts; the recordin
   assert.match(stopSrc, /handleAuto\(ending, \{ final: true \}\);[^]*renderMistakes\(\);/);
   assert.match(stopSrc, /post\('\/api\/results\?model=live', \{ id, \.\.\.rec, /);
   assert.match(stopSrc, /savedWorkouts\(\[\{ id \}\]\);/, 'a workout just saved can be reviewed');
-  assert.match(startSrc, /frames: \[\], events: \[\],\n\s+mistakes: \[\] \} : null;/);
+  assert.match(startSrc, /frames: \[\], events: \[\], mistakes: \[\], attempts: \[\], movementIntervals: \[\]/);
   assert.match(app, /S\.lastFrameT = t;\n\s+S\.t0 \?\?= t;/);
   // the Mistakes list replaces "See the last mistake in 3D", in the Workout card
   assert.ok(!ids.has('last3d'));
@@ -1055,13 +1061,13 @@ test("a moving movement's form on the Now card: the fault told, checked only whe
   assert.ok(at > html.indexOf('<aside>') && at > html.indexOf('id="now"') && at < html.indexOf('id="demo"'));
 });
 
-const finishSrc = app.slice(app.indexOf('function finishMovement()'),
+const finishSrc = app.slice(app.indexOf('function finishMovement('),
   app.indexOf('\n// A hold goes to the coach (hold_start)'));
 /** app.js finishMovement() on the stand-in page `p`, for the movement `entry` named (its tracker's summary: `sum`). */
 const finishOn = (p, entry, sum = {}) => {
   p.S.move = { entry, tracker: { finish: () => [], summary: () => sum } }; p.S.moves ??= [];
-  return new Function('S', 'log', 'mmss', 'doneText', 'hideForm', `${finishSrc}\nreturn finishMovement;`)(p.S,
-    () => {}, String, () => '', p.fns.hideForm)();
+  return new Function('S', 'log', 'mmss', 'doneText', 'hideForm', 'recordMovingIntervals', 'endAttempt', `${finishSrc}\nreturn finishMovement;`)(p.S,
+    () => {}, String, () => '', p.fns.hideForm, recordMovingIntervals, endAttempt)();
 };
 
 test("a moving movement's form check: shown aside as a hold's, kept, put away on its fix or the movement's end", () => {
@@ -1425,7 +1431,7 @@ test('the form unchecked a while: its cue goes to the coach as it comes, said by
     assert.deepEqual(Mistakes.deriveMistakes({ events: [cev('form_unseen', 6200, FEET_OUT)] }), []);
     // (recorded as every tracker event is: the page pushes them all before it handles them)
     assert.match(app,
-      /tracker\?\.update\([^\n]+\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);\n\s+moveEvents\(evs, t\);/);
+      /tracker\.update\([^\n]+\n[^]*?catch[^\n]+\n\s+if \(S\.rec\) S\.rec\.events\.push\(\.\.\.evs\);\n\s+moveEvents\(evs, t\);/);
   });
 
 test('the form unchecked in a hold: after its start, if it still holds; dropped with a hold too short to tell', () => {

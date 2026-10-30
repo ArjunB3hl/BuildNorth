@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rhythm pose coach</title>
+<link rel="stylesheet" href="/web/review.css">
 <style>
   :root { --bg: #0f1115; --panel: #181b22; --text: #e8eaf0; --muted: #9aa3b2; --accent: #4fd1c5; --warn: #f6ad55; --bad: #fc8181; }
   * { box-sizing: border-box; }
@@ -14,6 +15,12 @@
   select, button { background: #232733; color: var(--text); border: 1px solid #333a48; border-radius: 8px; padding: 7px 10px; }
   button.primary { background: var(--accent); color: #0b2b28; border-color: var(--accent); font-weight: 600; }
   button:disabled { opacity: .5; }
+  #startCountdown { position: fixed; inset: 0; z-index: 100; background: rgba(8, 15, 23, .96); display: grid; place-content: center; gap: 18px; padding: 24px; text-align: center; }
+  #startCountdown[hidden] { display: none; }
+  #countdownNumber { font-size: clamp(80px, 22vw, 160px); font-weight: 800; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+  #countdownText { font-size: 23px; max-width: 600px; }
+  #startCountdown p { color: var(--muted); margin: 0; }
+  #cancelCountdown { justify-self: center; }
   main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 16px; }
   @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
   /* (a long clip or recording name in a picker must not widen a phone-width page) */
@@ -209,6 +216,54 @@
   <button id="start" class="primary">Start</button>
   <button id="stop" disabled>Stop</button>
 </header>
+<div id="startCountdown" hidden>
+  <div role="status" aria-live="polite" aria-atomic="true"><div id="countdownNumber"></div><div id="countdownText">Get ready</div></div>
+  <p>Keep your whole body, including your feet, in view.<br>Recording and coaching start after the countdown and setup.</p>
+  <button id="cancelCountdown" type="button">Cancel start</button>
+</div>
+<section id="movementReview" hidden aria-labelledby="movementReviewTitle">
+  <h2 id="movementReviewTitle">Explore your movement</h2>
+  <p>Compare your feet and legs with the reference, then try a specific change where the saved landmarks are clear enough. Freestyle variations are choices, not mistakes.</p>
+  <div class="review-controls">
+    <label>Saved recording <select id="movementRecording"></select></label>
+    <label>Reference <select id="movementReference"></select></label>
+    <button id="loadMovementReview">Load review</button>
+    <button id="refreshMovementRecordings">Refresh recordings</button>
+    <label>Open recording JSON <input id="reviewRecordingFiles" type="file" accept=".json,application/json" multiple></label>
+  </div>
+  <p id="reviewStatus" role="status">Choose a recording to review.</p>
+  <div id="reviewBody" hidden>
+    <div id="reviewAttempts" aria-label="Saved attempts"></div>
+    <div class="review-controls">
+      <label>Review focus <select id="reviewFocus"><option value="legs" selected>Feet and legs</option><option value="whole">Whole body</option></select></label>
+      <label>Activity / attempt <select id="reviewWindow"></select></label>
+      <button id="reviewSuggest">Find a comparable phrase</button>
+      <label>From (s) <input id="reviewFrom" type="number" min="0" step="0.1"></label>
+      <label>To (s) <input id="reviewTo" type="number" min="0" step="0.1"></label>
+      <button id="reviewCompare">Compare selected phrase</button>
+    </div>
+    <div class="review-controls"><label>3D view <select id="reviewView"><option value="character">Y Bot character when reliable</option><option value="landmarks">Saved landmarks</option></select></label></div>
+    <div class="review-labels"><span id="reviewYouLabel">You · loading character</span><span id="reviewReferenceLabel">Reference · loading character</span></div>
+    <p id="reviewActiveCue" hidden></p>
+    <div id="reviewScene"></div>
+    <p id="reviewModelStatus"></p>
+    <div class="review-controls">
+      <button id="reviewPlay">Play phrase</button>
+      <input id="reviewScrub" aria-label="Recording replay position" type="range" min="0" max="1" step="0.001" value="0">
+      <label>Speed <select id="reviewSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option></select></label>
+      <output id="reviewReadout"></output>
+    </div>
+    <div class="review-controls">
+      <label><input id="reviewAligned" type="checkbox" checked>Face both bodies forward</label>
+      <label><input id="reviewMirror" type="checkbox">Mirror display</label>
+      <button id="reviewFront">Reset view</button>
+    </div>
+    <p class="muted">Drag to rotate. Anatomical left/right labels stay the same when mirrored. Both characters use Y Bot proportions and are centered at the hips; the landmark view preserves your measured proportions. Travel, absolute size, finger motion and limb twist are not compared. Uncertain poses switch to labelled landmarks. Gold marks a supported difference only during its measured interval.</p>
+    <p id="reviewAlignment"></p>
+    <div id="reviewFindings"></div>
+    <details open><summary>What the recording can tell us</summary><div id="reviewEvidence"></div></details>
+  </div>
+</section>
 <main>
   <div>
     <div id="stage" class="mirror">
@@ -239,6 +294,7 @@
       <div class="now-foot">
         <span class="now-actions">
           <button id="changeEx" class="mini" disabled title="Name the exercise you are doing, or let the coach detect it">Change exercise</button>
+          <button id="restartMove" class="mini" hidden title="Start tracking this movement again from zero">Restart movement</button>
           <button id="talk" class="mini" title="Talk to the coach without a workout (it closes after 2 minutes without a word)">Talk to coach</button>
           <button id="ptt" class="mini" hidden title="Hold (or hold the Space bar) and talk: one sentence, for a noisy room">Hold to talk</button>
         </span>
@@ -311,5 +367,6 @@
 <script type="importmap">{ "imports": { "three": "/web/vendor/three-0.170.0/build/three.module.js",
   "three/addons/": "/web/vendor/three-0.170.0/examples/jsm/" } }</script>
 <script type="module" src="/web/js/app.js"></script>
+<script type="module" src="/web/js/review-page.js"></script>
 </body>
 </html>

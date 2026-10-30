@@ -608,6 +608,11 @@ export class ElevenCoach {
     if (!this.hushed) this.apply(volume);
   }
 
+  /** Authoritative control results, supplied immediately after a client-side restart. */
+  context(text) {
+    this.conversation?.sendContextualUpdate?.(text);
+  }
+
   clearTimers() {
     clearInterval(this.activity); clearTimeout(this.capTimer); clearTimeout(this.quietTimer); clearTimeout(this.graceTimer);
     clearTimeout(this.userTimer); clearTimeout(this.talkTimer); clearTimeout(this.gapTimer); clearTimeout(this.saidTimer);

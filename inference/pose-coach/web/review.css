@@ -1,0 +1,27 @@
+#movementReview { margin:16px; padding:20px; background:#17212d; border:1px solid #35475c; border-radius:14px; }
+#movementReview[hidden] { display:none; }
+#movementReview h2 { margin:0 0 4px; font-size:22px; }
+#movementReview p { max-width:1100px; }
+.review-controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+.review-controls label { display:flex; gap:6px; align-items:center; }
+.review-controls select { max-width: min(400px,75vw); }
+.review-controls input[type=number] { width:90px; background:#232733; color:#e8eaf0; border:1px solid #536174; padding:7px; border-radius:6px; }
+.review-labels { display:flex; justify-content:space-around; padding:12px; font-weight:650; }
+.review-labels span:first-child { color:#52dbc9; }.review-labels span:last-child { color:#c4adff; }
+#reviewScene { height:390px; min-width:0; touch-action:none; cursor:grab; }
+#reviewScene canvas { width:100%; height:100%; display:block; }
+#reviewModelStatus { color:#ffcf70; font-size:14px; }
+#reviewActiveCue { border-left:3px solid #ffcf70; padding:8px 12px; background:#292a28; color:#ffcf70; }
+#reviewScrub { flex:1; min-width:140px; accent-color:#52dbc9; }
+#reviewReadout { font-variant-numeric:tabular-nums; min-width:260px; }
+#reviewFindings { display:flex; gap:10px; flex-wrap:wrap; }
+.review-finding { flex:1 1 240px; border:1px solid #6d6140; background:#222934; border-radius:8px; padding:12px; }
+.review-finding p { margin:6px 0; }.review-finding button { margin-top:6px; }
+#reviewEvidence { color:#c5d1e0; line-height:1.6; }
+#reviewAttempts { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+.review-attempt { flex:1 1 210px; border:1px solid #43566e; border-radius:8px; padding:12px; background:#141e29; }
+.review-attempt p { color:#c5d1e0; font-size:14px; margin:8px 0; }
+.review-attempt button { display:block; margin:8px 0 0; }
+#reviewRecordingFiles { max-width:260px; }
+#reviewStatus { color:#ffcf70; }
+@media(max-width:600px) { #movementReview {margin:8px;padding:12px;} #reviewScene {height:300px;} .review-labels {font-size:12px;} }

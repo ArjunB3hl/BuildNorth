@@ -90,7 +90,7 @@ def eleven_status() -> dict:
     rec = eleven_record() or {}
     rec = rec if rec.get("agentId") == agent else {}    # the record tells of its own agent (not POSE_ELEVEN_AGENT's)
     plan = _text(rec.get("plan"))
-    return {"connected": agent is not None, "agentId": agent, "name": _text(rec.get("name")), "plan": plan,
+    return {"connected": agent is not None, "agentId": agent, "signedSessions": bool(os.environ.get("ELEVENLABS_API_KEY")), "name": _text(rec.get("name")), "plan": plan,
             "paid": None if plan is None else plan.lower() != "free", "llm": _text(rec.get("llm"))}
 
 

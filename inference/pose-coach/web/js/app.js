@@ -25,7 +25,9 @@ import { MacVoice, createVoice } from './voice.js';
 import { CAP_MS, ElevenCoach } from './eleven-coach.js';
 import { AGENT_ID, ORDER, SessionCues, brainLabel, describe, describeStt, fallback, listens, resolve } from './connections.js';
 import { Listener, sttStatus, transcribe } from './listen.js';
+import { restartRequested, recordMovingIntervals, beginAttempt, anchorAttempt, endAttempt, freshTracker, loadMovementModule, recordTrackingUpdate, trackerRunning } from './movement-review.js';
 import { afterEcho, chatter, intentOf, movementNames, words } from './intents.js';
+import { SESSION_INTRO_TEXT, sessionIntroEvent, waitForCountdown } from './session-start.js';
 import { MistakeList, clock, framesIn, fromRecord, mistakesOf, recordOf, rowOf, savedName, seenWindow }
   from './mistakes.js';
 
@@ -47,6 +49,9 @@ const HOSTED = document.documentElement.dataset.hosted === 'true';
 const IN_WINDOWS_APP = embedded(location.search) && windowsApp(window, location.search);
 const PARENT = IN_WINDOWS_APP ? WINDOWS_APP : embedded(location.search) ? parentOrigin(location.search) : null;
 const app = IN_WINDOWS_APP ? connectWindowsApp(window.chrome.webview) : PARENT ? connect(window, PARENT) : null;
+const REVIEW = !HOSTED && !app && QS.get('review') === '1';
+// Only this explicitly opened local session; no persistent preference or remote agent configuration changes.
+S.startIntroPending = REVIEW && QS.get('session_intro') === '1';
 let hostAuthorized = !HOSTED;
 if (HOSTED) {
   $('start').disabled = true;
@@ -96,7 +101,7 @@ if (app) {
   // a stop while the page is still starting (model, camera prompt): it starts nothing and sends an empty workout
   app.on('stop', () => {
     if (S.running) stop();
-    else if (S.starting) S.cancelStart = true;
+    else if (S.starting) { S.cancelStart = true; S.startDelay?.abort(); }
     else if (S.workout) app.send('summary', S.workout);
   });
 }
@@ -165,6 +170,24 @@ for (const [id, k] of [['coachKind', 'coach'], ['voiceKind', 'voice']]) {
   if (app) continue;
   try { const v = localStorage.getItem(`pose-coach-${k}`); if (v && [...$(id).options].some(o => o.value === v)) $(id).value = v; } catch { /* */ }
 }
+// Explicit local review mode records tracked pose landmarks and engine events, not camera video.
+// It does not start a remote AI session; the user may choose a coach after reviewing.
+if (REVIEW) {
+  $('coachKind').value = S.startIntroPending ? 'auto' : 'off';
+  $('voiceKind').value = S.startIntroPending ? 'auto' : 'off';
+  $('record').checked = true;
+  $('useDemos').checked = true;
+  $('start').textContent = 'Start recording';
+  $('stop').textContent = 'Stop and save';
+  const info = document.createElement('aside');
+  info.id = 'sessionStartNote';
+  info.setAttribute('role', 'note');
+  info.style.cssText = 'margin:12px 16px;padding:14px 18px;border:1px solid #3496eb;border-radius:12px;background:#102334;color:#e6edf8;line-height:1.5';
+  info.textContent = S.startIntroPending
+    ? 'For your next Start only: a visible five-second countdown, then the voice coach introduces movement tracking and 3D review and asks what you would like to do today. Keep your whole body and feet in view. Only pose landmarks are saved; Stop and save keeps your recording. Tracking status depends on actual pose updates.'
+    : 'Review saved movement below without starting the camera or coach. To record a new attempt, choose a movement, stand where your whole body is visible, then Start recording and Stop and save. Only pose landmarks are saved, not camera video or audio. Restart movement begins a separate attempt. AI coach and voice stay off unless you select them.';
+  document.querySelector('header').after(info);
+}
 S.conns = undefined;     // GET /api/connections (null: the server did not say)
 S.failed = {};           // brains that failed to start ({brain: why}): skipped until the coach picker changes or Check again
                          // (the agent's is tried again at each Start: see start())
@@ -201,6 +224,7 @@ async function ensureVoice() {
  * when it was heard.
  */
 function speak(text, who, t0 = null, heard = false, { label = 'event to voice', onAudible } = {}) {
+  if (S.trackingBlocked) return; // includes already queued CLI replies and engine fallback timers
   if (text == null) return;
   if (who === 'engine' && !/[\p{L}\p{N}]/u.test(text)) return;   // (the engine has nothing to say: a short hold ended)
   text = text.replace(/\[[a-z ]{2,24}\]\s*/gi, '');    // an ElevenLabs voice's expressive tags ("[excited]"): heard, not shown
@@ -234,7 +258,7 @@ const ECHO_MS = 6000, ECHO_WORD_MS = 450;      // a cue can come back while it p
 S.spoken = [];                                 // what the page's voice said lately {text, until}, newest last
 $('voiceKind').addEventListener('change', () => { remember('voice', voiceChoice()); replan(); applyPlan(); });
 // picking a coach again tries again what failed to start
-$('coachKind').addEventListener('change', () => { remember('coach', coachChoice()); S.failed = {}; replan(); applyPlan(); });
+$('coachKind').addEventListener('change', () => { remember('coach', coachChoice()); S.failed = {}; replan(); applyPlan(); if (REVIEW) void loadStt(); });
 ensureVoice();                       // Kokoro loads with the page (on the server: ready in a few seconds)
 
 /** The plan from what is connected and the pickers (connections.js); a change of it is logged with why. */
@@ -327,7 +351,7 @@ const FALLBACK = {
   hold_fix: () => "That's it. Keep it there.",
   hold_progress: e => `${spokenTime(e.seconds)}. Keep holding, keep breathing.`,
   hold_end: e => (e.seconds >= 5 ? `You held it for ${spokenTime(e.seconds)}.` : ''),   // (a pause of a few seconds: nothing said)
-  moving_progress: e => `${spokenTime(e.seconds)} of moving. Keep it up.`,
+  moving_progress: e => e.kind === 'dance' || e.movementKind === 'dance' ? 'Keep exploring the movement at your own pace.' : `${spokenTime(e.seconds)} of moving. Keep it up.`,
   technique_result: e => e.cue || '',
   rhythm_progress: e => `About ${e.count} so far. Keep going.`,
   // a moving or rhythm movement's guard rails (web/js/moveform.js): a clear mistake measured while the user moves, and
@@ -376,6 +400,7 @@ const IDLE_MS = 5 * 60000, HIDDEN_MS = 60000;
 const CONNECT_MS = 30000;      // a CLI session's first wait_for_event (measured: Claude Sonnet 2.7 s, ChatGPT 4.8 s)
 const CLOSE_MS = 5000;         // the longest a new agent session waits for the last one to close
 async function ensureCoach() {
+  if (S.startGate || (S.startIntroPending && !S.running && !S.talking && !S.starting)) return null;
   const b = brain();
   if (b === 'none') { idleState(); return null; }
   if (app && !S.appConnection) return null;      // (in the app: no coach starts before the app says what is connected)
@@ -468,6 +493,7 @@ S.elevenFallback = new WeakMap();  // ... each event's own engine cue, for when 
 S.elevenFinal = new WeakSet();     // ... the workout summaries: the session ends once one has been answered
 S.elevenLast = 0;
 async function startEleven() {
+  if (S.trackingBlocked || S.startGate) return null;
   if (S.eleven && S.eleven.agentId === S.conns?.eleven?.agentId && S.eleven.textOnly === !elevenListen()) return S.eleven;
   await stopEleven();
   // a session ended just before (asleep, or the last workout's) closes first; one whose close hangs is not waited for long
@@ -481,7 +507,9 @@ async function startEleven() {
   // voice the session is duplex: the user talks to it through the microphone (text only, the page speaks: no microphone).
   // Talk to coach is always duplex. The user's Mute stands for the next session: it starts without opening the microphone
   const listen = elevenListen();
-  const coach = new ElevenCoach({ agentId, signedUrl: accountSession, textOnly: !listen, listen, muted: !!S.micMuted });
+  const localSession = !app && S.conns?.eleven?.signedSessions
+    ? async () => (await post('/api/elevenlabs/session', {})).signedUrl : null;
+  const coach = new ElevenCoach({ agentId, signedUrl: accountSession || localSession, textOnly: !listen, listen, muted: !!S.micMuted });
   // talking with the coach is activity too: the session is not ended for want of events in the middle of it
   const awake = () => { if (S.eleven === coach) { S.elevenLast = performance.now(); armIdle(); armTalkIdle(); } };
   if (S.elevenAsleep) log('ElevenLabs: reconnecting');
@@ -505,6 +533,7 @@ async function startEleven() {
       },
       onCue: ({ text, marks, user }) => {
         if (S.eleven !== coach) return;
+        if (S.trackingBlocked) return;
         answered = true;
         const p = S.elevenPending.get(marks);
         // (a late reply that also answers the user's words is theirs: it is heard, see eleven-coach.js)
@@ -520,8 +549,8 @@ async function startEleven() {
       },
       // duplex: the user's words, and what the agent said to them (or on its own): no message of the page's
       // (the agent speaking up on its own is no activity: it would keep the session up for ever)
-      onUser: text => { if (S.eleven !== coach) return; answered = true; awake(); log(`You: ${text}`, 'you'); chat('you', text); },
-      onSaid: ({ text, user }) => { if (S.eleven !== coach) return; answered = true; if (user) awake(); speak(text, 'coach', null, !coach.textOnly); },
+      onUser: text => { if (S.eleven !== coach) return; answered = true; awake(); log(`You: ${text}`, 'you'); chat('you', text); if (restartRequested(text)) restartMovement(); },
+      onSaid: ({ text, user }) => { if (S.eleven !== coach || S.trackingBlocked) return; answered = true; if (user) awake(); speak(text, 'coach', null, !coach.textOnly); },
       // ... and what the agent does with the user's words: the page applies it, and the agent says a few words with what
       // the tool returns (a voice answer is confirmed by the agent itself: the coach is not sent exercise_set or set_end).
       // Only in a reply to the user's own words: live, the agent read "Set 1 finished (the user said they are done)" as
@@ -631,6 +660,7 @@ function withdrawEvent(ev) {
  * how long its cue may take (an answer to the user, longer than a cue).
  */
 async function coachEvent(ev, fallbackText, { t0 = null, wait = FALLBACK_MS } = {}) {
+  if (S.trackingBlocked) return; // no stale success fallback or remote reply after an unavailable tracker
   const at = t0 ?? performance.now();               // when it happened (the cue delay counts from here)
   const standInFor = () => {
     if (fallbackText != null) speak(fallbackText, 'engine');
@@ -864,11 +894,14 @@ function hideExercises() {
   $('changeEx').textContent = 'Change exercise';
 }
 /** At Start, in auto mode: the coach asks, the chips show, and with no answer in ASK_EXERCISE_MS auto mode goes on. */
-function askExercise() {
+function askExercise(intro = false) {
   S.asking = true;
   showExercises(true);
-  S.askEx = { kind: 'ask_exercise' };
-  coachEvent(S.askEx, FALLBACK.ask_exercise());
+  S.askEx = intro ? sessionIntroEvent() : { kind: 'ask_exercise' };
+  if (intro) $('askExText').textContent = 'What would you like to do today?';
+  coachEvent(S.askEx, intro ? SESSION_INTRO_TEXT : FALLBACK.ask_exercise());
+  // Leave room for the introduction and the user's answer; a timeout must not cut it off with an auto-mode cue.
+  if (intro) { clearTimeout(S.askTimer); return; }
   const until = performance.now() + ASK_EXERCISE_MS + CAP_MS;
   const check = () => {
     if (!S.asking) return;
@@ -999,7 +1032,7 @@ S.reference = null;           // the library's movement named now, counted or no
 S.moves = [];                 // this workout's movements, done: {movement, display, movementKind, track, seconds | count}
 S.nextMove = null;            // one picked before Start
 S.Tracker = null;             // web/js/moves.js MovementTracker and statusText, once loaded
-const movesJs = import('./moves.js')
+const movesJs = loadMovementModule()
   .then(m => { S.Tracker = m.MovementTracker; S.statusText = m.statusText; return m; })
   .catch(e => { log(`movement tracking is not available (web/js/moves.js: ${e.message})`, 'err'); return null; });
 // (and a held pose's measures, for its form check's reference pose: the user's working side, workingSide())
@@ -1142,7 +1175,7 @@ function openLibrary() {
  * applied (and the set they ended), or the agent confirms its own tool. Before
  * Start, a tap picks it for the workout. What it returns is the tool's answer to the agent.
  */
-function chooseMovement(key, how) {
+function chooseMovement(key, how, preparedTracker = null) {
   const m = S.libByKey.get(String(key ?? ''));
   if (!m) return S.library.length ? `There is no movement "${key}" in the library: use one of ${[...S.libByKey.keys()].join(', ')}.`
     : 'The movement library is not loaded on this page.';
@@ -1155,12 +1188,19 @@ function chooseMovement(key, how) {
     return '';
   }
   if (isCounted(m)) return chooseExercise(m.engine, how, m);
+  if (!S.Tracker) {
+    return trackingUnavailable('Movement tracking is unavailable. Selection was not applied. Stop, reload the page, and try again.');
+  }
   const who = how === 'voice' ? 'You told the coach' : how === 'start' ? 'Picked before Start' : 'You picked';
   if (S.move?.entry.key === m.key) {
+    if (!S.move.tracker || S.trackingBlocked) return trackingUnavailable('Movement tracking is unavailable. Selection was not applied.');
     hideExercises();
     log(`${who}: ${m.display} (already so)`, 'you');
-    return `Already tracking ${m.display} (${trackLabel(m)}).`;
+    return trackerRunning(S,performance.now()) ? `Already tracking ${m.display} (${trackLabel(m)}).` : `${m.display} is selected. Waiting for a successfully tracked visible pose.`;
   }
+  let tracker;
+  try { tracker = preparedTracker ?? freshTracker(S.Tracker, m); }
+  catch (e) { return trackingUnavailable(`${m.display} could not start: ${e.message} Selection was not applied.`); }
   hideExercises();
   if (S.autoTold) { withdrawEvent(S.autoTold); S.autoTold = null; }
   let before = '', ended = null;
@@ -1175,10 +1215,10 @@ function chooseMovement(key, how) {
   }
   const left = finishMovement();
   if (left) before += `${left.display} ended (${doneText(left)}). `;
-  let tracker = null;
-  try { tracker = S.Tracker ? new S.Tracker({ movement: m }) : null; } catch (e) { log(`(${m.display} cannot be tracked: ${e.message})`, 'err'); }
-  S.move = { entry: m, tracker };
-  if (!S.Tracker) log(`(movement tracking is not loaded: ${m.display} is shown, not timed)`, 'err');
+  const attempt = beginAttempt(S.rec, m, S.lastFrameT) ?? ++S.attemptSerial;
+  tracker.lastT = S.lastFrameT ?? null;
+  S.move = { entry: m, tracker, attempt };
+  S.trackingBlocked = false;
   S.reference = m;
   $('reps').classList.remove('tentative');
   renderMove(); markLibrary(); renderWorkout(); showFraming();
@@ -1187,8 +1227,45 @@ function chooseMovement(key, how) {
     coachEvent({ kind: 'movement_set', movement: m.key, display: m.display, movementKind: m.kind, track: m.track, coach: m.coach ?? '' },
       FALLBACK.movement_set(m, ended));
   }
-  return `${before}Tracking ${m.display} now (${trackLabel(m)}). No reps are counted until they name an exercise or ask you to detect it.`;
+  return `${before}${m.display} tracker is ready (${trackLabel(m)}). ${performance.now() - (S.lastPoseAt ?? -Infinity) < 1000 ? 'A recent pose is available.' : 'Waiting for a visible pose; tracking has not been observed yet.'} No reps are counted until they name an exercise or ask you to detect it.`;
 }
+// A failed control action is authoritative. Stop streamed agent audio as well as suppressing its transcript:
+// filtering onSaid alone is too late, because the ElevenLabs audio can precede that callback.
+function trackingUnavailable(message) {
+  S.trackingBlocked = true;
+  if (S.rec) S.rec.events.push({ type: 'tracking_unavailable', t: S.lastFrameT ?? null, attempt: S.move?.attempt ?? null, message });
+  S.eleven?.setVolume(0);
+  void stopEleven();
+  S.voiceOut?.cancel();
+  log(message, 'err'); chat('coach', message);
+  $('say').textContent = message; $('say').style.display = 'block';
+  $('coachState').textContent = 'paused: tracking unavailable';
+  $('reps').textContent = '—'; $('repsLabel').textContent = message;
+  return message;
+}
+function restartMovement() {
+  if (!S.running || !S.Tracker || !trackerRunning(S,performance.now())) {
+    trackingUnavailable('Restart was not applied: movement tracking or a recent visible pose is unavailable. Stop and start again when tracking is available.'); return false;
+  }
+  const entry = S.move.entry;
+  let tracker;
+  try { tracker = freshTracker(S.Tracker, entry); }
+  catch { trackingUnavailable('Could not restart movement tracking. The current attempt was retained.'); return false; }
+  try { finishMovement('restart'); }
+  catch { trackingUnavailable('Restart was not applied: the current tracker could not finish. Stop and reload before trying again.'); return false; }
+  const attempt = beginAttempt(S.rec, entry, S.lastFrameT, 'restart') ?? ++S.attemptSerial;
+  tracker.lastT = S.lastFrameT; // the new tracker cannot count any time before this boundary
+  S.move = { entry, tracker, attempt };
+  S.moveVis = null;
+  renderMove(); renderWorkout(); showFraming();
+  log(`${entry.display}: fresh attempt ${attempt} created at zero; waiting for its first tracked pose.`, 'you');
+  chat('coach', `${entry.display}: new attempt ready at zero. Waiting for its first tracked pose.`);
+  S.eleven?.context?.(`The reset was applied for ${entry.display}: fresh attempt ${attempt}, counters zero. The new tracker has not processed a pose yet. Do not claim tracking is running until the page sends tracking_started.`);
+  return true;
+}
+$('restartMove').addEventListener('click', restartMovement);
+// A stalled camera may stop delivering callbacks entirely. Refresh status without fabricating pose samples.
+setInterval(() => { if (S.running && S.move && performance.now() - (S.lastPoseAt ?? -Infinity) >= 1000) renderMove(); }, 1000);
 /** Reps pause while a movement is named: the AutoTracker gets no frames. It is told the person was lost (its rep
  * detectors start over) at both ends, so that nothing from before joins anything after. */
 function pauseReps() {
@@ -1204,13 +1281,15 @@ function resumeReps() {
 }
 /** The movement named now ends (another one, an exercise or "detect it" was named, or the workout stopped): its time
  * or count joins the workout's. Returns it, or null. */
-function finishMovement() {
+function finishMovement(reason = 'ended') {
   const x = S.move;
   if (!x) return null;
   // (an open hold ends where it is: logged and recorded, not sent; the next movement's or exercise's news is the
   // coach's to say)
-  const ending = x.tracker?.finish(S.lastFrameT) ?? [];
+  const ending = S.trackingBlocked ? [] : x.tracker?.finish(S.lastFrameT) ?? [];
   if (S.rec) S.rec.events.push(...ending);
+  if(!S.trackingBlocked)recordMovingIntervals(S.rec, x.entry, x.tracker, x.attempt);
+  endAttempt(S.rec, x.attempt, S.lastFrameT, reason);
   if (x.entry.track === 'technique') moveEvents(ending, S.lastFrameT);
   for (const e of ending) {
     log(`${x.entry.display}: ${e.type.replace(/_/g, ' ')}${e.seconds != null ? ` ${mmss(e.seconds)}` : ''}`);
@@ -1220,8 +1299,9 @@ function finishMovement() {
   // list stays: hideForm)
   if (S.form?.library) hideForm();
   // (a count of 0 or 0 seconds is no result: none is kept, and the summary leaves it out)
-  const sum = x.tracker?.summary() ?? {}, seconds = Math.round(sum.seconds ?? 0);
+  const sum = S.trackingBlocked ? {} : x.tracker?.summary() ?? {}, seconds = Math.round(sum.seconds ?? 0);
   const done = { movement: x.entry.key, display: x.entry.display, movementKind: x.entry.kind, track: x.entry.track,
+    ...(x.attempt != null ? { attempt: x.attempt } : {}),
     ...(x.entry.track === 'technique' ? { reviewed: !!sum.reviewed } : {}),
     ...(sum.count > 0 ? { count: sum.count } : seconds > 0 ? { seconds } : {}) };
   S.moves.push(done);
@@ -1340,6 +1420,7 @@ function moveEvents(evs, t) {
  * told at all, and "Form checked" flashed in pauses); of a moving or rhythm movement, as it is (moveform.js state():
  * its open faults are the ones told, and each went to the coach as it came). */
 function moveStatus(x) {
+  if (S.trackingBlocked || !x.tracker) return { big: '—', text: 'Movement tracking unavailable', form: null, state: null };
   const c = x.tracker?.current(S.lastFrameT), text = (c && S.statusText?.(c)) || 'nothing to time or count';
   if (!c || c.track === 'reps') return { big: '-', text, form: null, state: null };
   // (`state`: the form as the tracker has it now, told or not: whether a form_unseen still holds)
@@ -1350,6 +1431,7 @@ function moveStatus(x) {
   if (c.track === 'technique') return { big: 'Technique', text, form: c.form, state: c.form };
   if (c.track === 'rhythm') return { big: `~${c.count ?? 0}`, text, form: c.form ?? null, state: c.form ?? null };
   const state = (c.track === 'moving' && c.form) || null;
+  if (x.entry?.kind === 'dance') return { big: '●', text: trackerRunning(S,performance.now()) ? S.moveVis?.legs===false?'Tracking pose · legs unclear':'Tracking movement' : 'Waiting for a tracked visible pose', form: state, state };
   return { big: mmss(c.seconds), text, form: state, state };
 }
 /** A movement's form on the Now card (moveStatus: a hold's once the coach was told its start, a moving or rhythm
@@ -1382,6 +1464,8 @@ function formLine(form) {
 /** The Now card: the movement named now and what is tracked (no reps meanwhile), or a counted one's name; Show in 3D. */
 function renderMove() {
   const ref = S.running ? S.reference : null, x = S.move;
+  $('restartMove').hidden = !S.running || !x;
+  $('restartMove').disabled = !x?.tracker || !!S.trackingBlocked;
   $('now').classList.toggle('technique', !!ref && x?.entry.track === 'technique');
   $('moveRow').hidden = !ref;
   if (!ref || !x) { $('moveForm').hidden = true; $('holdAgain').hidden = true; }
@@ -1524,11 +1608,12 @@ S.listenStats = [];                // each utterance: when the user stopped, whe
 
 /** Is Parakeet set up and ready? Asked at load and at Start, then every second while it loads (about 10 s). */
 async function loadStt() {
-  if (HOSTED) { S.stt = { available: false, ready: false }; return S.stt; }
+  if (HOSTED || (REVIEW && coachChoice() === 'off')) { S.stt = { available: false, ready: false }; syncListening(); return S.stt; }
   if (S.sttLoading) return S.sttLoading;
   S.sttLoading = (async () => {
     for (let i = 0; i < 180; i++) {
       const st = await sttStatus();
+      if (REVIEW && coachChoice() === 'off') { S.stt = { available: false, ready: false }; syncListening(); return S.stt; }
       const changed = JSON.stringify(st) !== JSON.stringify(S.stt);
       S.stt = st;
       if (changed) { renderConnections(); syncListening(); }
@@ -1543,7 +1628,7 @@ async function loadStt() {
 /** The page listens while a workout runs or starts, or in a conversation (Talk to coach), unless the agent hears the user
  * itself (duplex) or nobody can (a text-only agent, no Parakeet). */
 function syncListening() {
-  const want = listens(S.plan, S.stt) === 'page' && !!S.stt?.ready && (S.running || S.starting || S.talking);
+  const want = !S.startGate && listens(S.plan, S.stt) === 'page' && !!S.stt?.ready && (S.running || S.starting || S.talking);
   if (want && !S.listener) openListener();
   else if (!want && S.listener) closeListener();
   renderMic(); renderTalk();
@@ -1629,6 +1714,10 @@ function heard(text, rec) {
   rec.heard = true;
   log(`You: ${text}`, 'you');
   chat('you', text);
+  if (restartRequested(text)) {
+    if (restartMovement()) said(text, { type: 'restart', applied: true, tracking: 'waiting' }, 'New attempt created at zero; waiting for its first tracked pose.', rec);
+    return; // a rejected restart must not fall through to an unconstrained coach response
+  }
   log(`(written down ${((rec.textAt - rec.speechEnd) / 1000).toFixed(2)} s after you stopped talking: Parakeet ` +
     `${rec.sttMs} ms for ${rec.seconds.toFixed(1)} s of audio)`);
   armTalkIdle();
@@ -1641,6 +1730,12 @@ function heard(text, rec) {
     // The words go first, tagged with the set in progress (said()): naming a movement the engine does not count ends
     // that set, and no set_end goes for it (the coach reads the tags: coach.py heard())
     const m = S.libByKey.get(intent.movement), counted = isCounted(m);
+    if (!counted) {
+      const result = chooseMovement(m.key, 'voice');
+      if (S.move?.entry.key === m.key && S.move.tracker && !S.trackingBlocked) said(text,
+        { type: 'movement', movement: m.key, display: m.display, movementKind: m.kind, track: m.track }, result, rec);
+      return;
+    }
     const a = !counted && !S.move ? S.auto.active : null;
     said(text, counted ? { type: 'exercise', exercise: m.engine, label: exLabel(m.engine), movement: m.key, display: m.display }
       : { type: 'movement', movement: m.key, display: m.display, movementKind: m.kind, track: m.track },
@@ -2306,7 +2401,7 @@ function showFraming() {
   if (S.move) {
     const v = S.moveVis;
     if (v && !v.torso) { b.className = 'wait'; b.textContent = `I can't see ${PART_HINT.torso}. Step back.`; return; }
-    b.className = 'ready'; b.textContent = MOVE_HINT[S.move.entry.track];
+    b.className = 'ready'; b.textContent = S.move.entry.kind === 'dance' ? 'Move at your own pace; pauses and variations are welcome.' : MOVE_HINT[S.move.entry.track];
     return;
   }
   const note = S.tentative?.text ?? (S.lapse && performance.now() < S.lapse.until ? S.lapse.text : null);
@@ -2340,16 +2435,25 @@ function processPose(r, t, w, h) {
     world: r.world ? r.world.map(p => [r4(p.x), r4(p.y), r4(p.z)]) : null });
   S.lastFrameT = t;
   S.t0 ??= t;                                   // (the workout's first frame: its mistakes are timed from it)
+  if (S.move) anchorAttempt(S.rec, S.move.attempt, t);
   if (r.image && r.world) {
     const f = features(r.world, r.image, w / h);
+    if (f.visTorso >= .6 && (f.visArms >= .6 || f.visLegs >= .6)) S.lastPoseAt = performance.now();
     if (S.move) {
       // a movement of the library named: its tracker has the frames, and no reps are counted (the AutoTracker gets
       // none). With the landmarks too: a hold's form is measured from them (web/js/holdform.js), and a moving or
       // rhythm movement's (web/js/moveform.js). Its events are recorded
+      if(S.trackingBlocked){renderMove();return;}
       S.moveVis = { torso: f.visTorso >= 0.6, legs: f.visLegs >= 0.6, arms: f.visArms >= 0.6 };
-      const evs = S.move.tracker?.update(f, t, { world: r.world, image: r.image, aspect: w / h }) ?? [];
+      let evs = [];
+      try { if (!S.trackingBlocked&&S.move.tracker) {
+        evs = S.move.tracker.update(f, t, { world: r.world, image: r.image, aspect: w / h }) ?? [];
+        if(recordTrackingUpdate(S.rec,S.move,t,performance.now()))S.eleven?.context?.(`tracking_started: attempt ${S.move.attempt} processed its first pose successfully. Visibility still determines which body parts can be reviewed.`);
+      } }
+      catch (e) { trackingUnavailable(`Movement tracking stopped: ${e.message}. No restart was applied.`); return; }
       if (S.rec) S.rec.events.push(...evs);
       moveEvents(evs, t);
+      recordMovingIntervals(S.rec, S.move.entry, S.move.tracker, S.move.attempt);
       renderMove(); showFraming();
       $('signal').textContent = '-'; $('view').textContent = f.view;
     } else {
@@ -2363,7 +2467,10 @@ function processPose(r, t, w, h) {
     }
   } else {
     if (S.move) {
-      const evs = S.move.tracker?.lost(t) ?? [];
+      if(S.trackingBlocked){renderMove();return;}
+      let evs=[];
+      try { evs = S.move.tracker?.lost(t) ?? []; }
+      catch(e){trackingUnavailable(`Movement tracking stopped: ${e.message}.`);return;}
       if (S.rec) S.rec.events.push(...evs);
       moveEvents(evs, t); renderMove();
     } else {
@@ -2387,7 +2494,7 @@ function onFrame(gen) {
     const ts = Math.max(S.lastTs + 1, Math.round(performance.now()));
     S.lastTs = ts;
     let r;
-    try { r = detect(S.pose.landmarker, video, ts); } catch (e) {
+    try { r = detect(S.pose.landmarker, video, ts); S.trackErr = false; } catch (e) {
       // a failed frame must not stop the loop. MediaPipe needs increasing timestamps: if it has seen a later one (a
       // stray call from outside the loop), continue from there
       const m = /minimum expected timestamp is (\d+)/.exec(String(e));
@@ -2422,6 +2529,9 @@ async function start() {
   if (!hostAuthorized) return;
   if (S.running || S.starting) return;            // one start at a time (the button, or the app's start message)
   S.starting = true; S.cancelStart = false;
+  const intro = S.startIntroPending;
+  S.startGate = intro;
+  const stopLabel = $('stop').textContent;
   $('start').disabled = true;
   S.voiceOut?.unlock();                           // in the click: browsers only start audio after the user did something
   // a conversation without a workout (Talk to coach) goes on in the workout: the page keeps listening, and an agent
@@ -2445,12 +2555,36 @@ async function start() {
   // a movement of the library picked before Start (a counted one set the Exercise picker): named once the workout runs
   const pre = S.nextMove && (!isCounted(S.nextMove) || S.nextMove.engine === S.exercise) ? S.nextMove : null;
   S.nextMove = null; S.move = null; S.moves = []; S.reference = null; S.moveVis = null; S.lastFrameT = undefined;
+  S.lastPoseAt = undefined; S.attemptSerial = 0; S.trackingBlocked = false;
   renderMove(); markLibrary();
   const auto = S.exercise === 'auto';
   $('reps').textContent = '-'; $('repsLabel').textContent = auto ? 'start any exercise' : `${exLabel(S.exercise)}: start your set`;
   $('say').style.display = 'none';
   hideExercises(); hideSetEnd(); S.autoTold = null;
   try {
+    if (intro) {
+      S.startDelay = new AbortController();
+      $('stop').disabled = false; $('stop').textContent = 'Cancel start';
+      $('startCountdown').hidden = false;
+      $('cancelCountdown').focus();
+      const ready = await waitForCountdown({ signal: S.startDelay.signal, onTick: n => {
+        $('countdownNumber').textContent = String(n);
+        $('countdownText').textContent = 'Starting in…';
+      } });
+      S.startDelay = null;
+      if (!ready || S.cancelStart) { cancelStart(was); return; }
+      $('countdownNumber').textContent = '';
+      $('countdownText').textContent = 'Preparing camera and tracker…';
+    }
+    if (!S.Tracker) {
+      try {
+        const moves = await loadMovementModule();
+        S.Tracker = moves.MovementTracker; S.statusText = moves.statusText;
+      } catch { log('Movement tracking could not load. Reload and try again.', 'err'); }
+    }
+    if (intro && !S.Tracker) throw new Error('Movement tracker unavailable. Reload and try again; the coach has not started.');
+    if (S.cancelStart) { cancelStart(was); return; }
+    const pendingTracker = pre && !isCounted(pre) ? freshTracker(S.Tracker, pre) : null; // validate before camera/coach startup
     const src = $('source').value, recording = src.startsWith('rec:');
     S.replayRec = null; S.trail = []; hideForm(); clearTentative(false);
     if (recording) {
@@ -2460,6 +2594,7 @@ async function start() {
       video.pause(); video.srcObject = null; video.removeAttribute('src');
       $('stage').classList.toggle('mirror', rec.source === 'camera');
     } else if (!S.pose || S.pose.model !== $('model').value) { log('loading the pose model...'); S.pose = await createPose({ model: $('model').value }); }
+    if (S.cancelStart) { cancelStart(was); return; }
     if (recording) { /* nothing to open */ } else if (src === 'camera') {
       S.stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
       video.srcObject = S.stream; video.removeAttribute('src');
@@ -2482,6 +2617,9 @@ async function start() {
     // the agent is opened per workout, and takes one session at a time: one that refused the last workout (another tab
     // had it, or the last session was still closing) is tried again
     if (S.failed.eleven) { const { eleven: _, ...failed } = S.failed; S.failed = failed; }
+    if (S.cancelStart) { cancelStart(was); return; }
+    S.startGate = false;
+    $('startCountdown').hidden = true;
     replan();
     // the coach connects meanwhile (an ElevenLabs agent per workout, or the next connection if it fails to); never wait
     // for it long: the engine's cues stand in
@@ -2489,31 +2627,46 @@ async function start() {
     if (S.cancelStart) { cancelStart(was); return; }
     // the coach asks which exercise (the chips show, and auto mode counts meanwhile), unless one was named already (a
     // movement of the library picked before Start: named below, and the coach hears of it then)
-    if (pre && !isCounted(pre)) { /* chooseMovement, once running */ } else if (auto) askExercise();
+    if (intro || (pre && !isCounted(pre))) { /* welcome / chooseMovement, once running */ } else if (auto) askExercise();
     else {
       coachEvent({ kind: 'start', exercise: S.exercise, exerciseLabel: exLabel(S.exercise), ...(pre ? { movement: pre.key, display: pre.display } : {}) },
         FALLBACK.start(pre?.display ?? exLabel(S.exercise)));
     }
+    if (intro) S.startedAt = new Date().toISOString();
     resetMistakes();                                // (the last workout's, or a saved one's: this one's from now on)
     S.running = true; S.lastTs = 0; S.gen += 1; S.trackErr = false;
-    if (pre && isCounted(pre)) { S.reference = pre; renderMove(); markLibrary(); } else if (pre) chooseMovement(pre.key, 'start');
+    S.rec = $('record').checked && !recording ? { started: new Date().toISOString(), code: S.code, source: src === 'camera' ? 'camera' : JSON.parse(src).id,
+      exercise: S.exercise, model: S.pose.model, delegate: S.pose.delegate, frames: [], events: [], mistakes: [], attempts: [], movementIntervals: [],
+      coordinateSystem: { world: 'mediapipe metres; x right, y down, z away; hip origin', image: 'unmirrored normalized camera', displayMirrored: src === 'camera' },
+      timestampUnit: 'milliseconds', timestampOrigin: src === 'camera' ? 'performance.now' : 'video.currentTime' } : null;
+    if (pre && isCounted(pre)) { S.reference = pre; renderMove(); markLibrary(); } else if (pre) chooseMovement(pre.key, 'start', pendingTracker);
+    if (intro) {
+      S.startIntroPending = false;
+      const url = new URL(location.href); url.searchParams.delete('session_intro');
+      history.replaceState(null, '', url);
+      $('sessionStartNote').textContent = 'This session’s countdown and introduction are complete. Tracking status depends on actual pose updates. Stop and save keeps the pose recording; Restart movement begins a separate attempt.';
+      askExercise(true);
+    }
     $('changeEx').disabled = false;
     clearTimeout(S.elevenEnd); S.elevenEnding = false;   // the last workout's agent session (if kept) goes on in this one
-    S.rec = $('record').checked && !recording ? { started: new Date().toISOString(), code: S.code, source: src === 'camera' ? 'camera' : JSON.parse(src).id,
-      exercise: S.exercise, model: S.pose.model, delegate: S.pose.delegate, frames: [], events: [],
-      mistakes: [] } : null;                      // (mistakes: each one the form check showed, by its frames' times)
     $('stop').disabled = false;
     app?.send('state', { running: true, startedAt: S.startedAt });
     log(`${auto ? 'workout started: detecting exercises automatically' : `workout started: ${exLabel(S.exercise)} only`} (${recording ? 'recording' : src === 'camera' ? 'camera' : 'clip'})`);
-    if (recording) replayLoop(S.gen); else onFrame(S.gen);
+    if (recording) { S.replayRec.wall0 = performance.now(); replayLoop(S.gen); } else onFrame(S.gen);
   } catch (e) {
     log(`could not start: ${e.message}`, 'err');
+    if (intro) { $('banner').className = 'wait'; $('banner').textContent = `Could not start: ${e.message}`; }
     if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }   // a camera opened before the failure
     app?.send('error', { message: `Could not start: ${e.message}` });
     $('start').disabled = false;
     if (S.cancelStart) cancelStart(was);
     else if (S.eleven && S.eleven !== was) stopEleven();  // an agent session this start opened
   } finally {
+    S.startDelay?.abort(); S.startDelay = null; S.startGate = false;
+    if (intro && !S.running) { S.nextMove = pre; renderMove(); markLibrary(); }
+    $('startCountdown').hidden = true;
+    $('stop').textContent = stopLabel; $('stop').disabled = !S.running;
+    if (intro) (S.running ? $('stop') : $('start')).focus();
     S.starting = false;
     syncListening();                              // (listening from the start, or not at all if it failed)
     renderMistakes();                             // (the saved-workout picker again, if it did not start)
@@ -2526,7 +2679,7 @@ function cancelStart(was) {
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
   if (S.eleven && S.eleven !== was) stopEleven();      // an agent session this start opened (the last one ends as planned)
   $('start').disabled = false;
-  log('start cancelled (stopped by the app)');
+  log('start cancelled');
   S.workout = workoutOf([], [], S.startedAt, new Date().toISOString());
   app?.send('state', { running: false, startedAt: S.startedAt });
   app?.send('summary', S.workout);
@@ -2541,7 +2694,7 @@ async function stop() {
   $('stop').disabled = true;
   video.pause();
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
-  finishMovement();                        // (a movement named now: its time or count goes in the summary)
+  finishMovement('stop');                  // keep the final attempt boundary even when no movement was counted
   const ending = S.auto.finish();
   if (S.rec) S.rec.events.push(...ending);
   const n = S.auto.sets.reduce((k, s) => k + s.count, 0);
@@ -2554,6 +2707,7 @@ async function stop() {
       .then(() => {
         log(`saved for debugging: ${id} (${rec.frames.length} frames, landmarks only)`);
         savedWorkouts([{ id }]);                  // (its mistakes can be reviewed later, after the next workout too)
+        window.dispatchEvent(new CustomEvent('rhythm-recording-saved',{detail:{id}}));
         const src = `rec:${id}`;
         if (![...$('source').options].some(o => o.value === src)) $('source').add(new Option(`Recording: ${id}`, src));
       })
@@ -2576,7 +2730,11 @@ async function stop() {
 
 video.addEventListener('ended', () => { if ($('source').value !== 'camera' && !S.replayRec) stop(); });
 $('start').addEventListener('click', start);
-$('stop').addEventListener('click', stop);
+$('stop').addEventListener('click', () => {
+  if (S.starting && !S.running) { S.cancelStart = true; S.startDelay?.abort(); }
+  else stop();
+});
+$('cancelCountdown').addEventListener('click', () => { S.cancelStart = true; S.startDelay?.abort(); });
 window.POSE_COACH = S;
 S.formCheck = formCheck; S.hideForm = hideForm;     // (for checking the form check from the console)
 S.pinMistake = pinMistake; S.reviewSaved = reviewSaved;   // (... and the Mistakes list)

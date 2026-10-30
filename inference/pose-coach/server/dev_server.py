@@ -348,6 +348,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path == "/api/elevenlabs/session":
+            refused = self.write_refused("start an ElevenLabs conversation")
+            origin = (self.headers.get("Origin") or "").lower()
+            if refused or origin != f"http://{(self.headers.get('Host') or '').lower()}":
+                return self.send_json({"error": "Only this local page can start a conversation."}, 403)
+            agent, key = connections.eleven_agent_id(), os.environ.get("ELEVENLABS_API_KEY")
+            if not agent or not key:
+                return self.send_json({"error": "ElevenLabs agent or key is not configured."}, 503)
+            from urllib.request import Request, urlopen
+            from urllib.parse import urlencode
+            try:
+                req = Request("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?" + urlencode({"agent_id": agent}), headers={"xi-api-key": key})
+                with urlopen(req, timeout=15) as response:
+                    url = json.loads(response.read(16384)).get("signed_url", "")
+                parsed = urlparse(url)
+                if parsed.scheme != "wss" or parsed.hostname != "api.elevenlabs.io" or not parsed.path.startswith("/v1/convai/conversation"):
+                    raise ValueError("invalid signed URL")
+                return self.send_json({"signedUrl": url})
+            except Exception:
+                return self.send_json({"error": "ElevenLabs could not start a session. Check the key and agent permissions."}, 502)
         if u.path == "/api/stt":
             return self.transcribe()
         if u.path == "/api/connections/elevenlabs":
